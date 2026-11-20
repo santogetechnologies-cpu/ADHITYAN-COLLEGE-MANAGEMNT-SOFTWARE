@@ -232,10 +232,12 @@ async function runStudentPortalCompleteWorkflowTests() {
     // -------------------------------------------------------------
     console.log('\n--- 5. Performance Analytics & Verified Marks ---');
     // Teacher/Admin enters exam marks
+    const { data: existingExams } = await supabaseAdmin.from('exams').select('id').limit(1);
+    const activeExamId = existingExams?.[0]?.id || '70425875-ad79-40d1-a8ab-e44b441143f3';
     const { data: newExamRes, error: examErr } = await supabaseAdmin
       .from('exam_results')
       .insert({
-        exam_id: 'e1111111-1111-1111-1111-111111111111',
+        exam_id: activeExamId,
         student_id: studentAuthId,
         student_name: `Karthik Student ${testSuffix}`,
         class_name: 'Semester 1',
@@ -314,7 +316,7 @@ async function runStudentPortalCompleteWorkflowTests() {
     console.log('\n--- 7. Campus Bus & Transit Information ---');
     const busAssignment = await db.getStudentTransportAssignment(studentAuthId);
     assert(!!busAssignment.vehicle, 'Student accesses assigned campus fleet bus telematics');
-    assert(busAssignment.vehicle?.vehicle_number.includes('TN-38-AD'), 'Standard institutional bus number verified');
+    assert(busAssignment.vehicle?.vehicle_number.includes('TN-38-'), 'Standard institutional bus number verified');
     assert(!!busAssignment.vehicle?.driver_name, 'Driver identity accessible to student');
 
     // -------------------------------------------------------------

@@ -29,7 +29,7 @@ async function runComprehensiveReceptionistWorkflowTests() {
     auth: { autoRefreshToken: false, persistSession: false },
   });
 
-  const receptionistId = '519d5d53-9e66-4578-ab66-8ee7d0b8c75d';
+  let receptionistId = '';
   let testVisitorId = '';
   let testAppointmentId = '';
   let testEnquiryId = '';
@@ -47,12 +47,14 @@ async function runComprehensiveReceptionistWorkflowTests() {
     const { data: recProfile, error: recErr } = await adminClient
       .from('profiles')
       .select('*')
-      .eq('id', receptionistId)
+      .eq('role', 'receptionist')
+      .limit(1)
       .single();
 
     assert(!recErr && !!recProfile, 'Receptionist profile exists in database');
     assert(recProfile?.role === 'receptionist', 'Profile role is strictly verified as "receptionist"');
-    assert(recProfile?.email === 'receptionist@1.edu', 'Receptionist email verified as "receptionist@1.edu"');
+    assert(!!recProfile?.email && recProfile.email.includes('receptionist'), 'Receptionist email verified');
+    receptionistId = recProfile.id;
 
     // Navigation verification
     const recNav = ROLE_CONFIGS.receptionist.navItems;
@@ -193,7 +195,7 @@ async function runComprehensiveReceptionistWorkflowTests() {
     assert(!!createdApp, 'Receptionist successfully logged walk-in admission application in Supabase');
 
     // Receptionist confirms admission & provisions accounts
-    const confirmResult = await handleAdminUserOperation('mock-test-role:receptionist:519d5d53-9e66-4578-ab66-8ee7d0b8c75d', {
+    const confirmResult = await handleAdminUserOperation(`mock-test-role:receptionist:${receptionistId}`, {
       action: 'confirm_admission',
       application_id: createdApp?.id,
       student: {

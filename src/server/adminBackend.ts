@@ -3211,19 +3211,6 @@ export async function handleAdminUserOperation(token: string, body: any): Promis
         }
         return { status: 200, body: { authorized: true, collegeId: effectiveCallerCollege, accessScope: 'tenant_isolated' } };
       }
-        const effectiveCallerCollege = callerCollegeId || '11111111-1111-1111-1111-111111111111';
-        if (targetCollegeId && targetCollegeId !== effectiveCallerCollege) {
-          return {
-            status: 403,
-            body: {
-              authorized: false,
-              error: 'Cross-college access rejected. Caller is isolated to their own college.',
-              code: 'CROSS_TENANT_VIOLATION'
-            }
-          };
-        }
-        return { status: 200, body: { authorized: true, collegeId: effectiveCallerCollege, accessScope: 'tenant_isolated' } };
-      }
 
       default:
         return { status: 400, body: { error: `Unknown action: "${action}".`, code: 'UNKNOWN_ACTION' } };

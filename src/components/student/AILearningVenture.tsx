@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/hooks/use-toast';
+import { supabase } from '@/lib/supabase';
 
 interface ChatMessage {
   id: string;
@@ -158,6 +159,30 @@ export function AILearningVenture() {
     scrollToBottom();
   }, [messages, isTyping]);
 
+  // Load verified previous conversation history from Supabase
+  useEffect(() => {
+    if (!user?.id) return;
+    let isMounted = true;
+    supabase
+      .from('ai_chat_messages')
+      .select('id, role, content, created_at')
+      .eq('user_id', user.id)
+      .order('created_at', { ascending: true })
+      .limit(50)
+      .then(({ data, error }) => {
+        if (!error && data && data.length > 0 && isMounted) {
+          const history: ChatMessage[] = data.map((m: any) => ({
+            id: m.id,
+            sender: m.role === 'user' ? 'user' : 'ai',
+            text: m.content,
+            time: new Date(m.created_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true })
+          }));
+          setMessages(prev => [prev[0], ...history]);
+        }
+      });
+    return () => { isMounted = false; };
+  }, [user?.id]);
+
   const handleSendMessage = (textToSend?: string) => {
     const query = (textToSend || inputQuery).trim();
     if (!query || isTyping) return;
@@ -174,7 +199,16 @@ export function AILearningVenture() {
     setInputQuery('');
     setIsTyping(true);
 
-    // Simulate smart thinking and natural assistant response
+    if (user?.id) {
+      supabase.from('ai_chat_messages').insert({
+        user_id: user.id,
+        role: 'user',
+        content: query,
+        created_at: new Date().toISOString()
+      }).then();
+    }
+
+    // Generate clinical/academic response tailored to student's enrolled department
     setTimeout(() => {
       const aiResponse = generateStudentAcademicResponse(query, studentDepartment);
       const aiTime = new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
@@ -186,6 +220,15 @@ export function AILearningVenture() {
       };
       setMessages(prev => [...prev, aiMsg]);
       setIsTyping(false);
+
+      if (user?.id) {
+        supabase.from('ai_chat_messages').insert({
+          user_id: user.id,
+          role: 'ai',
+          content: aiResponse,
+          created_at: new Date().toISOString()
+        }).then();
+      }
     }, 600);
   };
 
