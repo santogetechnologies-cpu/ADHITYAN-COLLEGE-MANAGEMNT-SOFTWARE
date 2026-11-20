@@ -46,8 +46,6 @@ import { useToast } from '@/hooks/use-toast';
 import { db } from '@/services/supabase/database';
 import { supabase } from '@/lib/supabase';
 import { storageService } from '@/services/supabase/storage';
-import { DynamicFormFields } from '@/components/customizer/DynamicFormFields';
-import { EditableText } from '@/components/customizer/EditableText';
 
 interface ComprehensiveAdmissionDialogProps {
   open: boolean;
@@ -104,9 +102,6 @@ export function ComprehensiveAdmissionDialog({
     address: '',
     previousSchool: '',
   });
-
-  // Dynamic Custom Form Fields
-  const [customFields, setCustomFields] = useState<Record<string, any>>({});
 
   // Student ID Uniqueness Validation State
   const [studentIdCheck, setStudentIdCheck] = useState<{
@@ -420,8 +415,7 @@ export function ComprehensiveAdmissionDialog({
         },
 
         status: 'Pending',
-        remarks: `Manual Student ID: ${cleanStudentId}. Registered via Admission Form.`,
-        custom_fields: customFields
+        remarks: `Manual Student ID: ${cleanStudentId}. Registered via Admission Form.`
       };
 
       const result = await db.createAdmissionApplication(applicationPayload);
@@ -686,15 +680,6 @@ export function ComprehensiveAdmissionDialog({
                       onChange={(e) => setStudentData({ ...studentData, previousSchool: e.target.value })}
                     />
                   </div>
-                </div>
-
-                {/* Dynamic Form Customizer Fields for Student Registration */}
-                <div className="pt-2 border-t border-slate-100 dark:border-slate-800">
-                  <DynamicFormFields
-                    formId="student_registration"
-                    values={customFields}
-                    onChange={(key, val) => setCustomFields(prev => ({ ...prev, [key]: val }))}
-                  />
                 </div>
 
                 <div className="flex justify-end pt-2">

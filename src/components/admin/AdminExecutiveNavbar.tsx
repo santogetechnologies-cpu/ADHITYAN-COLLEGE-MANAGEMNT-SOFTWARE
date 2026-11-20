@@ -332,20 +332,6 @@ export function AdminExecutiveNavbar() {
               {/* Quick Create Menu */}
               <AdminQuickCreateMenu />
 
-              {/* Super Admin Control Center Direct Shortcut */}
-              {user?.role === 'admin' && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => navigate('/admin/control-center')}
-                  className="h-9 px-2.5 text-xs font-semibold text-indigo-700 bg-indigo-50/80 hover:bg-indigo-100 border-indigo-200 rounded-xl flex items-center gap-1.5 shadow-2xs transition-all"
-                  title="Super Admin Control Center"
-                >
-                  <Shield className="h-3.5 w-3.5 text-indigo-600 shrink-0" />
-                  <span className="hidden lg:inline">Control Center</span>
-                </Button>
-              )}
-
               {/* Admin Profile & Account Menu */}
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
@@ -392,16 +378,6 @@ export function AdminExecutiveNavbar() {
                     <Settings className="mr-2 h-3.5 w-3.5 text-slate-400" />
                     <span>System Settings & Profile</span>
                   </DropdownMenuItem>
-
-                  {user?.role === 'admin' && (
-                    <DropdownMenuItem 
-                      onClick={() => navigate('/admin/control-center')} 
-                      className="cursor-pointer text-xs rounded-lg py-2 font-semibold text-indigo-700 bg-indigo-50/60 hover:bg-indigo-100/80"
-                    >
-                      <Shield className="mr-2 h-3.5 w-3.5 text-indigo-600" />
-                      <span>Super Admin Control Center</span>
-                    </DropdownMenuItem>
-                  )}
 
                   <DropdownMenuItem onClick={() => navigate('/admin/reports')} className="cursor-pointer text-xs rounded-lg py-2">
                     <FileText className="mr-2 h-3.5 w-3.5 text-slate-400" />

@@ -1,0 +1,62 @@
+{
+  "timestamp": "2026-11-20T06:39:13.056Z",
+  "environment": "https://ogbbyqxulhegwvrtinib.supabase.co",
+  "tables": {
+    "super_admin_configs": {
+      "exists": false,
+      "error": "404 Not Found"
+    },
+    "super_admin_releases": {
+      "exists": false,
+      "error": "404 Not Found"
+    },
+    "super_admin_backups": {
+      "exists": false,
+      "error": "404 Not Found"
+    },
+    "college_configurations": {
+      "exists": false,
+      "error": "404 Not Found"
+    },
+    "institutional_settings": {
+      "exists": true,
+      "count": 1,
+      "rows": [
+        {
+          "id": "00000000-0000-0000-0000-000000000001",
+          "institution_name": "Adhithyan Group of Institutions",
+          "institution_code": "ADH-AGI-2025",
+          "academic_year": "2025-2026",
+          "contact_email": "admin@adhithyan.edu",
+          "contact_phone": "+91 (044) 2876-4100",
+          "min_attendance_percentage": 75,
+          "passing_marks_percentage": 40,
+          "enable_realtime": true,
+          "enable_email_alerts": true,
+          "maintenance_mode": false,
+          "created_at": "2026-11-09T09:38:16.954612+00:00",
+          "updated_at": "2026-11-09T10:30:11.380436+00:00"
+        }
+      ]
+    },
+    "platform_audit_logs": {
+      "exists": false,
+      "error": "404 Not Found"
+    }
+  },
+  "institutional_settings_row": {
+    "id": "00000000-0000-0000-0000-000000000001",
+    "institution_name": "Adhithyan Group of Institutions",
+    "institution_code": "ADH-AGI-2025",
+    "academic_year": "2025-2026",
+    "contact_email": "admin@adhithyan.edu",
+    "contact_phone": "+91 (044) 2876-4100",
+    "min_attendance_percentage": 75,
+    "passing_marks_percentage": 40,
+    "enable_realtime": true,
+    "enable_email_alerts": true,
+    "maintenance_mode": false,
+    "created_at": "2026-11-09T09:38:16.954612+00:00",
+    "updated_at": "2026-11-09T10:30:11.380436+00:00"
+  }
+}

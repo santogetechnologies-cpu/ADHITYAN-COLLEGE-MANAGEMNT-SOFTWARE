@@ -28,8 +28,6 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Progress } from '@/components/ui/progress';
 import { Assignment, ExamSchedule, TimetableSlot } from '@/types/database.types';
-import { EditableText } from '@/components/customizer/EditableText';
-import { EditableZone } from '@/components/customizer/EditableZone';
 import { IndiaTimeInfo } from '@/lib/indiaTime';
 import { getCourseSemesters } from '@/constants/courses';
 
@@ -163,19 +161,12 @@ export function CampusProDashboardView({
             </div>
 
             <div className="space-y-1.5">
-              <EditableText
-                id="student_welcome_title"
-                defaultText="Welcome back, {studentName}!"
-                variables={{ studentName }}
-                as="h1"
-                className="text-2xl lg:text-3xl font-bold tracking-tight text-white"
-              />
-              <EditableText
-                id="student_welcome_subtitle"
-                defaultText="Keep learning, achieve more, and build your future."
-                as="p"
-                className="text-white/80 text-xs sm:text-sm block"
-              />
+              <h1 className="text-2xl lg:text-3xl font-bold tracking-tight text-white">
+                Welcome back, {studentName}!
+              </h1>
+              <p className="text-white/80 text-xs sm:text-sm block">
+                Keep learning, achieve more, and build your future.
+              </p>
 
               {/* Badges / Pill Tags */}
               <div className="flex flex-wrap items-center gap-3 pt-1 text-xs text-white/90">
@@ -222,8 +213,7 @@ export function CampusProDashboardView({
         </div>
       </div>
 
-      {/* Contextual Injected Content Zone below Hero */}
-      <EditableZone zoneId="student_hero_bottom" className="my-3" />
+
 
       {/* Mobile Stacked Hero Card */}
       <div className="sm:hidden space-y-3">
@@ -244,13 +234,9 @@ export function CampusProDashboardView({
             )}
           </div>
           <div className="space-y-0.5 min-w-0 flex-1">
-            <EditableText
-              id="student_welcome_mobile_title"
-              defaultText="Welcome back, {studentName}!"
-              variables={{ studentName }}
-              as="h2"
-              className="text-base font-bold text-slate-900 truncate"
-            />
+            <h2 className="text-base font-bold text-slate-900 truncate">
+              Welcome back, {studentName}!
+            </h2>
             <div className="text-[11px] text-slate-500 truncate">
               {studentRoll} • {studentDepartment} • {studentClass}
             </div>
@@ -418,8 +404,7 @@ export function CampusProDashboardView({
         </div>
       </div>
 
-      {/* Contextual Injected Content Zone above Stats */}
-      <EditableZone zoneId="student_stats_top" className="my-3" />
+
       <div className="hidden sm:grid sm:grid-cols-2 md:grid-cols-4 gap-4">
         {/* Attendance Card */}
         <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200/80 shadow-2xs space-y-3 hover:border-blue-300 transition-colors">
@@ -525,8 +510,7 @@ export function CampusProDashboardView({
         </div>
       </div>
 
-      {/* Contextual Injected Content Zone above Timetable */}
-      <EditableZone zoneId="student_timetable_top" className="my-3" />
+
       <div className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="flex items-center space-x-3.5">
           <div className="w-12 h-12 rounded-2xl bg-blue-100 text-[#1D61E7] flex items-center justify-center font-bold shrink-0 shadow-2xs">
@@ -820,8 +804,7 @@ export function CampusProDashboardView({
         </div>
       </div>
 
-      {/* Contextual Injected Content Zone above Analytics */}
-      <EditableZone zoneId="student_analytics_top" className="my-3" />
+
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
         {/* Card 1: Performance Analytics (Real Bar Chart) */}
         <div className="bg-white rounded-2xl border border-slate-200/80 p-5 shadow-2xs space-y-4 hover:shadow-xs transition-shadow">
@@ -956,11 +939,9 @@ export function CampusProDashboardView({
         </div>
       </div>
 
-      {/* Contextual Injected Content Zone below Hero */}
-      <EditableZone zoneId="student_hero_bottom" className="my-3" />
 
-      {/* Contextual Injected Content Zone at Bottom */}
-      <EditableZone zoneId="student_dashboard_bottom" className="mt-6" />
+
+
 
       {/* Footer */}
       <footer className="pt-6 border-t border-slate-200/70 flex flex-col sm:flex-row items-center justify-between text-xs text-slate-400 space-y-2 sm:space-y-0">

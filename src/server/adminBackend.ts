@@ -1,5 +1,4 @@
 import { createClient } from '@supabase/supabase-js';
-import { multiCollegeService } from '../services/multiCollegeService';
 
 try {
   if (typeof process !== 'undefined' && typeof (process as any).loadEnvFile === 'function') {
@@ -44,10 +43,10 @@ export async function handleAdminUserOperation(token: string, body: any): Promis
     const parts = token.split(':');
     callerRole = parts[1];
     callerCollegeId = parts[3];
-    callerUser = { 
-      id: parts[2] || 'test-user-id', 
+    callerUser = {
+      id: parts[2] || 'test-user-id',
       email: parts[4] || `${callerRole}@test.adithyan.edu`,
-      user_metadata: { role: callerRole, college_id: callerCollegeId } 
+      user_metadata: { role: callerRole, college_id: callerCollegeId }
     };
   } else {
     const userClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
@@ -146,47 +145,6 @@ export async function handleAdminUserOperation(token: string, body: any): Promis
     }
   }
 
-  // 2. Dynamic Role-Level Capability & Backend Action Enforcement (College Tenant Scoped)
-  if (callerRole && callerRole !== 'platform_super_admin') {
-    const effectiveCollegeId = callerCollegeId || '11111111-1111-1111-1111-111111111111';
-    const isBypassAction = ['resolve_login_id', 'verify_tenant_isolation'].includes(action);
-
-    if (!isBypassAction) {
-      try {
-        const roleConfig = await multiCollegeService.getRoleConfiguration(effectiveCollegeId, callerRole);
-
-        // A. Business Rules Enforcement: e.g. restrictFinanceAccess
-        if (roleConfig?.businessRules?.restrictFinanceAccess) {
-          const isFinanceAction = ['collect_fee_payment', 'generate_fee_receipt', 'approve_fee_concession'].includes(action);
-          if (isFinanceAction) {
-            return {
-              status: 403,
-              body: {
-                error: `Financial transaction "${action}" is blocked for role "${callerRole}" by institutional policy.`,
-                code: 'FINANCE_ACCESS_RESTRICTED'
-              }
-            };
-          }
-        }
-
-        // B. Explicit Backend Action Blocking
-        if (roleConfig && roleConfig.backendActions && roleConfig.backendActions[action] === false) {
-          return {
-            status: 403,
-            body: {
-              error: `Action "${action}" has been disabled for role "${callerRole}" by Institutional Administrator.`,
-              code: 'ROLE_ACTION_DISABLED',
-              role: callerRole,
-              action
-            }
-          };
-        }
-      } catch (roleErr) {
-        // Fallback gracefully
-      }
-    }
-  }
-
   // 3. Operational Category Authorization Whitelists
   const isTeacherOperation = [
     'record_attendance',
@@ -268,7 +226,7 @@ export async function handleAdminUserOperation(token: string, body: any): Promis
           if (!error && data) {
             return { status: 200, body: { success: true, assignment: data } };
           }
-        } catch {}
+        } catch { }
         return { status: 200, body: { success: true, assignment: assignment || {} } };
       }
 
@@ -293,7 +251,7 @@ export async function handleAdminUserOperation(token: string, body: any): Promis
           if (!error && data) {
             return { status: 200, body: { success: true, payment: data } };
           }
-        } catch {}
+        } catch { }
         return { status: 200, body: { success: true, payment: payment || {} } };
       }
 
@@ -1406,7 +1364,7 @@ export async function handleAdminUserOperation(token: string, body: any): Promis
             entity_type: 'students',
             new_values: { totalRows: rows.length, successCount, failureCount, timestamp: new Date().toISOString() }
           }]);
-        } catch {}
+        } catch { }
 
         return {
           status: 200,
@@ -1616,7 +1574,7 @@ export async function handleAdminUserOperation(token: string, body: any): Promis
             entity_type: 'parents',
             new_values: { totalRows: rows.length, successCount, failureCount, timestamp: new Date().toISOString() }
           }]);
-        } catch {}
+        } catch { }
 
         return {
           status: 200,
@@ -1805,7 +1763,7 @@ export async function handleAdminUserOperation(token: string, body: any): Promis
             entity_type: 'students_and_parents',
             new_values: { totalRows: rows.length, successCount, failureCount, timestamp: new Date().toISOString() }
           }]);
-        } catch {}
+        } catch { }
 
         return {
           status: 200,
@@ -3143,7 +3101,7 @@ export async function handleAdminUserOperation(token: string, body: any): Promis
         }
 
         const collegeId = crypto.randomUUID ? crypto.randomUUID() : `col_${Date.now()}`;
-        
+
         // Log in audit trail
         await supabaseAdmin.from('audit_logs').insert({
           user_email: callerUser.email || 'superadmin@platform.adithyan.edu',
@@ -3154,10 +3112,10 @@ export async function handleAdminUserOperation(token: string, body: any): Promis
           new_values: { collegeId, name, code, contactEmail, institutionType, adminAccount, timestamp: new Date().toISOString() }
         });
 
-        return { 
-          status: 200, 
-          body: { 
-            success: true, 
+        return {
+          status: 200,
+          body: {
+            success: true,
             college: {
               id: collegeId,
               name,
@@ -3167,8 +3125,8 @@ export async function handleAdminUserOperation(token: string, body: any): Promis
               contact_email: contactEmail,
               admin_email: adminAccount?.email,
               current_version: 'v1.0.0'
-            } 
-          } 
+            }
+          }
         };
       }
 
@@ -3234,13 +3192,13 @@ export async function handleAdminUserOperation(token: string, body: any): Promis
         }
         const effectiveCallerCollege = callerCollegeId || '11111111-1111-1111-1111-111111111111';
         if (targetCollegeId && targetCollegeId !== effectiveCallerCollege) {
-          return { 
-            status: 403, 
-            body: { 
-              authorized: false, 
+          return {
+            status: 403,
+            body: {
+              authorized: false,
               error: 'Cross-college access rejected. Caller is isolated to their own college.',
-              code: 'CROSS_TENANT_VIOLATION' 
-            } 
+              code: 'CROSS_TENANT_VIOLATION'
+            }
           };
         }
         return { status: 200, body: { authorized: true, collegeId: effectiveCallerCollege, accessScope: 'tenant_isolated' } };

@@ -23,9 +23,6 @@ import { useAuth } from '@/context/AuthContext';
 import { useRealtimeSubscription } from '@/hooks/useRealtimeSubscription';
 import { Concern } from '@/types/database.types';
 import { useToast } from '@/hooks/use-toast';
-import { DynamicFormFields } from '@/components/customizer/DynamicFormFields';
-import { CustomFieldsViewer } from '@/components/customizer/CustomFieldsViewer';
-import { EditableText } from '@/components/customizer/EditableText';
 
 const CATEGORIES = [
   'Academic Curriculum & Lectures',
@@ -52,7 +49,6 @@ export function StudentComplaintsTab() {
   const [priority, setPriority] = useState<'low' | 'medium' | 'high' | 'urgent'>('medium');
   const [subject, setSubject] = useState<string>('');
   const [description, setDescription] = useState<string>('');
-  const [customFields, setCustomFields] = useState<Record<string, any>>({});
 
   const loadConcerns = useCallback(async () => {
     if (!user?.id) return;
@@ -104,7 +100,6 @@ export function StudentComplaintsTab() {
         description: description.trim(),
         status: 'Pending',
         is_anonymous: false,
-        custom_fields: customFields,
       };
 
       const result = await db.createConcern(payload);
@@ -116,7 +111,6 @@ export function StudentComplaintsTab() {
         setSubject('');
         setDescription('');
         setPriority('medium');
-        setCustomFields({});
         loadConcerns();
       } else {
         throw new Error('Database insertion rejected.');
@@ -164,18 +158,10 @@ export function StudentComplaintsTab() {
         <div className="flex items-center space-x-2.5">
           <AlertTriangle className="w-5 h-5 text-amber-600" />
           <div>
-            <EditableText
-              id="student_complaints_title"
-              defaultText="Student Grievance & Concerns Portal"
-              as="h2"
-              className="text-xl font-bold text-foreground"
-            />
-            <EditableText
-              id="student_complaints_subtitle"
-              defaultText="Direct and confidential communication channel to university administration and grievance officers"
-              as="p"
-              className="text-xs text-muted-foreground"
-            />
+            <h2 className="text-xl font-bold text-foreground">Student Grievance & Concerns Portal</h2>
+            <p className="text-xs text-muted-foreground">
+              Direct and confidential communication channel to university administration and grievance officers
+            </p>
           </div>
         </div>
         <Button variant="outline" size="sm" onClick={loadConcerns} className="h-8">
@@ -250,13 +236,6 @@ export function StudentComplaintsTab() {
                     required
                   />
                 </div>
-
-                {/* Dynamic Form Customizer for Grievances */}
-                <DynamicFormFields
-                  formId="student_complaints"
-                  values={customFields}
-                  onChange={(k, v) => setCustomFields(prev => ({ ...prev, [k]: v }))}
-                />
               </CardContent>
 
               <CardFooter className="pt-2 border-t border-border bg-slate-50/50">
@@ -345,13 +324,6 @@ export function StudentComplaintsTab() {
                       <p className="text-xs text-foreground/80 leading-relaxed whitespace-pre-wrap">
                         {concern.description}
                       </p>
-
-                      {/* Submitted Custom Attributes */}
-                      <CustomFieldsViewer 
-                        customFields={(concern as any).custom_fields} 
-                        layout="inline" 
-                        className="mt-2" 
-                      />
 
                       {/* Admin response block if available */}
                       {(concern.admin_response || concern.resolution_notes) ? (

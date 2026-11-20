@@ -19,7 +19,6 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Button } from '@/components/ui/button';
 import { AlertTriangle, LogOut, ArrowLeft } from 'lucide-react';
 import { ROLE_CONFIGS } from '@/config/roles';
-import { DynamicRoleDashboard } from '@/components/dashboards/DynamicRoleDashboard';
 
 function RoleErrorDashboard({ role, onLogout }: { role: string; onLogout: () => void }) {
   const navigate = useNavigate();
@@ -152,12 +151,7 @@ const Dashboard = () => {
         return <RoleErrorDashboard role={activeRole} onLogout={logout} />;
     }
 
-    return (
-      <DynamicRoleDashboard
-        role={activeRole}
-        defaultDashboardComponent={dashboardContent}
-      />
-    );
+    return dashboardContent;
   };
 
   // Student portal has its own integrated mobile & desktop shell

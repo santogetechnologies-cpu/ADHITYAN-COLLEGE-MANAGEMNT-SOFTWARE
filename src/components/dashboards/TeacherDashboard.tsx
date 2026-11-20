@@ -48,8 +48,6 @@ import { db } from '@/services/supabase/database';
 import { useRealtimeSubscription } from '@/hooks/useRealtimeSubscription';
 import { useToast } from '@/hooks/use-toast';
 import { Assignment, AssignmentSubmission, ExamResult, StudentAttendance, Profile } from '@/types/database.types';
-import { EditableText } from '@/components/customizer/EditableText';
-import { EditableZone } from '@/components/customizer/EditableZone';
 
 // Tab components
 import { PeriodAttendanceDesk } from '@/components/teachers/PeriodAttendanceDesk';
@@ -358,12 +356,7 @@ export function TeacherDashboard() {
         {/* Header Bar */}
         <div className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
-            <EditableText
-              id="teacher_portal_title"
-              defaultText="Faculty Portal"
-              as="h1"
-              className="text-xl font-bold text-slate-900 tracking-tight"
-            />
+            <h1 className="text-xl font-bold text-slate-900 tracking-tight">Faculty Portal</h1>
             <p className="text-xs text-slate-500 mt-0.5">
               {user?.name || 'Faculty Member'} • {user?.department || 'Paramedical Faculty'} • {assignedClassRosters.length} {assignedClassRosters.length === 1 ? 'Class' : 'Classes'} Assigned
             </p>
@@ -382,8 +375,7 @@ export function TeacherDashboard() {
           </div>
         </div>
 
-        {/* Injected Content Zone for Faculty Dashboard */}
-        <EditableZone zoneId="teacher_dashboard_top" className="my-3" />
+
 
         {/* Assigned Classes Section */}
         {loading ? (

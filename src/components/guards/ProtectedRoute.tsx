@@ -3,8 +3,6 @@ import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth, UserRole } from '@/context/AuthContext';
 import { ROLE_CONFIGS } from '@/config/roles';
 import { Loader2 } from 'lucide-react';
-import { permissionEnforcementService } from '@/services/permissionEnforcementService';
-import { toast } from 'sonner';
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
@@ -33,37 +31,12 @@ export function ProtectedRoute({ children, allowedRoles }: ProtectedRouteProps) 
     return <Navigate to="/" state={state} replace />;
   }
 
-  // Platform super admin has global bypass across platform and college previews
-  if (user.role === 'platform_super_admin') {
-    return <>{children}</>;
-  }
-
-  // College admin has bypass within their college routes, but is strictly blocked from Platform Super Admin routes
-  if (user.role === 'admin') {
-    if (allowedRoles && allowedRoles.includes('platform_super_admin') && !allowedRoles.includes('admin')) {
-      return <Navigate to="/admin" replace />;
-    }
-    return <>{children}</>;
-  }
-
   // Check role authorization: safely redirect unauthorized users to their own home dashboard
   // and replace the unauthorized URL in history so browser Back does not return to unauthorized pages
   if (allowedRoles && allowedRoles.length > 0 && !allowedRoles.includes(user.role)) {
     const userRoleConfig = ROLE_CONFIGS[user.role];
     const userHome = userRoleConfig?.home || `/dashboard/${user.role}`;
-
     return <Navigate to={userHome} replace />;
-  }
-
-  // Dynamic Super Admin Module & Page Authorization Enforcement
-  const dynamicCheck = permissionEnforcementService.checkRouteAccess(user.role, location.pathname);
-  if (!dynamicCheck.allowed) {
-    if (dynamicCheck.reason) {
-      toast.error(dynamicCheck.reason);
-    }
-    const userRoleConfig = ROLE_CONFIGS[user.role];
-    const fallbackHome = dynamicCheck.redirectTo || userRoleConfig?.home || `/dashboard/${user.role}`;
-    return <Navigate to={fallbackHome} replace />;
   }
 
   return <>{children}</>;

@@ -55,27 +55,15 @@ import ReceptionistDashboard from '@/components/dashboards/ReceptionistDashboard
 import StoreManagerDashboard from '@/components/dashboards/StoreManagerDashboard';
 import FinanceManagerDashboard from '@/components/dashboards/FinanceManagerDashboard';
 import TransportDriverDashboard from '@/components/dashboards/TransportDriverDashboard';
-import SuperAdminControlCenter from '@/components/admin/superAdmin/SuperAdminControlCenter';
 import AccountProvisioningWorkspace from '@/components/admin/accountProvisioning/AccountProvisioningWorkspace';
 import { CollegeProvider } from '@/context/CollegeContext';
-import { VisualCustomizerProvider } from '@/context/VisualCustomizerContext';
-import { PlatformAdminLayout } from '@/components/platformAdmin/PlatformAdminLayout';
-import { PlatformOverview } from '@/components/platformAdmin/PlatformOverview';
-import { CollegeManagement } from '@/components/platformAdmin/CollegeManagement';
-import { CollegeProvisioningWizard } from '@/components/platformAdmin/CollegeProvisioningWizard';
-import { CollegeWorkspace } from '@/components/platformAdmin/workspace/CollegeWorkspace';
-import { ConfigurationTemplates } from '@/components/platformAdmin/ConfigurationTemplates';
-import { PlatformAuditLogs } from '@/components/platformAdmin/PlatformAuditLogs';
-import { PlatformSettings } from '@/components/platformAdmin/PlatformSettings';
-
 
 const App = () => (
   <ErrorBoundary>
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
         <CollegeProvider>
-          <VisualCustomizerProvider>
-            <PresenceProvider>
+          <PresenceProvider>
           <TooltipProvider>
             <Toaster />
             <Sonner />
@@ -302,20 +290,9 @@ const App = () => (
                   <Route path="reports" element={<AdminReports />} />
                   <Route path="analytics" element={<AdminAnalytics />} />
                   <Route path="settings" element={<ProtectedRoute allowedRoles={['admin']}><AdminSettings /></ProtectedRoute>} />
-                  <Route path="control-center" element={<ProtectedRoute allowedRoles={['admin']}><SuperAdminControlCenter /></ProtectedRoute>} />
                   <Route path="account-provisioning" element={<ProtectedRoute allowedRoles={['admin', 'principal', 'receptionist']}><AccountProvisioningWorkspace /></ProtectedRoute>} />
                 </Route>
                 
-                {/* Super Admin Direct Shortcut */}
-                <Route
-                  path="/control-center"
-                  element={
-                    <ProtectedRoute allowedRoles={['admin', 'platform_super_admin']}>
-                      <SuperAdminControlCenter />
-                    </ProtectedRoute>
-                  }
-                />
-
                 {/* Account Provisioning & Admission Direct Shortcut */}
                 <Route
                   path="/account-provisioning"
@@ -325,24 +302,6 @@ const App = () => (
                     </ProtectedRoute>
                   }
                 />
-                
-                {/* Platform Super Admin Infrastructure (Multi-Tenant Management) */}
-                <Route
-                  path="/platform-admin"
-                  element={
-                    <ProtectedRoute allowedRoles={['platform_super_admin']}>
-                      <PlatformAdminLayout />
-                    </ProtectedRoute>
-                  }
-                >
-                  <Route index element={<PlatformOverview />} />
-                  <Route path="colleges" element={<CollegeManagement />} />
-                  <Route path="provision" element={<CollegeProvisioningWizard />} />
-                  <Route path="workspace/:collegeId" element={<CollegeWorkspace />} />
-                  <Route path="templates" element={<ConfigurationTemplates />} />
-                  <Route path="audit-logs" element={<PlatformAuditLogs />} />
-                  <Route path="settings" element={<PlatformSettings />} />
-                </Route>
                 
                 {/* NAAC Accreditation System (Nested) */}
                 <Route
@@ -372,7 +331,6 @@ const App = () => (
             </BrowserRouter>
           </TooltipProvider>
             </PresenceProvider>
-          </VisualCustomizerProvider>
         </CollegeProvider>
     </AuthProvider>
     </QueryClientProvider>

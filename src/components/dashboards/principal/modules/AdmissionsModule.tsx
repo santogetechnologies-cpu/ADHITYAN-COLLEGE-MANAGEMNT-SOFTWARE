@@ -22,7 +22,6 @@ import {
   Filter
 } from 'lucide-react';
 import { AdmissionApplication, Department } from '@/types/database.types';
-import { CustomFieldsViewer } from '@/components/customizer/CustomFieldsViewer';
 
 interface AdmissionsModuleProps {
   admissions: AdmissionApplication[];
@@ -460,11 +459,6 @@ export function AdmissionsModule({
                   <span className="text-slate-700">{selectedApp.remarks}</span>
                 </div>
               )}
-
-              {/* Dynamic Custom Institutional Attributes */}
-              <CustomFieldsViewer
-                customFields={(selectedApp as any).custom_fields}
-              />
             </div>
 
             <DialogFooter className="pt-2">

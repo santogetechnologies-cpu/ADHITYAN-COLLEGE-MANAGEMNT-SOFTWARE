@@ -1,0 +1,262 @@
+{
+  "totalFiles": 64,
+  "totalLines": 20048,
+  "inventory": [
+    {
+      "path": "src\\components\\admin\\superAdmin\\dataManagement\\AcademicsManagementView.tsx",
+      "lines": 898
+    },
+    {
+      "path": "src\\components\\admin\\superAdmin\\dataManagement\\AdmissionsManagementView.tsx",
+      "lines": 665
+    },
+    {
+      "path": "src\\components\\admin\\superAdmin\\dataManagement\\CampusOperationsView.tsx",
+      "lines": 435
+    },
+    {
+      "path": "src\\components\\admin\\superAdmin\\dataManagement\\CentralDataManagementHub.tsx",
+      "lines": 240
+    },
+    {
+      "path": "src\\components\\admin\\superAdmin\\dataManagement\\CollegeSettingsView.tsx",
+      "lines": 337
+    },
+    {
+      "path": "src\\components\\admin\\superAdmin\\dataManagement\\CoursesManagementView.tsx",
+      "lines": 547
+    },
+    {
+      "path": "src\\components\\admin\\superAdmin\\dataManagement\\FeesManagementView.tsx",
+      "lines": 716
+    },
+    {
+      "path": "src\\components\\admin\\superAdmin\\dataManagement\\StudentsManagementView.tsx",
+      "lines": 695
+    },
+    {
+      "path": "src\\components\\admin\\superAdmin\\dialogs\\CreateCollegeDialog.tsx",
+      "lines": 234
+    },
+    {
+      "path": "src\\components\\admin\\superAdmin\\header\\SuperAdminMasterHeader.tsx",
+      "lines": 253
+    },
+    {
+      "path": "src\\components\\admin\\superAdmin\\liveCustomizer\\AddPageModal.tsx",
+      "lines": 174
+    },
+    {
+      "path": "src\\components\\admin\\superAdmin\\liveCustomizer\\ElementInspectorDrawer.tsx",
+      "lines": 158
+    },
+    {
+      "path": "src\\components\\admin\\superAdmin\\liveCustomizer\\LiveBackendPermissionsDrawer.tsx",
+      "lines": 309
+    },
+    {
+      "path": "src\\components\\admin\\superAdmin\\liveCustomizer\\LiveCustomizerToolbar.tsx",
+      "lines": 257
+    },
+    {
+      "path": "src\\components\\admin\\superAdmin\\liveCustomizer\\LiveNavigationDrawer.tsx",
+      "lines": 252
+    },
+    {
+      "path": "src\\components\\admin\\superAdmin\\liveCustomizer\\LivePortalHost.tsx",
+      "lines": 299
+    },
+    {
+      "path": "src\\components\\admin\\superAdmin\\liveCustomizer\\LiveSectionsModal.tsx",
+      "lines": 307
+    },
+    {
+      "path": "src\\components\\admin\\superAdmin\\liveCustomizer\\RoleSelectionHub.tsx",
+      "lines": 433
+    },
+    {
+      "path": "src\\components\\admin\\superAdmin\\liveCustomizer\\WidgetSelectorModal.tsx",
+      "lines": 204
+    },
+    {
+      "path": "src\\components\\admin\\superAdmin\\rebuilt\\dialogs\\RollbackVersionDialog.tsx",
+      "lines": 198
+    },
+    {
+      "path": "src\\components\\admin\\superAdmin\\rebuilt\\header\\SuperAdminCommandHeader.tsx",
+      "lines": 140
+    },
+    {
+      "path": "src\\components\\admin\\superAdmin\\rebuilt\\RebuiltSuperAdminControlCenter.tsx",
+      "lines": 349
+    },
+    {
+      "path": "src\\components\\admin\\superAdmin\\rebuilt\\views\\AuditMonitoringView.tsx",
+      "lines": 270
+    },
+    {
+      "path": "src\\components\\admin\\superAdmin\\rebuilt\\views\\CollegeConfigView.tsx",
+      "lines": 411
+    },
+    {
+      "path": "src\\components\\admin\\superAdmin\\rebuilt\\views\\ModuleManagementView.tsx",
+      "lines": 205
+    },
+    {
+      "path": "src\\components\\admin\\superAdmin\\rebuilt\\views\\RoleControlCenterView.tsx",
+      "lines": 717
+    },
+    {
+      "path": "src\\components\\admin\\superAdmin\\rebuilt\\views\\SecurityEnforcementView.tsx",
+      "lines": 251
+    },
+    {
+      "path": "src\\components\\admin\\superAdmin\\rebuilt\\views\\UserAccountControlView.tsx",
+      "lines": 461
+    },
+    {
+      "path": "src\\components\\admin\\superAdmin\\rebuilt\\views\\WorkflowEngineView.tsx",
+      "lines": 373
+    },
+    {
+      "path": "src\\components\\admin\\superAdmin\\sections\\AuditLogsSection.tsx",
+      "lines": 299
+    },
+    {
+      "path": "src\\components\\admin\\superAdmin\\sections\\BackupRestoreSection.tsx",
+      "lines": 308
+    },
+    {
+      "path": "src\\components\\admin\\superAdmin\\sections\\DashboardBuilderSection.tsx",
+      "lines": 294
+    },
+    {
+      "path": "src\\components\\admin\\superAdmin\\sections\\DataIntegrationSection.tsx",
+      "lines": 161
+    },
+    {
+      "path": "src\\components\\admin\\superAdmin\\sections\\FeatureManagerSection.tsx",
+      "lines": 160
+    },
+    {
+      "path": "src\\components\\admin\\superAdmin\\sections\\FormBuilderSection.tsx",
+      "lines": 243
+    },
+    {
+      "path": "src\\components\\admin\\superAdmin\\sections\\GlobalSettingsSection.tsx",
+      "lines": 210
+    },
+    {
+      "path": "src\\components\\admin\\superAdmin\\sections\\ModuleManagerSection.tsx",
+      "lines": 220
+    },
+    {
+      "path": "src\\components\\admin\\superAdmin\\sections\\NavigationManagerSection.tsx",
+      "lines": 272
+    },
+    {
+      "path": "src\\components\\admin\\superAdmin\\sections\\NotificationConfigSection.tsx",
+      "lines": 132
+    },
+    {
+      "path": "src\\components\\admin\\superAdmin\\sections\\OverviewSection.tsx",
+      "lines": 239
+    },
+    {
+      "path": "src\\components\\admin\\superAdmin\\sections\\PermissionManagerSection.tsx",
+      "lines": 213
+    },
+    {
+      "path": "src\\components\\admin\\superAdmin\\sections\\PreviewModeSection.tsx",
+      "lines": 281
+    },
+    {
+      "path": "src\\components\\admin\\superAdmin\\sections\\PublishChangesModal.tsx",
+      "lines": 194
+    },
+    {
+      "path": "src\\components\\admin\\superAdmin\\sections\\RoleManagementSection.tsx",
+      "lines": 351
+    },
+    {
+      "path": "src\\components\\admin\\superAdmin\\sections\\RolePageCustomizerSection.tsx",
+      "lines": 290
+    },
+    {
+      "path": "src\\components\\admin\\superAdmin\\sections\\ThemeBrandingSection.tsx",
+      "lines": 166
+    },
+    {
+      "path": "src\\components\\admin\\superAdmin\\sections\\VersionHistorySection.tsx",
+      "lines": 147
+    },
+    {
+      "path": "src\\components\\admin\\superAdmin\\sections\\WidgetLibrarySection.tsx",
+      "lines": 132
+    },
+    {
+      "path": "src\\components\\admin\\superAdmin\\sections\\WorkflowBuilderSection.tsx",
+      "lines": 150
+    },
+    {
+      "path": "src\\components\\admin\\superAdmin\\SuperAdminControlCenter.tsx",
+      "lines": 9
+    },
+    {
+      "path": "src\\components\\customizer\\CustomFieldsViewer.tsx",
+      "lines": 66
+    },
+    {
+      "path": "src\\components\\customizer\\DynamicFormFields.tsx",
+      "lines": 384
+    },
+    {
+      "path": "src\\components\\customizer\\EditableText.tsx",
+      "lines": 191
+    },
+    {
+      "path": "src\\components\\customizer\\EditableZone.tsx",
+      "lines": 349
+    },
+    {
+      "path": "src/components/widgets/DynamicWidgetRenderer.tsx",
+      "lines": 540
+    },
+    {
+      "path": "src/components/dashboards/DynamicRoleDashboard.tsx",
+      "lines": 117
+    },
+    {
+      "path": "src/context/VisualCustomizerContext.tsx",
+      "lines": 354
+    },
+    {
+      "path": "src/services/superAdminService.ts",
+      "lines": 551
+    },
+    {
+      "path": "src/services/superAdminDefaults.ts",
+      "lines": 1054
+    },
+    {
+      "path": "src/services/visualCustomizationService.ts",
+      "lines": 178
+    },
+    {
+      "path": "src/services/capabilityRegistry.ts",
+      "lines": 542
+    },
+    {
+      "path": "src/types/superAdmin.types.ts",
+      "lines": 298
+    },
+    {
+      "path": "src/types/visualCustomizer.types.ts",
+      "lines": 66
+    },
+    {
+      "path": "src/types/roleCustomization.types.ts",
+      "lines": 99
+    }
+  ]
+}

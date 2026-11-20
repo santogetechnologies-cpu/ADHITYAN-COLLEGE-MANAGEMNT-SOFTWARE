@@ -21,7 +21,6 @@ import {
   AlertTriangle
 } from 'lucide-react';
 import { Profile, Department, Certificate, DisciplinaryIncident } from '@/types/database.types';
-import { CustomFieldsViewer } from '@/components/customizer/CustomFieldsViewer';
 
 interface StudentsModuleProps {
   students: Profile[];
@@ -227,13 +226,6 @@ export function StudentsModule({
                   <div className="col-span-2 pt-1 border-t border-slate-200/60 mt-1">
                     <span className="text-[10px] text-muted-foreground uppercase block">Residential Address</span>
                     <span className="text-slate-700">{selectedStudent.address || 'On file with Admissions'}</span>
-                  </div>
-
-                  {/* Dynamic Custom Institutional Attributes */}
-                  <div className="col-span-2">
-                    <CustomFieldsViewer
-                      customFields={(selectedStudent as any).custom_fields || (selectedStudent as any).preferences?.custom_fields}
-                    />
                   </div>
                 </div>
 
