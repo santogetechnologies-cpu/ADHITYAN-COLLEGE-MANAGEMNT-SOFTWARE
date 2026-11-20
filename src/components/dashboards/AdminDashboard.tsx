@@ -102,12 +102,13 @@ export function AdminDashboard() {
       const totalUsers = profiles.length;
       const activeStudents = profiles.filter(p => p.role === 'student' && (p.status === 'active' || !p.status)).length;
       const parentAccounts = profiles.filter(p => p.role === 'parent').length;
+      const students = profiles.filter(p => p.role === 'student');
       const teachers = profiles.filter(p => p.role === 'teacher').length;
       const staff = profiles.filter(p => 
         ['receptionist', 'store_manager', 'finance_manager', 'transport_driver', 'driver', 'storekeeper', 'accountant', 'financier', 'admin', 'principal', 'naac_coordinator', 'hr_manager', 'librarian', 'hostel_warden', 'placement_officer'].includes(p.role)
       );
 
-      let attRate = 95.0;
+      let attRate = 0;
       if (attendance.length > 0) {
         const presentCount = attendance.filter(a => a.status === 'present').length;
         attRate = Math.round((presentCount / attendance.length) * 1000) / 10;

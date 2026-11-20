@@ -84,7 +84,7 @@ export function UserAccountControlView() {
   const handleToggleStatus = async (user: AdminManagedUser) => {
     const nextStatus = user.status === 'active' ? 'inactive' : 'active';
     try {
-      await adminUserService.setActiveStatus(user.id, nextStatus);
+      await adminUserService.setUserActiveStatus(user.id, nextStatus === 'active');
       setUsers(prev => prev.map(u => u.id === user.id ? { ...u, status: nextStatus } : u));
       toast.success(`Account status for ${user.name} updated to ${nextStatus}`);
     } catch (err: any) {
@@ -99,7 +99,7 @@ export function UserAccountControlView() {
     }
     setIsResetting(true);
     try {
-      await adminUserService.resetPassword(resetUser.id, newPassword.trim());
+      await adminUserService.resetUserPassword(resetUser.id, newPassword.trim());
       toast.success(`Password for ${resetUser.email} has been reset`);
       setResetUser(null);
       setNewPassword('');

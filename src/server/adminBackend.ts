@@ -1,6 +1,8 @@
 import { createClient } from '@supabase/supabase-js';
 import { multiCollegeService } from '../services/multiCollegeService';
 
+const isUuidStr = (u?: unknown): u is string => typeof u === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(u);
+
 try {
   if (typeof process !== 'undefined' && typeof (process as any).loadEnvFile === 'function') {
     (process as any).loadEnvFile();
@@ -642,7 +644,6 @@ export async function handleAdminUserOperation(token: string, body: any): Promis
 
       case 'record_admission_deposit': {
         const d = body.deposit ?? {};
-        const isUuidStr = (u?: unknown) => typeof u === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(u);
         const amount = Number(d.amount);
         if (!isUuidStr(d.application_id) || !Number.isFinite(amount) || amount <= 0) {
           return { status: 400, body: { error: 'deposit.application_id (uuid) and a positive deposit.amount are required.', code: 'VALIDATION_ERROR' } };

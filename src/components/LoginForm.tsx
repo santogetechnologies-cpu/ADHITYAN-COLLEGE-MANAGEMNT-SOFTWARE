@@ -49,7 +49,7 @@ export function LoginForm({ role, onBack }: LoginFormProps) {
   const [isFirstLoginOpen, setIsFirstLoginOpen] = useState(false);
   const [isResetting, setIsResetting] = useState(false);
   const [isUpdatingPassword, setIsUpdatingPassword] = useState(false);
-  const { login, resetPassword, updatePassword, isLoading } = useAuth();
+  const { login, logout, resetPassword, updatePassword, isLoading } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
 
