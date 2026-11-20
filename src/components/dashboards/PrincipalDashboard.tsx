@@ -394,11 +394,11 @@ export default function PrincipalDashboard() {
   const handleApproveCertificate = async (id: string) => {
     setActionLoadingId(id);
     try {
-      const ok = await db.updateCertificateStatus(id, 'Approved');
+      const ok = await db.updateCertificateStatus(id, 'Issued');
       if (ok) {
-        setCertificates(prev => prev.map(c => c.id === id ? { ...c, status: 'Approved' } : c));
+        setCertificates(prev => prev.map(c => c.id === id ? { ...c, status: 'Issued' } : c));
         toast({
-          title: "Certificate Approved",
+          title: "Certificate Issued",
           description: "Digitally authorized with Principal signature."
         });
       }
@@ -416,7 +416,9 @@ export default function PrincipalDashboard() {
   const handleRejectCertificate = async (id: string) => {
     setActionLoadingId(id);
     try {
-      const ok = await db.updateCertificateStatus(id, 'Rejected');
+      const reason = window.prompt('Reason for declining this certificate (required):');
+      if (!reason || reason.trim().length < 3) { setActionLoadingId(null); return; }
+      const ok = await db.updateCertificateStatus(id, 'Rejected', reason.trim());
       if (ok) {
         setCertificates(prev => prev.map(c => c.id === id ? { ...c, status: 'Rejected' } : c));
         toast({

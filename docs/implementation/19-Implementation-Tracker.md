@@ -150,3 +150,10 @@ Legend: ✅ done & verified as stated · 🟡 written, not runnable here · ⬜ 
 |------|--------|----------|
 | Directory hidden from students/parents; donations and mentorships stored in the database, staff-only | ✅ SQL | 4 smoke checks (183 total) |
 | Donations tab (record, status, export, real totals), Mentorship tab (pairings, status, real stats), directory filter + export, event status change; invented totals/rows and two fake dialogs removed | 🟡 UI | build + type-check; dead buttons 81 → 68 |
+
+## Module — Certificates (migration 048)
+| Item | Status | Evidence |
+|------|--------|----------|
+| Server-issued numbers/hash, student requests, staff decisions (reason on reject), public verification, audited | ✅ SQL | 11 smoke checks (194 total) |
+| Certificate screen rebuilt (issue by student search, requests table with issue/reject/print/export/search, verify tab); fake templates, transcript and bulk-print tabs removed; Principal dashboard uses the same functions | 🟡 UI | build; dead buttons 68 → ~57 |
+| Student-side "request a certificate" screen; transcripts from real results; certificate templates editor | ⬜ | API ready (`db.requestCertificate`) |

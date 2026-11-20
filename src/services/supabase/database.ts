@@ -2301,32 +2301,39 @@ export const db = {
     }
   },
 
-  async requestCertificate(cert: Omit<T.Certificate, 'id' | 'created_at'>): Promise<T.Certificate | null> {
-    try {
-      const { data, error } = await supabase.from('certificates').insert(cert).select().single();
-      if (error) throw error;
-      return data;
-    } catch (err) {
-      console.error('requestCertificate error:', err);
-      return null;
-    }
+  /** Staff issue a certificate; number, QR hash, name and class are produced by the server (migration 048). */
+  async issueCertificate(studentRef: string, type: string, purpose: string, details?: string): Promise<{ id: string; certificate_number: string }> {
+    const sb: any = supabase;
+    const { data, error } = await sb.rpc('certificate_issue', { p_student_ref: studentRef, p_type: type, p_purpose: purpose, p_details: details || null });
+    if (error) throw new Error(error.message);
+    if (!data?.success) throw new Error(data?.error || 'Could not issue the certificate');
+    return data;
   },
 
-  async updateCertificateStatus(id: string, status: T.Certificate['status']): Promise<boolean> {
-    try {
-      let { data, error } = await supabase.from('certificates').update({ status }).eq('id', id).select();
-      if (error || !data || data.length === 0) {
-        const admin = await getAdminClient();
-        if (admin) {
-          const res = await admin.from('certificates').update({ status }).eq('id', id).select();
-          if (!res.error && res.data && res.data.length > 0) return true;
-        }
-      }
-      return !error && !!data && data.length > 0;
-    } catch (err) {
-      console.error('updateCertificateStatus error:', err);
-      return false;
-    }
+  /** A student requests a certificate for themselves. */
+  async requestCertificate(type: string, purpose: string): Promise<{ id: string; certificate_number: string }> {
+    const sb: any = supabase;
+    const { data, error } = await sb.rpc('certificate_request', { p_type: type, p_purpose: purpose });
+    if (error) throw new Error(error.message);
+    if (!data?.success) throw new Error(data?.error || 'Could not submit the request');
+    return data;
+  },
+
+  /** Issue ('Approved'/'Issued') or reject a pending request. Rejection needs a reason. */
+  async updateCertificateStatus(id: string, status: T.Certificate['status'], note?: string): Promise<boolean> {
+    const decision = status === 'Rejected' ? 'Reject' : 'Issue';
+    const sb: any = supabase;
+    const { data, error } = await sb.rpc('certificate_decide', { p_id: id, p_decision: decision, p_note: note || null });
+    if (error) throw new Error(error.message);
+    if (!data?.success) throw new Error(data?.error || 'Could not update the request');
+    return true;
+  },
+
+  async verifyCertificate(number: string): Promise<{ valid: boolean; type?: string; student?: string; issued_on?: string }> {
+    const sb: any = supabase;
+    const { data, error } = await sb.rpc('certificate_verify', { p_number: number });
+    if (error) throw new Error(error.message);
+    return data || { valid: false };
   },
 
   // ---------------------------------------------------------------------------

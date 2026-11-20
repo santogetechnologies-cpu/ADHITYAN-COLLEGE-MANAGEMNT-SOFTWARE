@@ -431,6 +431,29 @@ RESET ROLE;
 SELECT pg_temp.chk('donation amount must be positive', pg_temp.fails($q$INSERT INTO public.alumni_donations (donor_name,amount,cause) VALUES ('x',0,'y')$q$));
 SELECT pg_temp.chk('donation status is validated', pg_temp.fails($q$INSERT INTO public.alumni_donations (donor_name,amount,cause,status) VALUES ('x',5,'y','Bogus')$q$));
 
+-- ---- 048 certificates ----
+SET LOCAL ROLE authenticated;
+SELECT set_config('request.jwt.claim.sub','c0000000-0000-0000-0000-000000000008',true);   -- admin
+CREATE TEMP TABLE _cert AS SELECT public.certificate_issue('FE-001','Bonafide Certificate','Bank loan') AS r;
+RESET ROLE;
+SELECT pg_temp.chk('admin issues a certificate; number and name come from the server', (SELECT (r->>'success')='true' AND r->>'certificate_number' ~ '^CERT-[0-9]{4}-[0-9]{6}$' FROM _cert)
+  AND (SELECT student_name='Fee S1' AND status='Issued' AND qr_code_hash IS NOT NULL FROM public.certificates WHERE certificate_number=(SELECT r->>'certificate_number' FROM _cert)));
+SELECT pg_temp.chk('unknown student is refused', (public.certificate_issue('NOPE-1','Bonafide','Loan')->>'code') IN ('FORBIDDEN','STUDENT_NOT_FOUND'));
+SET LOCAL ROLE authenticated;
+SELECT set_config('request.jwt.claim.sub','c0000000-0000-0000-0000-000000000007',true);   -- student FE-002
+SELECT pg_temp.chk('student cannot issue', (public.certificate_issue('FE-002','Bonafide','Loan')->>'code')='FORBIDDEN');
+CREATE TEMP TABLE _req AS SELECT public.certificate_request('Character Certificate','Scholarship') AS r;
+SELECT pg_temp.chk('student requests their own certificate (Pending)', (SELECT (r->>'success')='true' FROM _req) AND (SELECT count(*)=1 FROM public.certificates WHERE status='Pending'));
+SELECT pg_temp.chk('student sees only their own certificates', (SELECT count(*)=1 FROM public.certificates));
+SELECT pg_temp.chk('student cannot approve own request', (public.certificate_decide((SELECT (r->>'id')::uuid FROM _req),'Issue')->>'code')='FORBIDDEN');
+SELECT pg_temp.chk('no direct writes to certificates', has_table_privilege('authenticated','public.certificates','INSERT')=false AND has_table_privilege('authenticated','public.certificates','UPDATE')=false);
+SELECT set_config('request.jwt.claim.sub','c0000000-0000-0000-0000-000000000008',true);
+SELECT pg_temp.chk('rejecting needs a reason', (public.certificate_decide((SELECT (r->>'id')::uuid FROM _req),'Reject')->>'code')='REASON_REQUIRED');
+SELECT pg_temp.chk('admin issues the request', (public.certificate_decide((SELECT (r->>'id')::uuid FROM _req),'Issue')->>'status')='Issued');
+SELECT pg_temp.chk('a decided request cannot be decided again', (public.certificate_decide((SELECT (r->>'id')::uuid FROM _req),'Reject','changed my mind')->>'code')='ALREADY_DECIDED');
+RESET ROLE;
+SELECT pg_temp.chk('anyone can verify a genuine number, forged ones fail', (public.certificate_verify((SELECT r->>'certificate_number' FROM _cert))->>'valid')='true' AND (public.certificate_verify('CERT-2026-999999')->>'valid')='false');
+
 SELECT name, CASE WHEN ok THEN 'PASS' ELSE 'FAIL' END AS result FROM _r ORDER BY ok, name;
 DO $$ BEGIN
   IF EXISTS (SELECT 1 FROM _r WHERE NOT ok) THEN RAISE EXCEPTION 'SMOKE TEST FAILED'; END IF;
