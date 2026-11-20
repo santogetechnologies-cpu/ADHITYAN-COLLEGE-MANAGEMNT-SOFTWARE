@@ -1,4 +1,4 @@
--- Smoke test for migrations 028-039. Synthetic data only; everything is rolled back.
+-- Smoke test for migrations 028-040. Synthetic data only; everything is rolled back.
 -- Run against a SCRATCH/STAGING database that has 001-015 + 028-037 applied (never production):
 --   psql "$STAGING_DB_URL" -v ON_ERROR_STOP=1 -f supabase/tests/smoke_028_037.sql
 -- Any failed assertion raises an exception and the script exits non-zero.
@@ -126,6 +126,75 @@ SELECT pg_temp.chk('statuses after apply', (SELECT string_agg(application_number
 SELECT pg_temp.chk('apply merit again changes nothing', (public.admission_apply_merit('Merit Course','2026-27','c0000000-0000-0000-0000-000000000005')->>'updated')='0');
 SELECT pg_temp.chk('merit/test functions not callable by authenticated', has_function_privilege('authenticated','public.admission_publish_merit(text,text,integer,integer,uuid)','EXECUTE')=false
    AND has_function_privilege('authenticated','public.admission_schedule_tests(uuid[],date,uuid)','EXECUTE')=false);
+
+-- ===================== 040 fee engine =====================
+INSERT INTO public.students(id,student_id,name,department,class_name,current_semester,status,admission_quota) VALUES
+ ('c4000000-0000-0000-0000-000000000001','FE-001','Fee S1','DeptX','ClassA',1,'active','General'),
+ ('c4000000-0000-0000-0000-000000000002','FE-002','Fee S2','DeptX','ClassA',1,'active','Management'),
+ ('c4000000-0000-0000-0000-000000000003','FE-003','Fee S3','DeptX','ClassB',3,'active','General'),
+ ('c4000000-0000-0000-0000-000000000004','FE-004','Fee S4','DeptY','ClassC',1,'active','General'),
+ ('c4000000-0000-0000-0000-000000000005','FE-005','Fee S5','DeptX','ClassA',1,'withdrawn','General');
+INSERT INTO public.fee_plans(id,name,academic_year,department) VALUES ('c5000000-0000-0000-0000-000000000001','Smoke Plan','2026-27','DeptX');
+INSERT INTO public.fee_plan_items(plan_id,fee_head_id,amount,billing_cycle,semesters) VALUES
+ ('c5000000-0000-0000-0000-000000000001',(SELECT id FROM public.fee_heads WHERE code='TUITION'),40000,'per_year',NULL),
+ ('c5000000-0000-0000-0000-000000000001',(SELECT id FROM public.fee_heads WHERE code='EXAM'),2000,'per_semester',NULL),
+ ('c5000000-0000-0000-0000-000000000001',(SELECT id FROM public.fee_heads WHERE code='LAB'),1500,'per_semester',ARRAY[1,2]),
+ ('c5000000-0000-0000-0000-000000000001',(SELECT id FROM public.fee_heads WHERE code='ADMISSION'),500,'one_time',NULL);
+SELECT pg_temp.chk('draft plan cannot be billed', (public.fee_generate(false,'c5000000-0000-0000-0000-000000000001',NULL,NULL,NULL,'department','DeptX',NULL,NULL,NULL,NULL,true,true,'c0000000-0000-0000-0000-000000000005')->>'code')='PLAN_NOT_PUBLISHED');
+UPDATE public.fee_plans SET status='Published' WHERE id='c5000000-0000-0000-0000-000000000001';
+CREATE FUNCTION pg_temp.fails(q TEXT) RETURNS BOOLEAN LANGUAGE plpgsql AS $f$ BEGIN EXECUTE q; RETURN FALSE; EXCEPTION WHEN OTHERS THEN RETURN TRUE; END $f$;
+SELECT pg_temp.chk('cannot add an item to a published plan', pg_temp.fails($q$INSERT INTO public.fee_plan_items(plan_id,fee_head_id,amount,billing_cycle) VALUES ('c5000000-0000-0000-0000-000000000001',(SELECT id FROM public.fee_heads WHERE code='SPORTS'),1,'one_time')$q$));
+SELECT pg_temp.chk('cannot change an item of a published plan', pg_temp.fails($q$UPDATE public.fee_plan_items SET amount=1 WHERE plan_id='c5000000-0000-0000-0000-000000000001'$q$));
+SELECT pg_temp.chk('cannot delete an item of a published plan', pg_temp.fails($q$DELETE FROM public.fee_plan_items WHERE plan_id='c5000000-0000-0000-0000-000000000001'$q$));
+SELECT pg_temp.chk('published plan cannot return to Draft', pg_temp.fails($q$UPDATE public.fee_plans SET status='Draft' WHERE id='c5000000-0000-0000-0000-000000000001'$q$));
+SELECT pg_temp.chk('published plan targeting cannot change', pg_temp.fails($q$UPDATE public.fee_plans SET department='DeptY' WHERE id='c5000000-0000-0000-0000-000000000001'$q$));
+INSERT INTO public.fee_plans(id,name,academic_year) VALUES ('c5000000-0000-0000-0000-000000000002','Empty Plan','2026-27');
+SELECT pg_temp.chk('empty plan cannot be published', pg_temp.fails($q$UPDATE public.fee_plans SET status='Published' WHERE id='c5000000-0000-0000-0000-000000000002'$q$));
+SELECT pg_temp.chk('clone succeeds', (public.fee_plan_clone('c5000000-0000-0000-0000-000000000001','Smoke Plan v2','2027-28','c0000000-0000-0000-0000-000000000005')->>'success')='true');
+SELECT pg_temp.chk('clone is an editable Draft with all items', (SELECT count(*)=4 FROM public.fee_plan_items i JOIN public.fee_plans p ON p.id=i.plan_id WHERE p.name='Smoke Plan v2' AND p.status='Draft'));
+
+SELECT pg_temp.chk('preview counts and total', (SELECT (r->>'students')::int=3 AND (r->>'to_create')::int=11 AND (r->>'total_amount')::numeric=130500 AND (r->>'preview')::boolean
+   FROM (SELECT public.fee_generate(false,'c5000000-0000-0000-0000-000000000001',NULL,NULL,NULL,'department','DeptX',NULL,NULL,NULL,NULL,true,true,'c0000000-0000-0000-0000-000000000005') r) x));
+SELECT pg_temp.chk('preview writes nothing', (SELECT count(*) FROM public.student_fees WHERE student_record_id IS NOT NULL)=0 AND (SELECT count(*) FROM public.fee_runs)=0);
+SELECT pg_temp.chk('execute creates the demands', (SELECT (r->>'created')::int=11 AND (r->>'total_amount')::numeric=130500
+   FROM (SELECT public.fee_generate(true,'c5000000-0000-0000-0000-000000000001',NULL,NULL,NULL,'department','DeptX',NULL,NULL,NULL,NULL,true,true,'c0000000-0000-0000-0000-000000000005') r) x));
+SELECT pg_temp.chk('one invoice per head, student has no login yet', (SELECT count(*)=4 FROM public.student_fees WHERE student_record_id='c4000000-0000-0000-0000-000000000001' AND student_id IS NULL AND original_amount=total_due));
+SELECT pg_temp.chk('lab fee skipped for semester 3', (SELECT count(*)=0 FROM public.student_fees f JOIN public.fee_heads h ON h.id=f.fee_head_id WHERE f.student_record_id='c4000000-0000-0000-0000-000000000003' AND h.code='LAB'));
+SELECT pg_temp.chk('rerun bills nothing twice', (public.fee_generate(true,'c5000000-0000-0000-0000-000000000001',NULL,NULL,NULL,'department','DeptX',NULL,NULL,NULL,NULL,true,true,'c0000000-0000-0000-0000-000000000005')->>'code')='NOTHING_TO_BILL');
+SELECT pg_temp.chk('semester run does not repeat semester fees', (public.fee_generate(false,'c5000000-0000-0000-0000-000000000001',NULL,NULL,NULL,'department','DeptX',NULL,1,NULL,NULL,false,false,'c0000000-0000-0000-0000-000000000005')->>'to_create')::int=0);
+-- ad-hoc fee added mid-year to one class
+SELECT pg_temp.chk('ad-hoc preview for a class (withdrawn student excluded)', (SELECT (r->>'students')::int=2 AND (r->>'total_amount')::numeric=2400
+   FROM (SELECT public.fee_generate(false,NULL,(SELECT id FROM public.fee_heads WHERE code='UNIFORM'),1200,'Lab coat','class','ClassA',NULL,NULL,'2026-27',DATE '2026-09-30',false,false,'c0000000-0000-0000-0000-000000000005') r) x));
+SELECT pg_temp.chk('ad-hoc executes', (public.fee_generate(true,NULL,(SELECT id FROM public.fee_heads WHERE code='UNIFORM'),1200,'Lab coat','class','ClassA',NULL,NULL,'2026-27',DATE '2026-09-30',false,false,'c0000000-0000-0000-0000-000000000005')->>'created')::int=2);
+SELECT pg_temp.chk('identical ad-hoc double submit refused', (public.fee_generate(true,NULL,(SELECT id FROM public.fee_heads WHERE code='UNIFORM'),1200,'Lab coat','class','ClassA',NULL,NULL,'2026-27',DATE '2026-09-30',false,false,'c0000000-0000-0000-0000-000000000005')->>'code')='DUPLICATE_RUN');
+SELECT pg_temp.chk('ad-hoc to a single student by student id', (public.fee_generate(true,NULL,(SELECT id FROM public.fee_heads WHERE code='TRANSPORT'),3000,NULL,'student','FE-004',NULL,NULL,'2026-27',DATE '2026-10-15',false,false,'c0000000-0000-0000-0000-000000000005')->>'created')::int=1);
+SELECT pg_temp.chk('ad-hoc quota filter bills only the Management student', (public.fee_generate(true,NULL,(SELECT id FROM public.fee_heads WHERE code='DEVELOPMENT'),5000,NULL,'department','DeptX','Management',NULL,'2026-27',DATE '2026-11-01',false,false,'c0000000-0000-0000-0000-000000000005')->>'created')::int=1);
+-- adjustments
+SELECT pg_temp.chk('concession reduces balance, keeps history', (public.fee_adjust((SELECT f.id FROM public.student_fees f JOIN public.fee_heads h ON h.id=f.fee_head_id WHERE f.student_record_id='c4000000-0000-0000-0000-000000000001' AND h.code='TUITION'),'concession',10000,'Merit concession','c0000000-0000-0000-0000-000000000005')->>'balance_remaining')::numeric=30000);
+SELECT pg_temp.chk('concession invariants hold', (SELECT original_amount=40000 AND waived_amount=10000 AND total_due=30000 AND paid_amount=0 FROM public.student_fees f JOIN public.fee_heads h ON h.id=f.fee_head_id WHERE f.student_record_id='c4000000-0000-0000-0000-000000000001' AND h.code='TUITION'));
+SELECT pg_temp.chk('concession above balance refused', (public.fee_adjust((SELECT f.id FROM public.student_fees f JOIN public.fee_heads h ON h.id=f.fee_head_id WHERE f.student_record_id='c4000000-0000-0000-0000-000000000001' AND h.code='TUITION'),'waiver',99999,'too much','c0000000-0000-0000-0000-000000000005')->>'code')='EXCEEDS_BALANCE');
+SELECT pg_temp.chk('reason is mandatory', (public.fee_adjust((SELECT id FROM public.student_fees WHERE student_record_id='c4000000-0000-0000-0000-000000000001' LIMIT 1),'waiver',1,' ','c0000000-0000-0000-0000-000000000005')->>'code')='REASON_REQUIRED');
+-- payment for a student record WITHOUT a login
+SELECT pg_temp.chk('pay a fee of a student with no login', (public.record_fee_payment((SELECT f.id FROM public.student_fees f JOIN public.fee_heads h ON h.id=f.fee_head_id WHERE f.student_record_id='c4000000-0000-0000-0000-000000000001' AND h.code='EXAM'),2000,'Cash',NULL,'smoke-fee-pay-001','c0000000-0000-0000-0000-000000000004')->>'success')='true');
+SELECT pg_temp.chk('receipt carries student id + head name', EXISTS (SELECT 1 FROM public.fee_receipts WHERE roll_number='FE-001' AND fee_type='Examination fee' AND student_record_id='c4000000-0000-0000-0000-000000000001' AND student_id IS NULL));
+SELECT pg_temp.chk('paid fee cannot be cancelled, only waived', (public.fee_adjust((SELECT f.id FROM public.student_fees f JOIN public.fee_heads h ON h.id=f.fee_head_id WHERE f.student_record_id='c4000000-0000-0000-0000-000000000001' AND h.code='EXAM'),'cancellation',NULL,'mistake','c0000000-0000-0000-0000-000000000005')->>'code')='NOTHING_DUE');
+SELECT pg_temp.chk('unpaid fee can be cancelled', (public.fee_adjust((SELECT f.id FROM public.student_fees f JOIN public.fee_heads h ON h.id=f.fee_head_id WHERE f.student_record_id='c4000000-0000-0000-0000-000000000001' AND h.code='LAB'),'cancellation',NULL,'not applicable','c0000000-0000-0000-0000-000000000005')->>'status')='cancelled');
+SELECT pg_temp.chk('cancelled fee can be billed again (new charge)', (SELECT (r->>'to_create')::int>=1 FROM (SELECT public.fee_generate(false,'c5000000-0000-0000-0000-000000000001',NULL,NULL,NULL,'student','FE-001',NULL,NULL,NULL,NULL,false,false,'c0000000-0000-0000-0000-000000000005') r) x));
+-- cancelling a whole run keeps paid items
+SELECT pg_temp.chk('cancel plan run: unpaid cancelled, paid kept, run stays open', (SELECT (r->>'kept_because_paid')::int=1 AND (r->>'run_closed')::boolean=false
+   FROM (SELECT public.fee_cancel_run((SELECT run_id FROM public.student_fees WHERE student_record_id='c4000000-0000-0000-0000-000000000001' AND charge_key LIKE '%ONCE' LIMIT 1),'wrong plan','c0000000-0000-0000-0000-000000000005') r) x));
+SELECT pg_temp.chk('cancel ad-hoc run closes it', (SELECT (r->>'run_closed')::boolean FROM (SELECT public.fee_cancel_run((SELECT id FROM public.fee_runs WHERE run_type='adhoc' AND description='Lab coat'),'raised in error','c0000000-0000-0000-0000-000000000005') r) x));
+-- login created later adopts the student record AND its fees
+INSERT INTO auth.users(id,email) VALUES ('c0000000-0000-0000-0000-000000000007','fe2@example.test');
+INSERT INTO public.profiles(id,email,name,role,student_id) VALUES ('c0000000-0000-0000-0000-000000000007','fe2@example.test','Fee S2','student','FE-002');
+SELECT pg_temp.chk('fees of the student are linked to the new login', (SELECT count(*)>0 AND bool_and(student_id='c0000000-0000-0000-0000-000000000007') FROM public.student_fees WHERE student_record_id='c4000000-0000-0000-0000-000000000002'));
+SET LOCAL ROLE authenticated;
+SELECT set_config('request.jwt.claim.sub','c0000000-0000-0000-0000-000000000007',true);
+SELECT pg_temp.chk('student with login sees own fees only', (SELECT count(*)>0 FROM public.student_fees) AND (SELECT count(*)=0 FROM public.student_fees WHERE student_record_id<>'c4000000-0000-0000-0000-000000000002'));
+SELECT pg_temp.chk('student cannot read fee plans', (SELECT count(*)=0 FROM public.fee_plans));
+SELECT pg_temp.chk('fee functions not callable by authenticated', has_function_privilege('authenticated','public.fee_generate(boolean,uuid,uuid,numeric,text,text,text,text,integer,text,date,boolean,boolean,uuid)','EXECUTE')=false
+   AND has_function_privilege('authenticated','public.fee_adjust(uuid,text,numeric,text,uuid)','EXECUTE')=false);
+RESET ROLE;
 
 SET LOCAL ROLE anon;
 SELECT pg_temp.chk('anon cannot read admission documents', (SELECT count(*) FROM information_schema.role_table_grants WHERE grantee='anon' AND table_name IN ('admission_document_verifications','admission_merit_lists'))=0);

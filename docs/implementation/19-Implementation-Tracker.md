@@ -96,3 +96,16 @@ Legend: ✅ done & verified as stated · 🟡 written, not runnable here · ⬜ 
 | Gate tests for the new actions | ✅ | 39 cases pass (`scripts/test-edge-gate.sh`) |
 | Known limits | | one test record per applicant (DB `UNIQUE(roll_no)`); scores assumed to be percentages (qualifying marks 0–100); old manual merit rows without an application stay in the table but are hidden |
 | Not yet built | ⬜ | seat/quota categories (reservation), configurable formulas beyond two weights, applicant-facing portal, offer letters, admission-deposit → first-fee reconciliation at provisioning |
+
+## Module 3 — Configurable fee engine (migration 040)
+| Item | Status | Evidence |
+|------|--------|----------|
+| Fee heads (add any fee), plans per academic year / department / class / quota, items billed one-time / per semester (all or chosen) / per year | ✅ SQL | smoke |
+| Frozen once published; cannot return to Draft; empty plan cannot publish; clone to revise | ✅ SQL | smoke |
+| Bill a plan or ONE new fee mid-year to a student, class, department or everyone (+quota/semester filters); preview first; never billed twice; double-submit guard for ad-hoc | ✅ SQL | smoke with hand-computed totals (11 demands / ₹130,500) |
+| Waiver / concession / cancellation (reason mandatory, append-only history, paid fees cannot be cancelled); cancel a whole run keeping paid items | ✅ SQL | smoke |
+| Students without a portal login can be billed and can pay; fees link to the login when it is created | ✅ SQL | smoke |
+| API actions `fee_generate` / `fee_adjust` / `fee_cancel_run` / `fee_plan_clone` (finance_manager + admin only) | 🟡 | tsc + 45 gate cases |
+| Fee setup screens (heads, plans, billing wizard with preview, history) | ⬜ → next | |
+| Late-fee rules, installment schedules, scholarship auto-application, refunds | ⬜ | |
+| Old `fee_structures` table and `FeeStructureManager` still exist (fixed columns); to be migrated into plans and retired | ⬜ | |

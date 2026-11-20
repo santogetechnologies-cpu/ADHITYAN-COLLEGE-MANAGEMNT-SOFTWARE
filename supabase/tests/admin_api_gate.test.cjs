@@ -49,5 +49,11 @@ async function expect(name, caller, body, status, code) {
   await expect('deposit: bad id', c('receptionist'), { action: 'record_admission_deposit', deposit: { application_id: 'x', amount: 5 } }, 400, 'VALIDATION_ERROR');
   await expect('deposit: negative amount', c('receptionist'), { action: 'record_admission_deposit', deposit: { application_id: '11111111-1111-1111-1111-111111111111', amount: -5 } }, 400, 'VALIDATION_ERROR');
   await expect('student deposit', c('student'), { action: 'record_admission_deposit', deposit: {} }, 403);
+  await expect('student fee_generate', c('student'), { action: 'fee_generate', execute: true, generate: {} }, 403);
+  await expect('financier cannot configure fees', c('financier'), { action: 'fee_generate', generate: {} }, 403);
+  await expect('accountant cannot waive fees', c('accountant'), { action: 'fee_adjust', adjustment: {} }, 403);
+  await expect('principal cannot cancel a fee run', c('principal'), { action: 'fee_cancel_run', run_id: 'x', reason: 'r' }, 403);
+  await expect('fee_generate needs a plan or a head', c('finance_manager'), { action: 'fee_generate', generate: { scope_type: 'all' } }, 400, 'VALIDATION_ERROR');
+  await expect('fee_generate rejects a malformed plan id', c('finance_manager'), { action: 'fee_generate', generate: { plan_id: 'nope', scope_type: 'all' } }, 400, 'VALIDATION_ERROR');
   console.log(fail ? `\n${fail} FAILED` : '\nALL GATE TESTS PASSED'); process.exit(fail ? 1 : 0);
 })();

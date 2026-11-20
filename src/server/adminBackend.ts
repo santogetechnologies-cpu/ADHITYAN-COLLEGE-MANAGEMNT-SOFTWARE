@@ -215,7 +215,11 @@ export async function handleAdminUserOperation(token: string, body: any): Promis
     'collect_fee_payment',
     'generate_fee_receipt',
     'approve_fee_concession',
-    'get_finance_summary'
+    'get_finance_summary',
+    'fee_generate',
+    'fee_adjust',
+    'fee_cancel_run',
+    'fee_plan_clone'
   ].includes(action);
 
   if (isStudentPortalOperation) {
@@ -680,6 +684,60 @@ export async function handleAdminUserOperation(token: string, body: any): Promis
           p_course: String(course), p_academic_year: academic_year ? String(academic_year) : null, p_actor: callerUser.id,
         });
         if (error) return { status: 500, body: { error: 'The decisions could not be applied.', code: 'APPLY_FAILED' } };
+        return { status: 200, body: data };
+      }
+
+      case 'fee_generate': {
+        // preview (execute=false) shows exactly what would be created; execute=true bills it
+        const g = body.generate ?? {};
+        const uuid = (v: unknown) => (typeof v === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v) ? v : null);
+        const planId = g.plan_id ? uuid(g.plan_id) : null;
+        const headId = g.fee_head_id ? uuid(g.fee_head_id) : null;
+        if ((g.plan_id && !planId) || (g.fee_head_id && !headId) || (!planId && !headId)) {
+          return { status: 400, body: { error: 'Choose a fee plan or a fee head.', code: 'VALIDATION_ERROR' } };
+        }
+        const dateOrNull = (v: unknown) => (/^\d{4}-\d{2}-\d{2}$/.test(String(v ?? '')) ? String(v) : null);
+        const intOrNull = (v: unknown) => (v === '' || v == null || !Number.isInteger(Number(v)) ? null : Number(v));
+        const { data, error } = await supabaseAdmin.rpc('fee_generate', {
+          p_execute: body.execute === true, p_plan_id: planId, p_head_id: headId,
+          p_amount: g.amount === '' || g.amount == null ? null : Number(g.amount),
+          p_description: g.description ? String(g.description).slice(0, 200) : null,
+          p_scope_type: String(g.scope_type ?? ''), p_scope_value: g.scope_value ? String(g.scope_value) : null,
+          p_quota: g.quota ? String(g.quota) : null, p_semester: intOrNull(g.semester),
+          p_academic_year: g.academic_year ? String(g.academic_year) : null, p_due_date: dateOrNull(g.due_date),
+          p_include_yearly: g.include_yearly === true, p_include_one_time: g.include_one_time === true, p_actor: callerUser.id,
+        });
+        if (error) return { status: 500, body: { error: 'The fees could not be generated.', code: 'FEE_RUN_FAILED' } };
+        if (!data?.success) return { status: data?.code === 'NOT_FOUND' ? 404 : 400, body: { error: data?.error ?? 'Rejected.', code: data?.code, already_billed: data?.already_billed } };
+        return { status: 200, body: data };
+      }
+
+      case 'fee_adjust': {
+        const a = body.adjustment ?? {};
+        const { data, error } = await supabaseAdmin.rpc('fee_adjust', {
+          p_student_fee_id: a.student_fee_id, p_kind: String(a.kind ?? ''),
+          p_amount: a.amount === '' || a.amount == null ? null : Number(a.amount), p_reason: String(a.reason ?? ''), p_actor: callerUser.id,
+        });
+        if (error) return { status: 500, body: { error: 'The adjustment could not be saved.', code: 'ADJUST_FAILED' } };
+        if (!data?.success) return { status: data?.code === 'NOT_FOUND' ? 404 : 400, body: { error: data?.error ?? 'Rejected.', code: data?.code } };
+        return { status: 200, body: data };
+      }
+
+      case 'fee_cancel_run': {
+        const { run_id, reason } = body;
+        const { data, error } = await supabaseAdmin.rpc('fee_cancel_run', { p_run_id: run_id, p_reason: String(reason ?? ''), p_actor: callerUser.id });
+        if (error) return { status: 500, body: { error: 'The run could not be cancelled.', code: 'CANCEL_FAILED' } };
+        if (!data?.success) return { status: data?.code === 'NOT_FOUND' ? 404 : 400, body: { error: data?.error ?? 'Rejected.', code: data?.code } };
+        return { status: 200, body: data };
+      }
+
+      case 'fee_plan_clone': {
+        const { plan_id, name, academic_year } = body;
+        const { data, error } = await supabaseAdmin.rpc('fee_plan_clone', {
+          p_plan_id: plan_id, p_new_name: String(name ?? ''), p_new_year: String(academic_year ?? ''), p_actor: callerUser.id,
+        });
+        if (error) return { status: 500, body: { error: 'The plan could not be copied.', code: 'CLONE_FAILED' } };
+        if (!data?.success) return { status: data?.code === 'NOT_FOUND' ? 404 : 400, body: { error: data?.error ?? 'Rejected.', code: data?.code } };
         return { status: 200, body: data };
       }
 
