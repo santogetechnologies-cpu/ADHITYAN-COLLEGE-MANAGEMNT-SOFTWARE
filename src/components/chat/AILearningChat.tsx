@@ -9,6 +9,7 @@ import { useAuth } from '@/context/AuthContext';
 import { db } from '@/services/supabase/database';
 import { supabase } from '@/services/supabase/client';
 import { useRealtimeSubscription } from '@/hooks/useRealtimeSubscription';
+import { apiUrl } from '@/lib/apiBase';
 
 interface Message {
   id: string;
@@ -85,7 +86,7 @@ export function AILearningChat() {
 
       // 1. Try local dev endpoint /api/ai/chat
       try {
-        const res = await fetch('/api/ai/chat', {
+        const res = await fetch(apiUrl('/api/ai/chat'), {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',

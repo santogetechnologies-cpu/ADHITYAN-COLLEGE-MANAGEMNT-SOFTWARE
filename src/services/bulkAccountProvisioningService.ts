@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabase';
+import { apiUrl } from '@/lib/apiBase';
 
 export interface StudentBulkImportRow {
   name: string;
@@ -86,7 +87,7 @@ class BulkAccountProvisioningService {
           return res.body.stats;
         }
       } else {
-        const response = await fetch('/api/admin/users', {
+        const response = await fetch(apiUrl('/api/admin/users'), {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -399,7 +400,7 @@ class BulkAccountProvisioningService {
       return res.body;
     }
 
-    const response = await fetch('/api/admin/users', {
+    const response = await fetch(apiUrl('/api/admin/users'), {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -446,7 +447,7 @@ class BulkAccountProvisioningService {
       return res.body;
     }
 
-    const response = await fetch('/api/admin/users', {
+    const response = await fetch(apiUrl('/api/admin/users'), {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -498,7 +499,7 @@ class BulkAccountProvisioningService {
       return res.body;
     }
 
-    const response = await fetch('/api/admin/users', {
+    const response = await fetch(apiUrl('/api/admin/users'), {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

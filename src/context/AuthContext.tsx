@@ -60,16 +60,10 @@ function mapAuthToUser(authUser: SupabaseAuthUser, profileData?: any): User {
   const meta = authUser.user_metadata || {};
   const email = (authUser.email || '').toLowerCase();
 
-  let fallbackRole: UserRole = 'student';
-  if (email.startsWith('superadmin') || email.includes('superadmin@') || meta.role === 'platform_super_admin') {
-    fallbackRole = 'platform_super_admin';
-  } else if (email.startsWith('admin') || email.includes('admin@')) {
-    fallbackRole = 'admin';
-  } else if (email.startsWith('principal') || email.includes('principal@')) {
-    fallbackRole = 'principal';
-  }
-
-  const resolvedRole = (meta.role || profileData?.preferences?.role || profileData?.role || fallbackRole) as UserRole;
+  // SECURITY: the role is authoritative ONLY from public.profiles (RLS-protected, guarded by the
+  // protect_profile_sensitive_columns trigger). user_metadata, profiles.preferences and e-mail
+  // prefixes are user-controllable, so they must never grant a role. No profile => least privilege.
+  const resolvedRole = (profileData?.role || 'student') as UserRole;
   const resolvedName = profileData?.name || meta.name || meta.full_name || email.split('@')[0].replace(/[._]/g, ' ');
   const resolvedAvatar = profileData?.avatar_url || meta.avatar || meta.avatar_url || '';
   const resolvedStudentId = profileData?.student_id || profileData?.roll_number || meta.student_id || meta.roll_number || undefined;

@@ -1,6 +1,7 @@
 import { supabase } from './client';
 import * as T from '@/types/database.types';
 import { matchesStudentClass, getAllAcademicClasses } from '@/config/academicClassRegistry';
+import { apiUrl } from '@/lib/apiBase';
 
 async function callAdminBackendAction(action: string, payload: Record<string, any>): Promise<any> {
   const { data: { session } } = await supabase.auth.getSession();
@@ -21,7 +22,7 @@ async function callAdminBackendAction(action: string, payload: Record<string, an
   // In browser environment, use fetch
   if (typeof fetch !== 'undefined') {
     try {
-      const res = await fetch('/api/admin/users', {
+      const res = await fetch(apiUrl('/api/admin/users'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ action, ...payload }),
@@ -2113,7 +2114,7 @@ export const db = {
         const { data: { session } } = await supabase.auth.getSession();
         const token = session?.access_token;
         if (token && typeof fetch !== 'undefined') {
-          const res = await fetch('/api/admin/users', {
+          const res = await fetch(apiUrl('/api/admin/users'), {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
@@ -2204,7 +2205,7 @@ export const db = {
         const { data: { session } } = await supabase.auth.getSession();
         const token = session?.access_token;
         if (token && typeof fetch !== 'undefined') {
-          const res = await fetch('/api/admin/users', {
+          const res = await fetch(apiUrl('/api/admin/users'), {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
