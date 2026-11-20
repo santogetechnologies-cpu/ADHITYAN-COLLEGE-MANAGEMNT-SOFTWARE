@@ -49,7 +49,7 @@ export default function LibrarianDashboard() {
       const [circData, booksData, profilesData] = await Promise.all([
         db.getLibraryCirculation(),
         db.getLibraryBooks(),
-        db.getAllProfiles().catch(() => [])
+        db.getStudentDirectory().catch(() => [])
       ]);
 
       setCirculations(circData || []);

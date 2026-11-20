@@ -237,3 +237,9 @@ Legend: ✅ done & verified as stated · 🟡 written, not runnable here · ⬜ 
 | Admin password reset: min 8 characters, sets must-change flag; app blocks with a "choose a new password" dialog until done | ✅ SQL (2 checks), 🟡 UI | |
 | Last-administrator protection read the role from user_metadata (untrusted, often empty) — now counts active admins in profiles | ✅ | edge gate tests |
 | Super-admin header logout called a non-existent `signOut` | ✅ | tsc |
+
+## Policy sweep (060, 061)
+| Item | Status | Evidence |
+|------|--------|----------|
+| All remaining `USING (true)` write policies closed; API roles lose TRUNCATE/REFERENCES/TRIGGER | ✅ SQL | 6 smoke checks (274 total) |
+| Staff lookups: warden/librarian now look students up in the central `students` table (profiles are not readable by those roles, so lookups silently returned nothing); HR can list staff | ✅ SQL, 🟡 UI | build |

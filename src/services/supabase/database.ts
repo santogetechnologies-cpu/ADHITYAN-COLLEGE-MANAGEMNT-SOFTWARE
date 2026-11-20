@@ -116,6 +116,14 @@ export const db = {
     }
   },
 
+  /** Enrolled students (central `students` table) shaped like profiles; readable by the staff roles that need to look students up. */
+  async getStudentDirectory(): Promise<T.Profile[]> {
+    const sb: any = supabase;
+    const { data, error } = await sb.from('students').select('id, user_id, student_id, roll_number, name, email, phone, department, class_name').eq('status', 'active').limit(5000);
+    if (error) throw new Error(error.message);
+    return (data || []).map((r: any) => ({ id: r.user_id || '', name: r.name, email: r.email || '', role: 'student', phone: r.phone, department: r.department, class_name: r.class_name, roll_number: r.roll_number || r.student_id, student_id: r.student_id })) as T.Profile[];
+  },
+
   async getAllProfiles(): Promise<T.Profile[]> {
     try {
       let { data, error } = await supabase.from('profiles').select('*').order('name');

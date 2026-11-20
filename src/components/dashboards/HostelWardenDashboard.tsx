@@ -58,7 +58,7 @@ export default function HostelWardenDashboard() {
       const [roomsData, passesData, profilesData] = await Promise.all([
         db.getHostelRooms(),
         db.getHostelOutPasses(),
-        db.getAllProfiles().catch(() => [])
+        db.getStudentDirectory().catch(() => [])
       ]);
 
       setRooms(roomsData || []);

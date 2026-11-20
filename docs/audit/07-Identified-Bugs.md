@@ -76,3 +76,5 @@ See `01-Executive-Audit.md` for the full table with status. Quick index:
 | Sign-in flags (`is_first_login`, `requires_password_change`, `login_id`) were never loaded into the session user, so the forced-password-change check in LoginForm could never fire and the Parent dashboard displayed a fabricated ID `PAR-2026-0001` | Fixed (AuthContext + 059 + ForcePasswordChange) |
 | Admin "delete user" protected the last admin by reading `user_metadata.role` (client-controlled, usually unset), so the guard could be bypassed; password reset accepted 6 characters | Fixed (edge function + dev backend) |
 | Super-admin master header "Sign out" threw (`signOut` not defined on the auth context) | Fixed |
+| `attendance_shortage_warnings` and `scholarships_master` allowed every signed-in user full read/write (student could edit scholarship discounts); API roles held TRUNCATE (not subject to RLS) on every table | Fixed (060) |
+| Hostel warden, librarian and HR lookups used `profiles`, which those roles cannot read — matches silently returned nothing, so out-passes/book issues were saved without the student link and HR could not list staff | Fixed (students directory, 061) |

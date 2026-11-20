@@ -648,6 +648,28 @@ RESET ROLE;
 SELECT pg_temp.chk('a user clears their own must-change-password flag', (SELECT requires_password_change=false FROM public.profiles WHERE id='c0000000-0000-0000-0000-000000000001'));
 SELECT pg_temp.chk('anonymous callers cannot acknowledge', has_function_privilege('anon','public.acknowledge_password_change()','EXECUTE')=false);
 
+-- ---- 060 open policies ----
+INSERT INTO public.attendance_shortage_warnings (student_id, student_name, roll_number, department, class_name, subject_code, subject_title, total_conducted, total_attended, percentage, warning_level)
+  VALUES ('c0000000-0000-0000-0000-0000000000c1','Place Student','PL-1','Nursing','ClassA','S1','Subj',10,5,50,'Warning');
+INSERT INTO public.scholarships_master (scholarship_name, code, category, discount_type, discount_value, eligibility_criteria) VALUES ('Smoke Aid','SMK-AID','Merit','Percentage',10,'n/a');
+SET LOCAL ROLE authenticated;
+SELECT set_config('request.jwt.claim.sub','c0000000-0000-0000-0000-000000000001',true);   -- another student
+SELECT pg_temp.chk('a student cannot read someone else''s shortage warning', (SELECT count(*)=0 FROM public.attendance_shortage_warnings));
+SELECT pg_temp.chk('a student cannot change scholarship schemes', pg_temp.fails($q$UPDATE public.scholarships_master SET discount_value=100$q$) OR (SELECT discount_value=10 FROM public.scholarships_master WHERE code='SMK-AID'));
+SELECT set_config('request.jwt.claim.sub','c0000000-0000-0000-0000-0000000000c1',true);   -- the student concerned
+SELECT pg_temp.chk('the student sees their own warning', (SELECT count(*)=1 FROM public.attendance_shortage_warnings));
+SELECT set_config('request.jwt.claim.sub','c0000000-0000-0000-0000-000000000009',true);   -- teacher
+SELECT pg_temp.chk('teachers read warnings', (SELECT count(*)=1 FROM public.attendance_shortage_warnings));
+RESET ROLE;
+SELECT pg_temp.chk('scholarship value untouched by the student', (SELECT discount_value=10 FROM public.scholarships_master WHERE code='SMK-AID'));
+SELECT pg_temp.chk('TRUNCATE is no longer granted to API roles', (SELECT count(*)=0 FROM information_schema.role_table_grants WHERE grantee IN ('anon','authenticated') AND table_schema='public' AND privilege_type IN ('TRUNCATE','REFERENCES','TRIGGER')));
+
+-- ---- 061 HR staff directory ----
+SET LOCAL ROLE authenticated;
+SELECT set_config('request.jwt.claim.sub','c0000000-0000-0000-0000-0000000000a1',true);   -- HR
+SELECT pg_temp.chk('HR sees staff profiles but not students or parents', (SELECT count(*)>=3 FROM public.profiles WHERE role='teacher' OR role='admin') AND (SELECT count(*)=0 FROM public.profiles WHERE role IN ('student','parent')));
+RESET ROLE;
+
 SELECT name, CASE WHEN ok THEN 'PASS' ELSE 'FAIL' END AS result FROM _r ORDER BY ok, name;
 DO $$ BEGIN
   IF EXISTS (SELECT 1 FROM _r WHERE NOT ok) THEN RAISE EXCEPTION 'SMOKE TEST FAILED'; END IF;
