@@ -13,7 +13,6 @@ const SUPABASE_ANON_KEY = process.env.VITE_SUPABASE_PUBLISHABLE_KEY || 'sb_publi
 const SUPABASE_SECRET_KEY = process.env.SUPABASE_SECRET_KEY || '';
 
 export const ALLOWED_ROLES = [
-  'super_admin',
   'admin',
   'principal',
   'student',
@@ -71,8 +70,8 @@ export async function handleAdminUserOperation(token: string, body: any): Promis
     }
   }
 
-  // 2. Strict Tenant Boundary Isolation: Non-platform users cannot access foreign colleges
-  if (callerRole !== 'super_admin' && body.collegeId) {
+  // 2. Strict Tenant Boundary Isolation: Non-admin users cannot access foreign colleges
+  if (callerRole !== 'admin' && body.collegeId) {
     const effectiveCallerCollege = callerCollegeId || '11111111-1111-1111-1111-111111111111';
     if (body.collegeId !== effectiveCallerCollege) {
       return {
@@ -131,17 +130,9 @@ export async function handleAdminUserOperation(token: string, body: any): Promis
     'restore_system_backup'
   ].includes(action);
 
-  if (isPlatformSuperAdminAction) {
-    if (action === 'verify_tenant_isolation') {
-      if (!['admin', 'super_admin'].includes(callerRole || '')) {
-        return { status: 403, body: { error: 'Forbidden: Administrator or Super Admin authorization required.', code: 'FORBIDDEN' } };
-      }
-    } else if (callerRole !== 'super_admin') {
-      return { status: 403, body: { error: 'Forbidden: Super Admin authorization required.', code: 'FORBIDDEN_SUPER_ADMIN_REQUIRED' } };
-    }
-  } else if (isSuperAdminConfigAction) {
-    if (callerRole !== 'admin' && callerRole !== 'super_admin') {
-      return { status: 403, body: { error: 'Access denied: Super Administrator privileges required.', code: 'FORBIDDEN' } };
+  if (isPlatformSuperAdminAction || isSuperAdminConfigAction) {
+    if (callerRole !== 'admin') {
+      return { status: 403, body: { error: 'Access denied: Administrator privileges required.', code: 'FORBIDDEN' } };
     }
   }
 
@@ -168,19 +159,19 @@ export async function handleAdminUserOperation(token: string, body: any): Promis
       return { status: 401, body: { error: 'Authentication required.', code: 'UNAUTHORIZED' } };
     }
   } else if (isTeacherOperation) {
-    if (!['teacher', 'hod', 'faculty', 'principal', 'admin', 'super_admin'].includes(callerRole || '')) {
+    if (!['teacher', 'hod', 'faculty', 'principal', 'admin'].includes(callerRole || '')) {
       return { status: 403, body: { error: 'Access denied: Faculty privileges required.', code: 'FORBIDDEN' } };
     }
   } else if (isFinanceOperation) {
-    if (!['finance_manager', 'principal', 'admin', 'super_admin'].includes(callerRole || '')) {
+    if (!['finance_manager', 'principal', 'admin'].includes(callerRole || '')) {
       return { status: 403, body: { error: 'Access denied: Finance Manager or Administrator privileges required.', code: 'FORBIDDEN' } };
     }
   } else if (isAdmissionAndParentOperation) {
-    if (!['admin', 'principal', 'receptionist', 'super_admin'].includes(callerRole || '')) {
+    if (!['admin', 'principal', 'receptionist'].includes(callerRole || '')) {
       return { status: 403, body: { error: 'Access denied: Receptionist, Principal, or Administrator privileges required.', code: 'FORBIDDEN' } };
     }
   } else if (!isPlatformSuperAdminAction && !isSuperAdminConfigAction) {
-    if (!['admin', 'principal', 'super_admin'].includes(callerRole || '')) {
+    if (!['admin', 'principal'].includes(callerRole || '')) {
       return { status: 403, body: { error: 'Access denied: Administrator privileges required.', code: 'FORBIDDEN' } };
     }
   }
@@ -1885,9 +1876,9 @@ export async function handleAdminUserOperation(token: string, body: any): Promis
           return { status: 400, body: { error: `Invalid role "${newUser.role}". Must be one of: ${ALLOWED_ROLES.join(', ')}`, code: 'INVALID_ROLE' } };
         }
 
-        // Only a super_admin can create another super_admin or admin account
-        if (['super_admin', 'admin'].includes(newUser.role) && callerRole !== 'super_admin') {
-          return { status: 403, body: { error: 'Access denied: Only a Super Administrator can create Administrator or Super Administrator accounts.', code: 'FORBIDDEN' } };
+        // Only an admin can create an admin account
+        if (newUser.role === 'admin' && callerRole !== 'admin') {
+          return { status: 403, body: { error: 'Access denied: Only an Administrator can create Administrator accounts.', code: 'FORBIDDEN' } };
         }
 
         if (newUser.password.length < 6) {
@@ -2045,11 +2036,11 @@ export async function handleAdminUserOperation(token: string, body: any): Promis
           return { status: 404, body: { error: 'Target user not found.', code: 'USER_NOT_FOUND' } };
         }
 
-        // Only a super_admin can modify or grant super_admin or admin roles
+        // Only an admin can modify or grant admin roles
         const targetRole = targetUser.user.user_metadata?.role || targetUser.user.app_metadata?.role;
-        const isModifyingPrivilegedRole = ['super_admin', 'admin'].includes(targetRole) || (updates.role && ['super_admin', 'admin'].includes(updates.role));
-        if (isModifyingPrivilegedRole && callerRole !== 'super_admin') {
-          return { status: 403, body: { error: 'Access denied: Only a Super Administrator can modify Administrator or Super Administrator accounts.', code: 'FORBIDDEN' } };
+        const isModifyingPrivilegedRole = targetRole === 'admin' || updates.role === 'admin';
+        if (isModifyingPrivilegedRole && callerRole !== 'admin') {
+          return { status: 403, body: { error: 'Access denied: Only an Administrator can modify Administrator accounts.', code: 'FORBIDDEN' } };
         }
 
         // Guard: Cannot remove the last active admin role
@@ -2189,7 +2180,7 @@ export async function handleAdminUserOperation(token: string, body: any): Promis
       }
 
       case 'set_active_status': {
-        if (!['super_admin', 'admin'].includes(callerRole || '')) {
+        if (callerRole !== 'admin') {
           return { status: 403, body: { error: 'Access denied: Administrator privileges required to change user status.', code: 'FORBIDDEN' } };
         }
         const { userId, active } = body;
@@ -2208,8 +2199,8 @@ export async function handleAdminUserOperation(token: string, body: any): Promis
         }
 
         const targetRole = targetUser.user.user_metadata?.role || targetUser.user.app_metadata?.role;
-        if (['super_admin', 'admin'].includes(targetRole) && callerRole !== 'super_admin') {
-          return { status: 403, body: { error: 'Access denied: Only a Super Administrator can change status of Administrator or Super Administrator accounts.', code: 'FORBIDDEN' } };
+        if (targetRole === 'admin' && callerRole !== 'admin') {
+          return { status: 403, body: { error: 'Access denied: Only an Administrator can change status of Administrator accounts.', code: 'FORBIDDEN' } };
         }
 
         // Guard: If deactivating an admin, ensure another active admin remains
@@ -3106,11 +3097,11 @@ export async function handleAdminUserOperation(token: string, body: any): Promis
       }
 
       // =======================================================================
-      // SUPER ADMIN GOVERNANCE ACTIONS
+      // ADMIN GOVERNANCE ACTIONS
       // =======================================================================
       case 'platform_provision_college': {
-        if (callerRole !== 'super_admin') {
-          return { status: 403, body: { error: 'Forbidden: Super Admin authorization required.', code: 'FORBIDDEN' } };
+        if (callerRole !== 'admin') {
+          return { status: 403, body: { error: 'Forbidden: Administrator authorization required.', code: 'FORBIDDEN' } };
         }
         const { name, code, contactEmail, institutionType, academicConfig, brandingConfig, adminAccount } = body;
         if (!name || !code || !contactEmail) {
@@ -3121,8 +3112,8 @@ export async function handleAdminUserOperation(token: string, body: any): Promis
 
         // Log in audit trail
         await supabaseAdmin.from('audit_logs').insert({
-          user_email: callerUser.email || 'superadmin@adithyan.edu',
-          user_role: 'super_admin',
+          user_email: callerUser.email || 'admin@adithyan.edu',
+          user_role: 'admin',
           action: 'provision_college',
           entity_type: 'college',
           entity_id: code,
@@ -3148,8 +3139,8 @@ export async function handleAdminUserOperation(token: string, body: any): Promis
       }
 
       case 'platform_set_college_status': {
-        if (callerRole !== 'super_admin') {
-          return { status: 403, body: { error: 'Forbidden: Super Admin authorization required.', code: 'FORBIDDEN' } };
+        if (callerRole !== 'admin') {
+          return { status: 403, body: { error: 'Forbidden: Administrator authorization required.', code: 'FORBIDDEN' } };
         }
         const { targetCollegeId, targetStatus } = body;
         if (!targetCollegeId || !targetStatus) {
@@ -3157,8 +3148,8 @@ export async function handleAdminUserOperation(token: string, body: any): Promis
         }
 
         await supabaseAdmin.from('audit_logs').insert({
-          user_email: callerUser.email || 'superadmin@adithyan.edu',
-          user_role: 'super_admin',
+          user_email: callerUser.email || 'admin@adithyan.edu',
+          user_role: 'admin',
           action: `set_college_status_${targetStatus}`,
           entity_type: 'college_status',
           entity_id: targetCollegeId,
@@ -3169,13 +3160,13 @@ export async function handleAdminUserOperation(token: string, body: any): Promis
       }
 
       case 'platform_save_college_config': {
-        if (callerRole !== 'super_admin') {
-          return { status: 403, body: { error: 'Forbidden: Super Admin authorization required.', code: 'FORBIDDEN' } };
+        if (callerRole !== 'admin') {
+          return { status: 403, body: { error: 'Forbidden: Administrator authorization required.', code: 'FORBIDDEN' } };
         }
         const { targetCollegeId, configType, data } = body;
         await supabaseAdmin.from('audit_logs').insert({
-          user_email: callerUser.email || 'superadmin@adithyan.edu',
-          user_role: 'super_admin',
+          user_email: callerUser.email || 'admin@adithyan.edu',
+          user_role: 'admin',
           action: 'save_college_config_draft',
           entity_type: configType || 'config',
           entity_id: targetCollegeId,
@@ -3185,14 +3176,14 @@ export async function handleAdminUserOperation(token: string, body: any): Promis
       }
 
       case 'platform_publish_college_config': {
-        if (callerRole !== 'super_admin') {
-          return { status: 403, body: { error: 'Forbidden: Super Admin authorization required.', code: 'FORBIDDEN' } };
+        if (callerRole !== 'admin') {
+          return { status: 403, body: { error: 'Forbidden: Administrator authorization required.', code: 'FORBIDDEN' } };
         }
         const { targetCollegeId, releaseVersion, summary } = body;
         const version = releaseVersion || `v1.${Date.now()}.0`;
         await supabaseAdmin.from('audit_logs').insert({
-          user_email: callerUser.email || 'superadmin@adithyan.edu',
-          user_role: 'super_admin',
+          user_email: callerUser.email || 'admin@adithyan.edu',
+          user_role: 'admin',
           action: 'publish_college_configuration',
           entity_type: 'configuration_release',
           entity_id: targetCollegeId,
@@ -3204,9 +3195,22 @@ export async function handleAdminUserOperation(token: string, body: any): Promis
       case 'verify_tenant_isolation': {
         // Validation endpoint used in security tests to verify cross-college isolation
         const { targetCollegeId } = body;
-        if (callerRole === 'super_admin') {
+        if (callerRole === 'admin') {
           return { status: 200, body: { authorized: true, role: callerRole, accessScope: 'global' } };
         }
+        const effectiveCallerCollege = callerCollegeId || '11111111-1111-1111-1111-111111111111';
+        if (targetCollegeId && targetCollegeId !== effectiveCallerCollege) {
+          return {
+            status: 403,
+            body: {
+              authorized: false,
+              error: 'Cross-college access rejected. Caller is isolated to their own college.',
+              code: 'CROSS_TENANT_VIOLATION'
+            }
+          };
+        }
+        return { status: 200, body: { authorized: true, collegeId: effectiveCallerCollege, accessScope: 'tenant_isolated' } };
+      }
         const effectiveCallerCollege = callerCollegeId || '11111111-1111-1111-1111-111111111111';
         if (targetCollegeId && targetCollegeId !== effectiveCallerCollege) {
           return {

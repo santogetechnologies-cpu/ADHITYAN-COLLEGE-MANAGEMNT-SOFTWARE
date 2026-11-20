@@ -4,7 +4,6 @@ import { Session, User as SupabaseAuthUser } from '@supabase/supabase-js';
 import { queryClient } from '@/lib/queryClient';
 
 export type UserRole =
-  | 'super_admin'
   | 'admin'
   | 'principal'
   | 'student'
