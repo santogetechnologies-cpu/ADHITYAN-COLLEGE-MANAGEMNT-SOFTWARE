@@ -4,7 +4,7 @@ import { Session, User as SupabaseAuthUser } from '@supabase/supabase-js';
 import { queryClient } from '@/lib/queryClient';
 
 export type UserRole =
-  | 'platform_super_admin'
+  | 'super_admin'
   | 'admin'
   | 'principal'
   | 'student'
@@ -31,7 +31,6 @@ export interface User {
   email: string;
   name: string;
   role: UserRole;
-  college_id?: string;
   avatar?: string;
   phone?: string;
   department?: string;
@@ -57,28 +56,16 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 function mapAuthToUser(authUser: SupabaseAuthUser, profileData?: any): User {
-  const meta = authUser.user_metadata || {};
   const email = (authUser.email || '').toLowerCase();
-
-  let fallbackRole: UserRole = 'student';
-  if (email.startsWith('superadmin') || email.includes('superadmin@') || meta.role === 'platform_super_admin') {
-    fallbackRole = 'platform_super_admin';
-  } else if (email.startsWith('admin') || email.includes('admin@')) {
-    fallbackRole = 'admin';
-  } else if (email.startsWith('principal') || email.includes('principal@')) {
-    fallbackRole = 'principal';
-  }
-
-  const resolvedRole = (meta.role || profileData?.preferences?.role || profileData?.role || fallbackRole) as UserRole;
-  const resolvedName = profileData?.name || meta.name || meta.full_name || email.split('@')[0].replace(/[._]/g, ' ');
-  const resolvedAvatar = profileData?.avatar_url || meta.avatar || meta.avatar_url || '';
-  const resolvedStudentId = profileData?.student_id || profileData?.roll_number || meta.student_id || meta.roll_number || undefined;
+  // Role MUST be resolved strictly from the verified profiles table in database
+  const resolvedRole = (profileData?.role || 'student') as UserRole;
+  const resolvedName = profileData?.name || authUser.user_metadata?.full_name || email.split('@')[0].replace(/[._]/g, ' ');
+  const resolvedAvatar = profileData?.avatar_url || '';
+  const resolvedStudentId = profileData?.student_id || profileData?.roll_number || undefined;
 
   let assignedClasses: string[] = [];
   if (Array.isArray(profileData?.preferences?.assigned_classes)) {
     assignedClasses = profileData.preferences.assigned_classes;
-  } else if (Array.isArray(meta?.assigned_classes)) {
-    assignedClasses = meta.assigned_classes;
   } else if (profileData?.class_name) {
     assignedClasses = profileData.class_name.split(',').map((s: string) => s.trim()).filter(Boolean);
   }
@@ -88,7 +75,6 @@ function mapAuthToUser(authUser: SupabaseAuthUser, profileData?: any): User {
     email: authUser.email || '',
     name: resolvedName,
     role: resolvedRole,
-    college_id: profileData?.college_id || meta.college_id || '11111111-1111-1111-1111-111111111111',
     avatar: resolvedAvatar,
     phone: profileData?.phone,
     department: profileData?.department,

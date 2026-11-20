@@ -15,18 +15,35 @@ export interface RoleConfig {
 }
 
 export const ROLE_CONFIGS: Record<UserRole, RoleConfig> = {
-  platform_super_admin: {
-    role: 'platform_super_admin',
-    label: 'Platform Super Admin',
-    home: '/platform-admin',
-    allowedRoutes: ['/platform-admin', '/platform-admin/colleges', '/platform-admin/provision', '/platform-admin/templates', '/platform-admin/audit-logs', '/platform-admin/settings'],
+  super_admin: {
+    role: 'super_admin',
+    label: 'Super Administrator',
+    home: '/super-admin',
+    allowedRoutes: [
+      '/super-admin',
+      '/super-admin/overview',
+      '/super-admin/users',
+      '/super-admin/permissions',
+      '/super-admin/settings',
+      '/super-admin/academics',
+      '/super-admin/data',
+      '/super-admin/approvals',
+      '/super-admin/modules',
+      '/super-admin/audit',
+      '/super-admin/backups',
+      '/admin',
+      '/dashboard',
+    ],
     navItems: [
-      { label: 'Platform Overview', path: '/platform-admin' },
-      { label: 'Colleges Directory', path: '/platform-admin/colleges' },
-      { label: 'Provision College', path: '/platform-admin/provision' },
-      { label: 'Config Templates', path: '/platform-admin/templates' },
-      { label: 'Platform Audit Logs', path: '/platform-admin/audit-logs' },
-      { label: 'Platform Settings', path: '/platform-admin/settings' },
+      { label: 'System Overview', path: '/super-admin' },
+      { label: 'Users & Access', path: '/super-admin/users' },
+      { label: 'Roles & Permissions', path: '/super-admin/permissions' },
+      { label: 'Institution Settings', path: '/super-admin/settings' },
+      { label: 'Academic Structure', path: '/super-admin/academics' },
+      { label: 'Approvals Center', path: '/super-admin/approvals' },
+      { label: 'Module Switches', path: '/super-admin/modules' },
+      { label: 'Audit & Security', path: '/super-admin/audit' },
+      { label: 'Backup & Recovery', path: '/super-admin/backups' },
     ],
   },
   admin: {

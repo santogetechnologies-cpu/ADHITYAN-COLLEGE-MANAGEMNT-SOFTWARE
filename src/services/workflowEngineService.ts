@@ -281,7 +281,7 @@ class WorkflowEngineService {
     role: UserRole,
     action: 'approve' | 'reject' | 'return_for_edit' | 'escalate'
   ): boolean {
-    if (role === 'platform_super_admin' || role === 'admin') return true;
+    if (role === 'super_admin' || role === 'admin') return true;
     const stage = workflow.stages.find(s => s.order === stageOrder);
     if (!stage) return false;
     const isRoleResponsible = stage.responsibleRoles.includes(role);
