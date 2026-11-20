@@ -43,6 +43,7 @@ export interface ExamScheduleItem {
   room?: string;
   max_marks?: number;
   passing_marks?: number;
+  credits?: number | null;
 }
 
 export interface ExamResultItem {
@@ -160,7 +161,7 @@ export const examService = {
       const { data, error } = await (supabase as any).from('exam_schedules').insert({
         exam_id: input.exam_id, subject: input.subject, subject_code: input.subject_code || null, class_name: input.class_name,
         exam_date: input.exam_date, start_time: input.start_time, end_time: input.end_time, room: input.room || 'TBA',
-        max_marks: max, passing_marks: input.passing_marks ?? Math.ceil(max * 0.4),
+        max_marks: max, passing_marks: input.passing_marks ?? Math.ceil(max * 0.4), credits: input.credits ?? null,
       }).select().single();
       if (error) throw error;
       return data;

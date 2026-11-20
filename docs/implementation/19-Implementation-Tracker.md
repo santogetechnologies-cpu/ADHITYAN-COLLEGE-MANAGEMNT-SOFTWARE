@@ -264,3 +264,10 @@ Legend: ✅ done & verified as stated · 🟡 written, not runnable here · ⬜ 
 |------|--------|----------|
 | Server-side scholarship decision through the fee ledger; student cannot self-sanction | ✅ SQL | 7 smoke checks (289 total) |
 | Principal dashboard: scholarship approval/decline uses it (decline needs a reason); "approve admission" no longer calls the legacy non-atomic `confirm_admission` (which also invented the programme 'Paramedical Sciences' and class "Year 1") — it approves via the lifecycle and points to Admission Management for offer/enrolment | 🟡 UI | build |
+
+## GPA / CGPA engine (064)
+| Item | Status | Evidence |
+|------|--------|----------|
+| Grade scale, credits, SGPA/CGPA, arrears, class report, placement integration | ✅ SQL | 9 smoke checks (298 total) incl. the arithmetic (9×4 + 0×2)/6 = 6.00 |
+| COE "Grades & GPA" tab (edit scale, SGPA report + CSV), credits field on papers, GPA card in student Performance and parent Results | 🟡 UI | build |
+| Existing stored grades are not rewritten when the scale changes (new marks use the new scale) | note | |

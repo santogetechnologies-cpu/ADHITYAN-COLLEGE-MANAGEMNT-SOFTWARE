@@ -4,6 +4,7 @@ import { Badge } from '@/components/ui/badge';
 import { Award, BookOpen, CheckCircle2, AlertCircle, Loader2, MessageSquare } from 'lucide-react';
 import { db } from '@/services/supabase/database';
 import { useRealtimeSubscription } from '@/hooks/useRealtimeSubscription';
+import { StudentGpaCard } from '@/components/student/StudentGpaCard';
 import { ExamResult } from '@/types/database.types';
 
 interface ParentResultsViewProps {
@@ -59,6 +60,8 @@ export function ParentResultsView({ studentId, studentName }: ParentResultsViewP
           </div>
         )}
       </div>
+
+      <StudentGpaCard studentId={studentId} />
 
       {loading ? (
         <div className="flex items-center justify-center p-12 text-muted-foreground">

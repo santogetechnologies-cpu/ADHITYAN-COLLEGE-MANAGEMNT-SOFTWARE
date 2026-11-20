@@ -38,7 +38,7 @@ export const ExamScheduling = () => {
   const [paperOpen, setPaperOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [ex, setEx] = useState({ name: '', term: '', academic_year: '', start_date: '', end_date: '', course: '', semester: '', exam_category: '' });
-  const [pp, setPp] = useState({ exam_id: '', class_name: '', subject: '', subject_code: '', room: '', exam_date: '', start_time: '09:00', end_time: '12:00', max_marks: '100', passing_marks: '40' });
+  const [pp, setPp] = useState({ exam_id: '', class_name: '', subject: '', subject_code: '', room: '', exam_date: '', start_time: '09:00', end_time: '12:00', max_marks: '100', passing_marks: '40', credits: '' });
 
   const load = useCallback(async () => {
     try {
@@ -90,7 +90,7 @@ export const ExamScheduling = () => {
     try {
       await examService.createSchedule({
         exam_id: pp.exam_id, class_name: pp.class_name, subject: pp.subject.trim(), subject_code: pp.subject_code.trim() || undefined,
-        room: pp.room.trim() || undefined, exam_date: pp.exam_date, start_time: pp.start_time, end_time: pp.end_time, max_marks: max, passing_marks: pass,
+        room: pp.room.trim() || undefined, exam_date: pp.exam_date, start_time: pp.start_time, end_time: pp.end_time, max_marks: max, passing_marks: pass, credits: pp.credits ? Number(pp.credits) : null,
       });
       toast({ title: 'Paper scheduled', description: `${pp.subject} · ${pp.class_name} · ${pp.exam_date}` });
       setPaperOpen(false);
@@ -236,6 +236,7 @@ export const ExamScheduling = () => {
             <div className="space-y-1.5"><Label className="text-xs font-semibold">Starts *</Label><Input type="time" value={pp.start_time} onChange={(e) => setPp({ ...pp, start_time: e.target.value })} /></div>
             <div className="space-y-1.5"><Label className="text-xs font-semibold">Ends *</Label><Input type="time" value={pp.end_time} onChange={(e) => setPp({ ...pp, end_time: e.target.value })} /></div>
             <div className="space-y-1.5"><Label className="text-xs font-semibold">Maximum marks</Label><Input type="number" min="1" value={pp.max_marks} onChange={(e) => setPp({ ...pp, max_marks: e.target.value })} className="font-mono" /></div>
+            <div className="space-y-1.5"><Label className="text-xs font-semibold">Credits (for GPA)</Label><Input type="number" min="0.5" step="0.5" value={pp.credits} onChange={(e) => setPp({ ...pp, credits: e.target.value })} placeholder="optional" className="font-mono" /></div>
             <div className="space-y-1.5"><Label className="text-xs font-semibold">Passing marks</Label><Input type="number" min="0" value={pp.passing_marks} onChange={(e) => setPp({ ...pp, passing_marks: e.target.value })} className="font-mono" /></div>
           </div>
           <DialogFooter><Button variant="outline" onClick={() => setPaperOpen(false)} disabled={busy}>Cancel</Button><Button onClick={createPaper} disabled={busy}>{busy ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : null}Schedule paper</Button></DialogFooter>

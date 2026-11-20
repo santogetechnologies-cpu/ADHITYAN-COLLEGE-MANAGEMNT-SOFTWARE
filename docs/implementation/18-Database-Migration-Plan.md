@@ -51,6 +51,7 @@ back-fills of NULLs and a de-duplication of `super_admin_releases` rows with the
 | 061_hr_staff_directory.sql | HR can list non-student/non-parent profiles (the HR dashboard and leave manager saw nothing before) | 053 |
 | 062_leave_decisions.sql | Staff leave decisions only through `staff_leave_decide`: HOD/principal/HR/admin, never your own leave, rejection needs a reason, over-quota approvals refused (the existing balance-ledger trigger does the deduction); leave days must fit the dates; balances can no longer be edited directly | 053 |
 | 063_scholarship_decisions.sql | **INTEGRITY: the principal's screen edited `student_fees.total_due` of the student's FIRST fee row directly from the browser** (no adjustment record, wrong fee when several) and students could edit their own sanctioned amount — decisions now go through `scholarship_decide`, which applies the concession with `fee_adjust` (audited, waived amount tracked, never above the balance) | 040 |
+| 064_grading_gpa.sql | **New:** configurable grade scale (bands → grade/grade points; edited by COE/principal/admin, audited), credits per paper, `student_gpa` (SGPA per examination + CGPA over published results, latest attempt per subject, arrears), `exam_gpa_report`; `exam_grade` now reads the scale. Placement applications use the computed CGPA (ignoring a typed one) when the student has published results; self-declared otherwise and flagged | 045, 055 |
 | 036_reconcile_legacy_columns.sql | `timetables.session_type`, `exam_schedules.day_of_week`, `student_attendance.*`, reception columns | 029 |
 
 **Behaviour changes to expect after 032:** buckets `documents`, `attachments`, `student_documents`, `staff_documents`
@@ -64,7 +65,7 @@ Not carried over on purpose: multi-college tables (`colleges`, `college_*`, `pla
 ```bash
 psql "$STAGING_DB_URL" -v ON_ERROR_STOP=1 -f supabase/tests/smoke_028_037.sql   # synthetic data, rolls back
 ```
-All lines must read PASS (289 checks). Edge-function checks: `scripts/test-edge-gate.sh` (type-check + authorization/validation cases; needs no database). Then in the SQL editor: `select count(*) from public.profiles where role is null;` (must be 0).
+All lines must read PASS (298 checks). Edge-function checks: `scripts/test-edge-gate.sh` (type-check + authorization/validation cases; needs no database). Then in the SQL editor: `select count(*) from public.profiles where role is null;` (must be 0).
 
 ### Rollback
 Each file is one transaction, so a failure leaves nothing half-applied. To undo a *successful* run use the backup/PITR from

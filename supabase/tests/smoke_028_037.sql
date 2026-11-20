@@ -708,6 +708,33 @@ SELECT pg_temp.chk('approval applies the concession through the fee ledger', (pu
 SELECT pg_temp.chk('rejecting needs a reason', (public.scholarship_decide('c9700000-0000-0000-0000-000000000002','Reject')->>'code')='REASON_REQUIRED');
 RESET ROLE;
 SELECT pg_temp.chk('fee balance reduced, waived tracked, adjustment recorded', (SELECT total_due=600 AND waived_amount=400 FROM public.student_fees WHERE id='c9600000-0000-0000-0000-000000000001') AND (SELECT count(*)=1 FROM public.fee_adjustments WHERE student_fee_id='c9600000-0000-0000-0000-000000000001' AND kind='concession' AND amount=400));
+INSERT INTO public.placement_drives (id, company_name, job_title, package_lpa, min_cgpa, max_backlogs, eligible_departments, drive_date, application_deadline, status) VALUES ('c9200000-0000-0000-0000-000000000004','GPA Co','Role',4,6.0,2,ARRAY['Nursing'],CURRENT_DATE+10,CURRENT_DATE+5,'Open');
+
+-- ---- 064 grading / GPA ----
+INSERT INTO public.exams (id, name, term, academic_year, start_date, end_date, status) VALUES ('c9800000-0000-0000-0000-000000000001','Smoke GPA Exam','T1','2026-27',CURRENT_DATE-10,CURRENT_DATE-5,'Completed');
+INSERT INTO public.exam_schedules (exam_id, subject, class_name, exam_date, start_time, end_time, room, max_marks, credits) VALUES
+ ('c9800000-0000-0000-0000-000000000001','Anatomy','ClassA',CURRENT_DATE-9,'09:00','12:00','R1',100,4),
+ ('c9800000-0000-0000-0000-000000000001','Physiology','ClassA',CURRENT_DATE-8,'09:00','12:00','R1',100,2);
+SET LOCAL ROLE authenticated;
+SELECT set_config('request.jwt.claim.sub','c0000000-0000-0000-0000-000000000008',true);   -- admin enters marks
+SELECT pg_temp.chk('marks saved for GPA test', (public.exam_save_marks('c9800000-0000-0000-0000-000000000001','[{"student_id":"c0000000-0000-0000-0000-0000000000c1","subject":"Anatomy","marks":85},{"student_id":"c0000000-0000-0000-0000-0000000000c1","subject":"Physiology","marks":35}]'::jsonb)->>'success')='true');
+SELECT pg_temp.chk('grade comes from the configured scale (85% -> A)', (SELECT grade='A' FROM public.exam_results WHERE subject='Anatomy' AND student_id='c0000000-0000-0000-0000-0000000000c1'));
+RESET ROLE;
+SET LOCAL ROLE authenticated;
+SELECT set_config('request.jwt.claim.sub','c0000000-0000-0000-0000-0000000000c1',true);   -- the student
+SELECT pg_temp.chk('unpublished results do not count for the student', (public.student_gpa('c0000000-0000-0000-0000-0000000000c1')->>'credits')::numeric=0);
+RESET ROLE;
+UPDATE public.exam_results SET is_published=true WHERE exam_id='c9800000-0000-0000-0000-000000000001';
+SET LOCAL ROLE authenticated;
+SELECT set_config('request.jwt.claim.sub','c0000000-0000-0000-0000-0000000000c1',true);
+SELECT pg_temp.chk('CGPA = (9x4 + 0x2) / 6 = 6.00 with one arrear', (SELECT (g->>'cgpa')::numeric=6.00 AND (g->>'arrears')::int=1 AND (g->>'credits')::numeric=6 FROM (SELECT public.student_gpa('c0000000-0000-0000-0000-0000000000c1') g) x));
+SELECT pg_temp.chk('another student cannot read it', (public.student_gpa('c0000000-0000-0000-0000-000000000009')->>'code')='FORBIDDEN');
+SELECT pg_temp.chk('placement uses the computed CGPA, ignoring a typed one', (SELECT (r->>'verified')::boolean AND (r->>'cgpa')::numeric=6.00 FROM (SELECT public.placement_apply('c9200000-0000-0000-0000-000000000004', 9.9) r) x));
+SELECT set_config('request.jwt.claim.sub','c0000000-0000-0000-0000-000000000008',true);
+SELECT pg_temp.chk('grade scale needs a 0% band', (public.grade_scale_save('[{"min_pct":50,"grade":"P","grade_point":5},{"min_pct":80,"grade":"D","grade_point":8}]'::jsonb)->>'code')='INVALID');
+SELECT pg_temp.chk('admin changes the scale', (public.grade_scale_save('[{"min_pct":0,"grade":"P","grade_point":4},{"min_pct":60,"grade":"M","grade_point":7},{"min_pct":85,"grade":"X","grade_point":10}]'::jsonb)->>'success')='true');
+SELECT pg_temp.chk('new scale is used for new grades', public.exam_grade(90, true)='X' AND public.exam_grade(61, true)='M' AND public.exam_grade(90, false)='F');
+RESET ROLE;
 
 SELECT name, CASE WHEN ok THEN 'PASS' ELSE 'FAIL' END AS result FROM _r ORDER BY ok, name;
 DO $$ BEGIN
