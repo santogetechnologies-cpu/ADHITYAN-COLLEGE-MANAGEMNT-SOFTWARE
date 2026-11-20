@@ -61,7 +61,7 @@ export function OverviewModule({
   attendanceMetrics,
   onOpenBroadcastModal
 }: OverviewModuleProps) {
-  const pendingLeaves = leaves.filter(l => l.status === 'Pending_HOD' || l.status === 'Pending_Principal' || l.status === 'Submitted');
+  const pendingLeaves = leaves.filter(l => l.status === 'Pending_HOD' || l.status === 'Pending_Principal' || (l.status as string) === 'Submitted');
   const pendingScholarships = scholarships.filter(s => s.status === 'Submitted' || s.status === 'Recommended_HOD');
   const pendingAdmissions = admissions.filter(a => a.status === 'Submitted' || a.status === 'Under Review');
   const pendingCertificates = certificates.filter(c => c.status === 'Pending');

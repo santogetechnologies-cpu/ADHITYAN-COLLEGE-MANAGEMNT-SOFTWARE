@@ -852,7 +852,7 @@ export const db = {
       let assignedClasses: string[] = [];
       if (teacherId) {
         const teacherSlots = await this.getTeacherTimetables(teacherId);
-        assignedClasses = Array.from(new Set(teacherSlots.map(s => s.class_name))).filter(Boolean);
+        assignedClasses = Array.from(new Set(teacherSlots.map(s => s.class_name))).filter(Boolean) as string[];
       }
 
       const mappedParents = parents.map(p => {
@@ -4761,14 +4761,14 @@ export const db = {
 
       const classSubjectPairs = Array.from(new Set(slots.map(s => `${s.class_name}|${s.subject}|${s.room || ''}`)))
         .map(str => {
-          const [className, subject, room] = str.split('|');
+          const [className, subject, room] = String(str).split('|');
           return { className, subject, room };
         });
 
       return {
         assignedSlots: slots,
         assignedClasses: allAssignedClasses,
-        assignedSubjects,
+        assignedSubjects: assignedSubjects as string[],
         classSubjectPairs,
         hasAssignments: allAssignedClasses.length > 0
       };
@@ -4825,7 +4825,7 @@ export const db = {
 
           const semMatch = yrSem.match(/Semester\s*(\d)/i);
           if (semMatch) {
-            semester = `Semester ${semMatch[1]}`;
+            semester = `Semester ${semMatch[1]}` as any;
           } else if (yrSem.includes('Year 2')) {
             semester = 'Semester 3';
           } else if (yrSem.includes('Year 3')) {

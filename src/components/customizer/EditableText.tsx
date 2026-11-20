@@ -40,12 +40,12 @@ export function EditableText({
   }
 
   const [editText, setEditText] = useState(content.text);
-  const [color, setColor] = useState(content.styling?.color || '');
+  const [color, setColor] = useState((content as any).styling?.color || '');
 
   const handleSave = async (e: React.MouseEvent) => {
     e.stopPropagation();
     await updateContent(id, editText, {
-      ...content.styling,
+      ...(content as any).styling,
       color: color || undefined
     });
     setIsOpen(false);
@@ -67,7 +67,7 @@ export function EditableText({
   const Component = as;
   const mergedStyle: React.CSSProperties = {
     ...style,
-    ...(content.styling?.color ? { color: content.styling.color } : {})
+    ...((content as any).styling?.color ? { color: (content as any).styling.color } : {})
   };
 
   // If NOT in Super Admin customizer mode, render pure text

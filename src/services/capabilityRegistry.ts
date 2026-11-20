@@ -501,7 +501,7 @@ export function buildDefaultRoleCustomization(
     label: baseRole.label,
     description: baseRole.description,
     category: baseRole.category,
-    status: baseRole.status || 'active',
+    status: (baseRole.status || 'active') as any,
     enabledModules: baseRole.allowedModules || ['students', 'academics', 'attendance'],
     enabledFeatures: ['feat_attendance_marking', 'feat_assignment_creation'],
     enabledCapabilities: enabledCapIds,

@@ -84,7 +84,7 @@ export default function DepartmentManagement() {
 
   // Create submission
   const handleCreateSubmit = createForm.handleSubmit(async (values: CreateDepartmentFormData) => {
-    createMutation.mutate(values, {
+    createMutation.mutate(values as any, {
       ...createMutationToast({
         successTitle: 'Department Initialized',
         successDescription: () => `"${values.name}" registered successfully with active sections.`,

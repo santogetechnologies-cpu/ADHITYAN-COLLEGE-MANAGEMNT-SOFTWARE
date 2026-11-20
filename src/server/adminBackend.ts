@@ -417,8 +417,8 @@ export async function handleAdminUserOperation(token: string, body: any): Promis
 
         const profileMap = new Map((studentProfiles || []).map(p => [p.id, {
           ...p,
-          student_id: p.student_id || p.roll_number || `STU-${p.id.slice(0, 8).toUpperCase()}`,
-          roll_number: p.roll_number || p.student_id || `STU-${p.id.slice(0, 8).toUpperCase()}`,
+          student_id: (p as any).student_id || p.roll_number || `STU-${p.id.slice(0, 8).toUpperCase()}`,
+          roll_number: p.roll_number || (p as any).student_id || `STU-${p.id.slice(0, 8).toUpperCase()}`,
         }]));
 
         const enrichedLinks = links.map(link => ({
@@ -3445,11 +3445,11 @@ export async function handleFirstLoginChallenge(body: any): Promise<{ status: nu
       user_id: user.id,
       name: user.name,
       role: user.role,
-      student_id: user.student_id || user.roll_number,
-      parent_id: user.login_id,
+      student_id: (user as any).student_id || user.roll_number,
+      parent_id: (user as any).login_id,
       masked_phone: maskedPhone,
       masked_email: maskedEmail,
-      is_first_login: user.is_first_login ?? true,
+      is_first_login: (user as any).is_first_login ?? true,
       verification_code: code // Supplied for on-screen verification in testing and production environment
     }
   };

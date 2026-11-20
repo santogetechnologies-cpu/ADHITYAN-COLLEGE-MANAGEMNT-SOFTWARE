@@ -305,7 +305,7 @@ Legend: ✅ done & verified as stated · 🟡 written, not runnable here · ⬜ 
 ## Type-check clean-up
 | Item | Status | Evidence |
 |------|--------|----------|
-| The Supabase client was typed with an out-of-date `Database` type that turned every insert/update into `never` — client is now untyped (`SupabaseClient<any>`), UserRole definitions aligned (21 roles), missing optional fields added | ✅ | TS errors 608 → 68 (remaining: deprecated multi-college/platform-admin code, tests, minor typings) |
+| The Supabase client was typed with an out-of-date `Database` type that turned every insert/update into `never` — client is now untyped (`SupabaseClient<any>`), UserRole definitions aligned (21 roles), missing optional fields added | ✅ | TS errors 608 → 48 (remaining: the deprecated multi-college / platform-admin customizer code and two test files) |
 | Real defects found this way and fixed: concerns saved/read through a document-table workaround and unknown column `student_name`; shortage warnings wrote non-existent columns (never saved); parent attendance compared 'Present'/'Late' to lower-case values (everything showed as absent); admin dashboard complaint counts and faculty-deployment score; linked-guardian list showed blank names and always "Verified"; afternoon wellness check-in rejected by the database; my earlier edit broke StudentDashboard (`acc`) | ✅ | |
 
 ## Partial refunds, settlement import, store payments (072)
@@ -320,3 +320,7 @@ Legend: ✅ done & verified as stated · 🟡 written, not runnable here · ⬜ 
 |------|--------|----------|
 | Fee on ledger, pay-before-decision, blind valuer, refund flag, photo on seating rows | ✅ SQL | 14 smoke checks (409 total) |
 | COE tab: fee field, valuer assignment, refund-due flag; teacher view of blind scripts; photos on printed seating sheets | 🟡 UI | build |
+
+## Remaining "not built" list — status
+All items from the previous list are now built: partial/per-fee refunds, settlement import, store-order payments, revaluation fee, second valuer, seating photos, type-check clean-up (48 errors left, all in the deprecated multi-college customizer and tests). A new-product dialog in the store invented a 4.8 rating for every product; removed.
+Still open (new ideas, not regressions): gateway adapters other than Razorpay; automatic instalment reminders; GST invoices for store sales; a real end-to-end browser test suite with a seeded Supabase.

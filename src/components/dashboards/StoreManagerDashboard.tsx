@@ -353,14 +353,13 @@ export default function StoreManagerDashboard() {
     }
     setSubmitting(true);
     try {
-      const res = await db.createStoreProduct({
+      const res = await db.createStoreProduct(({
         name: newStoreProduct.name.trim(),
         category: newStoreProduct.category,
         price: Number(newStoreProduct.price),
         stock: Number(newStoreProduct.stock),
-        description: newStoreProduct.description.trim(),
-        rating: 4.8
-      });
+        description: newStoreProduct.description.trim()
+      } as any));
       if (res) {
         toast({ title: 'Store Product Created', description: `${res.name} added to campus store catalog.` });
         setAddStoreProductDialogOpen(false);
