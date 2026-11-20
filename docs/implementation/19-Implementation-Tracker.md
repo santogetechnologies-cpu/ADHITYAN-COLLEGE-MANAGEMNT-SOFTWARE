@@ -17,7 +17,7 @@ Legend: ✅ done & verified as stated · 🟡 written, not runnable here · ⬜ 
 | Columns/constraints/triggers/RLS/audit hardening | ✅ | 029–033 | applied twice; self-promotion blocked, cross-student reads blocked, audit log immutable, buckets private |
 | Rate limiting, transactional fee posting | ✅ | 034, 035 | idempotency, overpayment, service_role-only tested |
 | Legacy column reconcile | ✅ | 036 | applied twice |
-| Smoke test in repo | ✅ | `supabase/tests/smoke_028_036.sql` | 13/13 PASS |
+| Smoke test in repo | ✅ | `supabase/tests/smoke_028_037.sql` | 13/13 PASS |
 | Run on real Supabase / staging | ⬜ (you) | | |
 | Central student identity model (applications, enrollments, history, multi-identifier, config) | 🟡 minimal: `students` table + permanent id only | 028 | enrollment/history/identifiers not built |
 | Configurable permission engine (beyond role names) | ⬜ | | |
@@ -47,7 +47,7 @@ Legend: ✅ done & verified as stated · 🟡 written, not runnable here · ⬜ 
 | Align backend `STU-` student-id format with DB generator | ⬜ | | |
 
 ## Next recommended increments
-1. You: deploy 028–036 + functions to staging, run the smoke SQL and the curl checks in `18-Database-Migration-Plan.md`; report any failure.
+1. You: deploy 028–037 + functions to staging, run the smoke SQL and the curl checks in `18-Database-Migration-Plan.md`; report any failure.
 2. Port the dev-only test token to a test-only guard, delete it from `src/server/adminBackend.ts`; add Deno tests for `admin-api`.
 3. Student information system: enrollment + identifier + status-history tables, then admission→student conversion RPC (transactional/idempotent).
 4. Fee engine (structures, versions, invoices, ledger) on top of `record_fee_payment`; then sidebar/app shell.
@@ -61,3 +61,14 @@ Legend: ✅ done & verified as stated · 🟡 written, not runnable here · ⬜ 
 | Parent/Student "Pay" were **simulated** (no gateway; marked fees paid from the browser, parent flow issued two receipts; would error after migration 032). Replaced by an honest "how to pay at the accounts desk" panel; parent totals bug (outstanding subtracted twice) fixed | 🟡 code, builds | **Online payment still needs a gateway (decision + keys + verified webhook function)** |
 | `collegeDataService.recordFeePayment` / `FeesManagementView` (third implementation, admin console) | ⬜ | still the old path |
 | Fee structures, versioned invoices, concessions/refunds through approval, installments, late fees | ⬜ | |
+
+## Module 2 — Admissions → student (step 2: database + API)
+| Item | Status | Evidence |
+|------|--------|----------|
+| Close open RLS on admission documents / merit tables | ✅ SQL | smoke: anon has no grants, student sees 0 rows, receptionist can read |
+| Typed application columns, wider status set, backfill from JSON workaround | ✅ SQL | applied twice on scratch DB; valid legacy row migrated, malformed row skipped with a notice |
+| `admission_set_status` (validated transitions, rejected-document gate, reason required, audit) | ✅ SQL | 9 smoke checks |
+| `admission_enroll` (transactional, idempotent, creates/links `students`; later login adopts the record) | ✅ SQL | smoke: retry idempotent, exactly one student row, adoption works |
+| API: `create_admission_application` (no JSON hack, no fake 85 score, duplicate-id checks), `update_admission_status`, new `enroll_admission` — edge fn + dev backend | 🟡 | tsc clean, 27 gate cases pass; DB-touching branches not run |
+| **Step 3 (next):** admissions workspace UI (pipeline, Enroll button, real errors), client `db.updateAdmissionStatus` still swallows errors and writes directly, entrance-test & merit tabs rebuilt on applications, form's fake defaults (`|| 85`, `|| 88`) | ⬜ | |
+| Legacy `confirm_admission` (non-transactional, creates login + parent + fee in ~10 writes) | ⬜ | to be reworked after step 3 |

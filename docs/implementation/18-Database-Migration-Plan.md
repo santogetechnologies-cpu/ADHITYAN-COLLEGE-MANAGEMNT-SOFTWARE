@@ -1,4 +1,4 @@
-# Deployment runbook — migrations 028–036 + edge functions
+# Deployment runbook — migrations 028–037 + edge functions
 
 Everything below is done **by you** on a staging project first (this repo never touches your Supabase). Nothing here is
 destructive: every migration is additive/idempotent and wrapped in a transaction; the only data statements are
@@ -24,6 +24,7 @@ back-fills of NULLs and a de-duplication of `super_admin_releases` rows with the
 | 033_phase1_configs_and_audit.sql | `super_admin_configs/releases`, append-only `audit_logs` (no UPDATE/DELETE/TRUNCATE) | 032 |
 | 034_auth_rate_limits.sql | `auth_rate_limits`, `check_rate_limit()` (service_role only) | — |
 | 035_record_fee_payment.sql | transactional, idempotent `record_fee_payment()` + receipts (service_role only) | 028 |
+| 037_admissions_lifecycle.sql | **closes RLS on `admission_document_verifications` / `admission_merit_lists`** (were open to the public key), typed application columns + backfill from the JSON workaround (originals kept), wider status set, `admission_set_status()` (validated transitions + audit), `admission_enroll()` (transactional, idempotent student record), student↔profile adoption | 028, 036 |
 | 036_reconcile_legacy_columns.sql | `timetables.session_type`, `exam_schedules.day_of_week`, `student_attendance.*`, reception columns | 029 |
 
 **Behaviour changes to expect after 032:** buckets `documents`, `attachments`, `student_documents`, `staff_documents`
@@ -35,9 +36,9 @@ Not carried over on purpose: multi-college tables (`colleges`, `college_*`, `pla
 
 ### Verify
 ```bash
-psql "$STAGING_DB_URL" -v ON_ERROR_STOP=1 -f supabase/tests/smoke_028_036.sql   # synthetic data, rolls back
+psql "$STAGING_DB_URL" -v ON_ERROR_STOP=1 -f supabase/tests/smoke_028_037.sql   # synthetic data, rolls back
 ```
-All 13 lines must read PASS. Then in the SQL editor: `select count(*) from public.profiles where role is null;` (must be 0).
+All lines must read PASS (33 checks). Edge-function checks: `scripts/test-edge-gate.sh` (type-check + 27 authorization/validation cases; needs no database). Then in the SQL editor: `select count(*) from public.profiles where role is null;` (must be 0).
 
 ### Rollback
 Each file is one transaction, so a failure leaves nothing half-applied. To undo a *successful* run use the backup/PITR from

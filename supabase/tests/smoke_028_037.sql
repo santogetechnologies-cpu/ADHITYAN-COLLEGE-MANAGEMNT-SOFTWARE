@@ -1,6 +1,6 @@
--- Smoke test for migrations 028-036. Synthetic data only; everything is rolled back.
--- Run against a SCRATCH/STAGING database that has 001-015 + 028-036 applied (never production):
---   psql "$STAGING_DB_URL" -v ON_ERROR_STOP=1 -f supabase/tests/smoke_028_036.sql
+-- Smoke test for migrations 028-037. Synthetic data only; everything is rolled back.
+-- Run against a SCRATCH/STAGING database that has 001-015 + 028-037 applied (never production):
+--   psql "$STAGING_DB_URL" -v ON_ERROR_STOP=1 -f supabase/tests/smoke_028_037.sql
 -- Any failed assertion raises an exception and the script exits non-zero.
 \set ON_ERROR_STOP 1
 BEGIN;
@@ -50,6 +50,41 @@ RESET ROLE;
 SELECT pg_temp.chk('buckets with sensitive data are private',
   NOT EXISTS (SELECT 1 FROM storage.buckets WHERE id IN ('documents','attachments','student_documents','staff_documents') AND public));
 SELECT pg_temp.chk('institutional_settings singleton exists', (SELECT count(*) FROM public.institutional_settings)=1);
+
+-- ===================== 037 admissions lifecycle =====================
+INSERT INTO auth.users(id,email) VALUES ('c0000000-0000-0000-0000-000000000005','smoke.recep@example.test'),
+                                        ('c0000000-0000-0000-0000-000000000006','smoke.newstu@example.test');
+INSERT INTO public.profiles(id,email,name,role) VALUES ('c0000000-0000-0000-0000-000000000005','smoke.recep@example.test','Smoke Recep','receptionist');
+INSERT INTO public.admission_applications(id,application_number,applicant_name,email,phone,class_name,parent_name,parent_phone,status)
+ VALUES ('c2000000-0000-0000-0000-000000000001','SMK-ADM-001','Smoke Applicant','smoke.newstu@example.test','900','B.Sc MLT','Smoke Parent','901','Submitted');
+SELECT pg_temp.chk('cannot jump Submitted -> Approved', (public.admission_set_status('c2000000-0000-0000-0000-000000000001','Approved',NULL,'c0000000-0000-0000-0000-000000000005')->>'code')='INVALID_TRANSITION');
+SELECT pg_temp.chk('Submitted -> Under Review ok', (public.admission_set_status('c2000000-0000-0000-0000-000000000001','Under Review',NULL,'c0000000-0000-0000-0000-000000000005')->>'success')='true');
+SELECT pg_temp.chk('enroll before approval refused', (public.admission_enroll('c2000000-0000-0000-0000-000000000001','c0000000-0000-0000-0000-000000000005')->>'code')='NOT_APPROVED');
+INSERT INTO public.admission_document_verifications(application_id,student_name,document_type,status)
+ VALUES ('c2000000-0000-0000-0000-000000000001','Smoke Applicant','12th Marksheet','Rejected');
+SELECT pg_temp.chk('rejected document blocks approval', (public.admission_set_status('c2000000-0000-0000-0000-000000000001','Approved',NULL,'c0000000-0000-0000-0000-000000000005')->>'code')='DOCUMENTS_REJECTED');
+UPDATE public.admission_document_verifications SET status='Verified' WHERE application_id='c2000000-0000-0000-0000-000000000001';
+SELECT pg_temp.chk('approve after documents verified', (public.admission_set_status('c2000000-0000-0000-0000-000000000001','Approved','ok','c0000000-0000-0000-0000-000000000005')->>'success')='true');
+SELECT pg_temp.chk('enroll creates student record', (public.admission_enroll('c2000000-0000-0000-0000-000000000001','c0000000-0000-0000-0000-000000000005')->>'student_id')='SMK-ADM-001');
+SELECT pg_temp.chk('enroll retry is idempotent', (public.admission_enroll('c2000000-0000-0000-0000-000000000001','c0000000-0000-0000-0000-000000000005')->>'already_enrolled')='true');
+SELECT pg_temp.chk('exactly one student row', (SELECT count(*) FROM public.students WHERE student_id='SMK-ADM-001')=1);
+SELECT pg_temp.chk('application marked Enrolled and linked', (SELECT status='Enrolled' AND student_record_id IS NOT NULL AND enrolled_by IS NOT NULL FROM public.admission_applications WHERE id='c2000000-0000-0000-0000-000000000001'));
+SELECT pg_temp.chk('Enrolled is terminal for status changes', (public.admission_set_status('c2000000-0000-0000-0000-000000000001','Cancelled','x','c0000000-0000-0000-0000-000000000005')->>'code')='INVALID_TRANSITION');
+SELECT pg_temp.chk('status changes audited', (SELECT count(*) FROM public.audit_logs WHERE entity_id='c2000000-0000-0000-0000-000000000001' AND action IN ('admission_status_change','admission_enrolled'))=3);
+-- portal account provisioned later adopts the existing student record (no unique violation)
+INSERT INTO public.profiles(id,email,name,role,student_id) VALUES ('c0000000-0000-0000-0000-000000000006','smoke.newstu@example.test','Smoke Applicant','student','SMK-ADM-001');
+SELECT pg_temp.chk('later login adopts the enrolled record', (SELECT user_id='c0000000-0000-0000-0000-000000000006' FROM public.students WHERE student_id='SMK-ADM-001') AND (SELECT count(*) FROM public.students WHERE student_id='SMK-ADM-001')=1);
+
+SET LOCAL ROLE anon;
+SELECT pg_temp.chk('anon cannot read admission documents', (SELECT count(*) FROM information_schema.role_table_grants WHERE grantee='anon' AND table_name IN ('admission_document_verifications','admission_merit_lists'))=0);
+RESET ROLE;
+SET LOCAL ROLE authenticated;
+SELECT set_config('request.jwt.claim.sub','c0000000-0000-0000-0000-000000000001',true);
+SELECT pg_temp.chk('student cannot read admission documents', (SELECT count(*) FROM public.admission_document_verifications)=0);
+SELECT pg_temp.chk('student cannot call admission_enroll', has_function_privilege('authenticated','public.admission_enroll(uuid,uuid,text,text)','EXECUTE')=false);
+SELECT set_config('request.jwt.claim.sub','c0000000-0000-0000-0000-000000000005',true);
+SELECT pg_temp.chk('receptionist can read admission documents', (SELECT count(*) FROM public.admission_document_verifications)>=1);
+RESET ROLE;
 
 SELECT name, CASE WHEN ok THEN 'PASS' ELSE 'FAIL' END AS result FROM _r ORDER BY ok, name;
 DO $$ BEGIN

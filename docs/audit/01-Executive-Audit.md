@@ -6,8 +6,8 @@ fee-engine / exam-engine / workflow-engine re-engineering and the other phases o
 
 ## How it was verified
 A scratch PostgreSQL 16 database was built from migrations 001–015 (the state the earlier audits
-say is live), then 028–036 were applied twice (idempotency) with Supabase-style stubs (`auth`, `storage`,
-`anon/authenticated/service_role`). `supabase/tests/smoke_028_036.sql` (13 checks) passes. The edge functions
+say is live), then 028–037 were applied twice (idempotency) with Supabase-style stubs (`auth`, `storage`,
+`anon/authenticated/service_role`). `supabase/tests/smoke_028_037.sql` (13 checks) passes. The edge functions
 type-check against the real `@supabase/supabase-js` types, and the authorization gate of `admin-api`
 was exercised by 20 cases. **Not verified:** execution on real Supabase, Deno runtime, email delivery, anything
 needing real auth users. Test on staging first.

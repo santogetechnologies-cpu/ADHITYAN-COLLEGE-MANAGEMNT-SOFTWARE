@@ -46,6 +46,7 @@ const ACTION_ROLES: Record<string, string[]> = {
   create_parent_account: ADMISSION_ROLES, link_parent_student: ADMISSION_ROLES, unlink_parent_student: ADMISSION_ROLES,
   list_parent_links: ADMISSION_ROLES, list_parent_accounts: ADMISSION_ROLES, search_parents: ADMISSION_ROLES,
   confirm_admission: ADMISSION_ROLES, create_admission_application: ADMISSION_ROLES, update_admission_status: ADMISSION_ROLES,
+  enroll_admission: ADMISSION_ROLES,
   resolve_login_id: ADMISSION_ROLES, check_student_id_availability: ADMISSION_ROLES,
   list_unprovisioned_approved_students: ADMISSION_ROLES, provision_student_account: ADMISSION_ROLES,
   list_students_for_parent_linking: ADMISSION_ROLES, create_parent_account_and_link: ADMISSION_ROLES,
@@ -355,176 +356,87 @@ export async function handleAdminUserOperation(caller: Caller, body: any, userTo
       }
 
       case 'create_admission_application': {
-        const { application } = body;
-        if (!application) {
-          return { status: 400, body: { error: 'Application payload required.', code: 'VALIDATION_ERROR' } };
-        }
-
-        const studentId = (application.student_id || application.studentId || '').trim();
+        const a = body.application;
+        if (!a) return { status: 400, body: { error: 'Application payload required.', code: 'VALIDATION_ERROR' } };
+        const studentId = String(a.student_id || a.studentId || a.application_number || '').trim();
+        const name = String(a.applicant_name || a.name || '').trim();
         if (!studentId) {
           return { status: 400, body: { error: 'Student ID must be entered manually by authorized staff. Auto-generation is not permitted.', code: 'STUDENT_ID_REQUIRED' } };
         }
-
-        // Uniqueness check for manual student ID
-        const { data: duplicateProfile } = await supabaseAdmin
-          .from('profiles')
-          .select('id, name, roll_number')
-          .eq('roll_number', studentId)
-          .maybeSingle();
-
-        if (duplicateProfile) {
-          return {
-            status: 409,
-            body: {
-              error: `Student ID "${studentId}" is already assigned to active student ${duplicateProfile.name}. Please enter a unique Student ID.`,
-              code: 'DUPLICATE_STUDENT_ID'
-            }
-          };
+        if (studentId.length > 64 || !name || name.length > 200) {
+          return { status: 400, body: { error: 'A valid applicant name and a student ID of at most 64 characters are required.', code: 'VALIDATION_ERROR' } };
+        }
+        const email = String(a.email || '').trim();
+        if (email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
+          return { status: 400, body: { error: 'The e-mail address is not valid.', code: 'VALIDATION_ERROR' } };
         }
 
-        // Check active applications in document metadata for duplicate student ID
-        try {
-          const { data: docMatches } = await supabaseAdmin
-            .from('admission_document_verifications')
-            .select('document_url')
-            .eq('document_type', 'APPLICATION_METADATA');
+        // Student id must be unique across profiles, students and open applications
+        const [{ data: dupProfile }, { data: dupStudent }, { data: dupApp }] = await Promise.all([
+          supabaseAdmin.from('profiles').select('name').or(`roll_number.eq.${studentId.replace(/[,()]/g, '')},student_id.eq.${studentId.replace(/[,()]/g, '')}`).limit(1).maybeSingle(),
+          supabaseAdmin.from('students').select('name').eq('student_id', studentId).maybeSingle(),
+          supabaseAdmin.from('admission_applications').select('applicant_name, status').eq('application_number', studentId).maybeSingle(),
+        ]);
+        const owner = dupProfile?.name || dupStudent?.name || dupApp?.applicant_name;
+        if (owner) {
+          return { status: 409, body: { error: `Student ID "${studentId}" is already in use (${owner}). Enter a unique Student ID.`, code: 'DUPLICATE_STUDENT_ID' } };
+        }
 
-          for (const doc of (docMatches || [])) {
-            if (doc.document_url && doc.document_url.includes(studentId)) {
-              try {
-                const metaDoc = JSON.parse(doc.document_url);
-                const sId = (metaDoc.student_id || metaDoc.studentId || metaDoc.application_no || metaDoc.application_number || '').trim();
-                if (sId.toLowerCase() === studentId.toLowerCase() && metaDoc.status !== 'Rejected') {
-                  return {
-                    status: 409,
-                    body: {
-                      error: `Student ID "${studentId}" is already registered in an active admission application for ${metaDoc.applicant_name || metaDoc.name}.`,
-                      code: 'DUPLICATE_STUDENT_ID'
-                    }
-                  };
-                }
-              } catch (pe) { }
-            }
-          }
-        } catch (e) { }
+        const num = (v: unknown) => { const n = Number(v); return v !== '' && v != null && Number.isFinite(n) ? n : null; };
+        const txt = (v: unknown, max = 500) => (v == null || String(v).trim() === '' ? null : String(v).trim().slice(0, max));
+        const course = txt(a.class_applied || a.class_name || a.program_applied, 200);
+        if (!course) return { status: 400, body: { error: 'The course applied for is required.', code: 'VALIDATION_ERROR' } };
+        const docs = (Array.isArray(a.documents) ? a.documents : []).filter((d: any) => d && (d.file_url || d.file_name));
 
-        const studentName = application.name || application.applicant_name || 'Applicant';
-        const courseName = application.class_applied || application.class_name || application.program_applied || 'Paramedical Sciences';
-        const appNo = studentId;
-
-        // 1. Create merit record
-        const { data: merit } = await supabaseAdmin.from('admission_merit_lists').insert({
-          student_name: studentName,
-          course_name: courseName,
-          merit_score: Number(application.qualifying_marks || application.qualifyingScore || 85),
-          rank: 1,
-          category: application.merit_category || 'Institutional Merit',
-          status: 'Submitted',
-          academic_year: application.academic_year || '2026-2027'
+        const { data: created, error: insErr } = await supabaseAdmin.from('admission_applications').insert({
+          application_number: studentId, applicant_name: name, email, phone: String(a.phone || '').trim(),
+          class_name: course, parent_name: txt(a.parent_name || a.guardian_name, 200) || 'Guardian',
+          parent_phone: String(a.parent_phone || a.guardian_phone || '').trim(), status: 'Submitted',
+          submission_date: new Date().toISOString().split('T')[0], remarks: txt(a.remarks, 1000),
+          date_of_birth: /^\d{4}-\d{2}-\d{2}$/.test(String(a.date_of_birth || '')) ? a.date_of_birth : null,
+          gender: txt(a.gender, 30), blood_group: txt(a.blood_group, 10), address: txt(a.address, 500),
+          previous_school: txt(a.previous_school, 300), parent_email: txt(a.parent_email, 200),
+          relationship: txt(a.relationship, 50), occupation: txt(a.occupation, 100), annual_income: txt(a.annual_income, 50),
+          academic_year: txt(a.academic_year, 20), admission_batch: txt(a.admission_batch, 50),
+          qualifying_board: txt(a.qualifying_board, 100), passing_year: txt(a.passing_year, 10),
+          qualifying_marks: num(a.qualifying_marks), science_score: num(a.science_score),
+          merit_category: txt(a.merit_category, 100), eligibility_verified: !!a.eligibility_verified,
+          documents: docs, extra: { custom_fields: a.custom_fields ?? null, fee_payment: a.fee_payment ?? null },
         }).select().single();
-
-        const newId = merit?.id || crypto.randomUUID();
-
-        // 2. Create metadata record in admission_document_verifications
-        const meta = {
-          ...application,
-          id: newId,
-          application_id: newId,
-          student_id: studentId,
-          studentId: studentId,
-          application_no: appNo,
-          application_number: appNo,
-          name: studentName,
-          applicant_name: studentName,
-          class_name: courseName,
-          class_applied: courseName,
-          status: 'Submitted',
-          is_provisioned: false,
-          created_at: new Date().toISOString()
-        };
-
-        await supabaseAdmin.from('admission_document_verifications').insert({
-          student_name: studentName,
-          document_type: 'APPLICATION_METADATA',
-          document_url: JSON.stringify(meta),
-          status: 'Pending',
-          submission_date: new Date().toISOString().split('T')[0]
-        });
-
-        // 3. Best-effort insert into admission_applications
-        try {
-          await supabaseAdmin.from('admission_applications').insert({
-            id: newId,
-            application_number: appNo,
-            applicant_name: studentName,
-            email: application.email || '',
-            phone: application.phone || '',
-            class_name: courseName,
-            parent_name: application.parent_name || application.guardian_name || 'Guardian',
-            parent_phone: application.parent_phone || application.guardian_phone || '',
-            status: 'Submitted',
-            submission_date: new Date().toISOString().split('T')[0],
-            remarks: application.remarks || `Student ID: ${studentId}`
-          });
-        } catch (e) { }
-
-        // Note: Admission application submission NEVER creates auth login accounts
-        return { status: 200, body: { success: true, application: meta } };
+        if (insErr || !created) {
+          return { status: insErr?.code === '23505' ? 409 : 400, body: { error: insErr?.code === '23505' ? 'This student ID is already used by another application.' : 'The application could not be saved.', code: insErr?.code === '23505' ? 'DUPLICATE_STUDENT_ID' : 'APPLICATION_FAILED' } };
+        }
+        if (docs.length > 0) {
+          await supabaseAdmin.from('admission_document_verifications').insert(docs.map((d: any) => ({
+            application_id: created.id, student_name: name, document_type: String(d.type || 'Document').slice(0, 100),
+            document_url: d.file_url || null, status: 'Pending', submission_date: new Date().toISOString().split('T')[0],
+          })));
+        }
+        // Registering an application never creates login accounts or a student record.
+        return { status: 200, body: { success: true, application: created } };
       }
 
       case 'update_admission_status': {
-        const { id, status: newStatus, remarks } = body;
-        if (!id || !newStatus) {
-          return { status: 400, body: { error: 'id and status required.', code: 'VALIDATION_ERROR' } };
-        }
+        const { id, status: requested, remarks } = body;
+        if (!id || !requested) return { status: 400, body: { error: 'id and status are required.', code: 'VALIDATION_ERROR' } };
+        const wanted = requested === 'Pending' ? 'Submitted' : String(requested);
+        const { data, error } = await supabaseAdmin.rpc('admission_set_status', {
+          p_application_id: id, p_new_status: wanted, p_remarks: remarks ?? null, p_actor: callerUser.id,
+        });
+        if (error) return { status: 500, body: { error: 'The status could not be changed.', code: 'STATUS_FAILED' } };
+        if (!data?.success) return { status: data?.code === 'NOT_FOUND' ? 404 : 400, body: { error: data?.error ?? 'Status change rejected.', code: data?.code, allowed: data?.allowed } };
+        return { status: 200, body: data };
+      }
 
-        try {
-          await supabaseAdmin
-            .from('admission_merit_lists')
-            .update({
-              status: newStatus === 'Approved' ? 'Admitted' : newStatus,
-              updated_at: new Date().toISOString()
-            })
-            .eq('id', id);
-        } catch (e) { }
-
-        try {
-          const { data: docs } = await supabaseAdmin
-            .from('admission_document_verifications')
-            .select('*')
-            .eq('document_type', 'APPLICATION_METADATA');
-
-          for (const d of (docs || [])) {
-            if (d.document_url && (d.document_url.includes(id) || d.id === id)) {
-              try {
-                const meta = JSON.parse(d.document_url);
-                meta.status = newStatus;
-                if (remarks) meta.remarks = remarks;
-                meta.updated_at = new Date().toISOString();
-                meta.reviewed_by = callerUser?.id;
-                meta.reviewed_at = new Date().toISOString();
-                await supabaseAdmin
-                  .from('admission_document_verifications')
-                  .update({
-                    document_url: JSON.stringify(meta),
-                    status: newStatus === 'Approved' ? 'Verified' : 'Pending',
-                    updated_at: new Date().toISOString()
-                  })
-                  .eq('id', d.id);
-              } catch (pe) { }
-            }
-          }
-        } catch (e) { }
-
-        try {
-          await supabaseAdmin
-            .from('admission_applications')
-            .update({ status: newStatus, remarks })
-            .eq('id', id);
-        } catch (e) { }
-
-        // Note: Admission approval NEVER automatically provisions Student or Parent auth accounts
-        return { status: 200, body: { success: true, message: `Admission status updated to ${newStatus}. Login accounts can be provisioned in Admin User Management.` } };
+      case 'enroll_admission': {
+        const { id, department, class_name } = body;
+        if (!id) return { status: 400, body: { error: 'id is required.', code: 'VALIDATION_ERROR' } };
+        const { data, error } = await supabaseAdmin.rpc('admission_enroll', {
+          p_application_id: id, p_actor: callerUser.id, p_department: department ?? null, p_class_name: class_name ?? null,
+        });
+        if (error) return { status: 500, body: { error: 'Enrolment failed; nothing was changed. Please retry.', code: 'ENROLL_FAILED' } };
+        if (!data?.success) return { status: data?.code === 'NOT_FOUND' ? 404 : 409, body: { error: data?.error ?? 'Enrolment rejected.', code: data?.code } };
+        return { status: 200, body: data };
       }
 
       case 'list_unprovisioned_approved_students': {
