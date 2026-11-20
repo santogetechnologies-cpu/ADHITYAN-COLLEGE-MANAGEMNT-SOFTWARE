@@ -904,6 +904,17 @@ SELECT pg_temp.chk('a completed order cannot be cancelled', (public.inventory_ca
 RESET ROLE;
 SELECT pg_temp.chk('stock = 10 - 4 + 3 + 10 = 19 and urgency low', (SELECT current_stock=19 AND urgency='low' FROM public.inventory_items WHERE id='c9b00000-0000-0000-0000-000000000001'));
 
+-- ---- 070 private admission documents ----
+SELECT pg_temp.chk('admission documents bucket is private', (SELECT public=false FROM storage.buckets WHERE id='admission-documents'));
+GRANT SELECT ON storage.objects TO authenticated;   -- Supabase grants this; the scratch database does not
+INSERT INTO storage.objects (bucket_id, name, owner) VALUES ('admission-documents','smoke/doc.pdf','c0000000-0000-0000-0000-000000000008');
+SET LOCAL ROLE authenticated;
+SELECT set_config('request.jwt.claim.sub','c0000000-0000-0000-0000-000000000001',true);
+SELECT pg_temp.chk('a student cannot see admission documents', (SELECT count(*)=0 FROM storage.objects WHERE bucket_id='admission-documents'));
+SELECT set_config('request.jwt.claim.sub','c0000000-0000-0000-0000-000000000008',true);
+SELECT pg_temp.chk('admin can', (SELECT count(*)>=1 FROM storage.objects WHERE bucket_id='admission-documents'));
+RESET ROLE;
+
 SELECT name, CASE WHEN ok THEN 'PASS' ELSE 'FAIL' END AS result FROM _r ORDER BY ok, name;
 DO $$ BEGIN
   IF EXISTS (SELECT 1 FROM _r WHERE NOT ok) THEN RAISE EXCEPTION 'SMOKE TEST FAILED'; END IF;

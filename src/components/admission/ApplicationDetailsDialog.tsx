@@ -1,3 +1,4 @@
+import { resolveDocumentUrl } from '@/lib/privateDocs';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import {
@@ -215,10 +216,10 @@ export const ApplicationDetailsDialog = ({
                         <Button
                           size="sm"
                           variant="outline"
-                          onClick={() => setPreviewDoc({ 
-                            name: doc.type || 'Document Preview', 
-                            url: doc.file_url || doc.document_url 
-                          })}
+                          onClick={async () => {
+                            try { setPreviewDoc({ name: doc.type || 'Document Preview', url: await resolveDocumentUrl(doc.file_url || doc.document_url) }); }
+                            catch (e: any) { toast({ title: 'Cannot open the document', description: e.message, variant: 'destructive' }); }
+                          }}
                           className="h-7 px-2 text-[11px] shrink-0"
                         >
                           <Eye className="h-3 w-3 mr-1 text-blue-600" /> View

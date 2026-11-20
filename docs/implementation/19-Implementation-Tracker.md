@@ -169,7 +169,7 @@ Legend: ✅ done & verified as stated · 🟡 written, not runnable here · ⬜ 
 |------|--------|----------|
 | Staff-only access, computed progress, private evidence bucket | ✅ SQL | 4 smoke checks (202 total) |
 | Criterion pages on real metrics (add/status/data entry/delete) and real file upload with view/download/delete; Repository uses the same; Reports generate real printable SSR/AQAR/compliance and criterion-wise CSV; fake recent-activity, invented metric list, fake "last generated", fake notification badge, toast-only Settings cards removed | 🟡 UI | build; dead buttons 41 → 25 |
-| Storage policies for the `documents` bucket (admissions/certificates) are still public-read — move admission documents to a private bucket | ⬜ | noted in audit |
+| Admission documents moved to a private bucket with signed links (070); the shared `documents` bucket remains public for library/general files | ✅ SQL, 🟡 UI | |
 
 ## Module — Sports (no migration; existing tables and RLS are adequate)
 | Item | Status | Evidence |

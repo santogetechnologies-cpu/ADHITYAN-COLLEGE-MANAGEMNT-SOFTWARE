@@ -1,3 +1,4 @@
+import { resolveDocumentUrl } from '@/lib/privateDocs';
 import { useState, useEffect, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -168,10 +169,8 @@ export const DocumentVerification = () => {
                       </>
                     )}
                     {doc.document_url && (
-                      <Button variant="ghost" size="sm" asChild>
-                        <a href={doc.document_url} target="_blank" rel="noopener noreferrer">
-                          <ExternalLink className="w-3.5 h-3.5" />
-                        </a>
+                      <Button variant="ghost" size="sm" onClick={async () => { try { window.open(await resolveDocumentUrl(doc.document_url), '_blank', 'noopener'); } catch { /* not available */ } }}>
+                        <ExternalLink className="w-3.5 h-3.5" />
                       </Button>
                     )}
                   </div>

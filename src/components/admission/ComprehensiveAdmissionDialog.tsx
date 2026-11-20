@@ -45,6 +45,7 @@ import { FeeReceipt } from '@/types/database.types';
 import { useToast } from '@/hooks/use-toast';
 import { db } from '@/services/supabase/database';
 import { supabase } from '@/lib/supabase';
+import { uploadAdmissionDocument, resolveDocumentUrl } from '@/lib/privateDocs';
 import { storageService } from '@/services/supabase/storage';
 import { ConfiguredFields, type FormFieldDef } from '@/components/admission/ConfiguredFields';
 import { EditableText } from '@/components/customizer/EditableText';
@@ -70,6 +71,7 @@ interface UploadedDocument {
   required: boolean;
   file_name: string;
   file_url: string;
+  preview_url?: string;
   file_size?: number;
   status: 'Pending' | 'Uploaded';
 }
@@ -280,26 +282,18 @@ export function ComprehensiveAdmissionDialog({
     }
 
     try {
-      // 1. Attempt upload to Supabase storage 'documents'
-      const sanitizedName = `${studentData.studentId || 'app'}_${documents[index].id}_${Date.now()}.${file.name.split('.').pop()}`;
-      const uploadRes = await storageService.uploadFile('documents', 'admissions', file);
-
-      let finalUrl = uploadRes.url;
-      if (!finalUrl) {
-        // Fallback to local Data URL for seamless preview & persistence
-        finalUrl = await new Promise<string>((resolve) => {
-          const reader = new FileReader();
-          reader.onloadend = () => resolve(reader.result as string);
-          reader.readAsDataURL(file);
-        });
-      }
+      // Stored in the PRIVATE admission-documents bucket; the application keeps only a reference. No local fallback: if the upload
+      // fails the document is NOT recorded, so nothing sensitive is silently embedded in the application record.
+      const finalUrl = await uploadAdmissionDocument(file, studentData.studentId || 'application');
+      const previewUrl = URL.createObjectURL(file);
 
       setDocuments(prev => {
         const next = [...prev];
         next[index] = {
           ...next[index],
           file_name: file.name,
-          file_url: finalUrl || '',
+          file_url: finalUrl,
+          preview_url: previewUrl,
           file_size: file.size,
           status: 'Uploaded'
         };
@@ -1086,7 +1080,7 @@ export function ComprehensiveAdmissionDialog({
                                 type="button"
                                 size="sm"
                                 variant="outline"
-                                onClick={() => setPreviewDoc({ name: doc.type, url: doc.file_url, type: doc.file_name })}
+                                onClick={async () => { try { setPreviewDoc({ name: doc.type, url: (doc as any).preview_url || await resolveDocumentUrl(doc.file_url), type: doc.file_name }); } catch (e: any) { toast({ title: 'Cannot open the document', description: e.message, variant: 'destructive' }); } }}
                                 className="h-8 px-2 text-xs"
                                 title="Preview Document"
                               >

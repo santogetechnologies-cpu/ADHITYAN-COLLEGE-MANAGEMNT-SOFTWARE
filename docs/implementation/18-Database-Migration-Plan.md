@@ -57,6 +57,7 @@ back-fills of NULLs and a de-duplication of `super_admin_releases` rows with the
 | 067_refunds_reconciliation.sql | **New:** payment reversal (ledger restored, receipt voided, finance entry, audited; counter payments by finance, online payments only via the gateway refund so money actually returns), `payments-refund` edge function, `payment_refunds`, daily reconciliation report with exceptions (orders in review / stuck / online payments without an order) | 066 |
 | 068_revaluation_supplementary.sql | **New:** revaluation (window set by COE after publication; student request with reason; COE decides Revise/Keep/Reject with a note; revision recomputes grade/pass-fail, kept in `exam_result_history`, flows into GPA) and supplementary examinations (linked to a parent exam; only students who failed/were absent can register; papers generated from failed subjects) | 045, 064, 065 |
 | 069_inventory_atomic.sql | **INTEGRITY:** store stock moves are atomic server calls (`inventory_issue/return/order/receive/cancel_order`): exact item match (was fuzzy `ilike`), row locks, no negative stock, returns limited to what the recipient holds, purchase orders can be received in parts or cancelled, urgency follows the minimum; movements can no longer be written directly | 001 |
+| 070_private_admission_documents.sql | **PRIVACY:** admission documents (ID proofs, mark sheets, photos) go to a private `admission-documents` bucket (staff-only, signed links) instead of the publicly readable `documents` bucket; no more base64 copies of documents inside application records. **Action:** files uploaded earlier remain in `documents` — re-upload sensitive ones, then delete the old copies | 003 |
 | 036_reconcile_legacy_columns.sql | `timetables.session_type`, `exam_schedules.day_of_week`, `student_attendance.*`, reception columns | 029 |
 
 **Behaviour changes to expect after 032:** buckets `documents`, `attachments`, `student_documents`, `staff_documents`
@@ -70,7 +71,7 @@ Not carried over on purpose: multi-college tables (`colleges`, `college_*`, `pla
 ```bash
 psql "$STAGING_DB_URL" -v ON_ERROR_STOP=1 -f supabase/tests/smoke_028_037.sql   # synthetic data, rolls back
 ```
-All lines must read PASS (372 checks). Edge-function checks: `scripts/test-edge-gate.sh` (type-check + authorization/validation cases; needs no database). Then in the SQL editor: `select count(*) from public.profiles where role is null;` (must be 0).
+All lines must read PASS (375 checks). Edge-function checks: `scripts/test-edge-gate.sh` (type-check + authorization/validation cases; needs no database). Then in the SQL editor: `select count(*) from public.profiles where role is null;` (must be 0).
 
 ### Rollback
 Each file is one transaction, so a failure leaves nothing half-applied. To undo a *successful* run use the backup/PITR from
