@@ -49,7 +49,8 @@ export async function handleAdminUserOperation(token: string, body: any): Promis
   let callerRole: string | undefined;
   let callerCollegeId: string | undefined;
 
-  if (token.startsWith('mock-test-role:')) {
+  // Test-only identity tokens are honoured ONLY when the test runner opts in explicitly; never in a dev server or production.
+  if (token.startsWith('mock-test-role:') && process.env.ALLOW_MOCK_TEST_TOKENS === '1') {
     const parts = token.split(':');
     callerRole = parts[1];
     callerCollegeId = parts[3];
@@ -70,15 +71,13 @@ export async function handleAdminUserOperation(token: string, body: any): Promis
     }
 
     callerUser = user;
-    callerRole = user.user_metadata?.role;
-    callerCollegeId = user.user_metadata?.college_id;
-    if (!callerRole) {
-      const { data: callerProfile } = await userClient.from('profiles').select('role, college_id').eq('id', callerUser.id).maybeSingle();
-      callerRole = callerProfile?.role;
-      if (!callerCollegeId && callerProfile?.college_id) {
-        callerCollegeId = callerProfile.college_id;
-      }
+    // The role is read from public.profiles (protected by RLS and a trigger) — NEVER from user_metadata, which the user can edit.
+    const { data: callerProfile } = await userClient.from('profiles').select('role, status').eq('id', callerUser.id).maybeSingle();
+    if (!callerProfile || (callerProfile.status && callerProfile.status !== 'active')) {
+      return { status: 403, body: { error: 'Your account is not active.', code: 'FORBIDDEN' } };
     }
+    callerRole = callerProfile.role;
+    callerCollegeId = undefined;
   }
 
   // 2. Strict Tenant Boundary Isolation: Non-platform users cannot access foreign colleges

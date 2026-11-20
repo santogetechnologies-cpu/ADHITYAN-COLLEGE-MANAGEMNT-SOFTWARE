@@ -243,3 +243,12 @@ Legend: ✅ done & verified as stated · 🟡 written, not runnable here · ⬜ 
 |------|--------|----------|
 | All remaining `USING (true)` write policies closed; API roles lose TRUNCATE/REFERENCES/TRIGGER | ✅ SQL | 6 smoke checks (274 total) |
 | Staff lookups: warden/librarian now look students up in the central `students` table (profiles are not readable by those roles, so lookups silently returned nothing); HR can list staff | ✅ SQL, 🟡 UI | build |
+
+## Dev backend, legacy admission paths, invented counters
+| Item | Status | Evidence |
+|------|--------|----------|
+| Dev admin API (`src/server/adminBackend.ts`, run by the Vite dev server on all interfaces): identity tokens `mock-test-role:…` granted ADMIN to anyone who sent one, and the caller's role was read from user_metadata (editable by the user) — now the test token needs `ALLOW_MOCK_TEST_TOKENS=1` and the role comes from `profiles` (active accounts only). Browser code no longer carries a fallback token | ✅ | tsc, edge gate tests |
+| Account-provisioning "Admission" section wrote merit-list rows directly (merit 88, rank 1, made-up e-mail domain, status Admitted without enrolment) — replaced by a read-only view of the real pipeline | 🟡 | build |
+| Provisioning statistics counted legacy merit-list rows and status spellings — now count `students` and lifecycle statuses | 🟡 | build |
+| Unused `admissionService` (marked applications 'accepted' on payment with a browser-made receipt number) deleted | ✅ | |
+| Invented counters removed: library 342/23/156 and 45,820 volumes, admin '14 accounts', '13 roles / 100% in sync', default module/widget counts | 🟡 | build |

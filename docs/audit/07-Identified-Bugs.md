@@ -78,3 +78,5 @@ See `01-Executive-Audit.md` for the full table with status. Quick index:
 | Super-admin master header "Sign out" threw (`signOut` not defined on the auth context) | Fixed |
 | `attendance_shortage_warnings` and `scholarships_master` allowed every signed-in user full read/write (student could edit scholarship discounts); API roles held TRUNCATE (not subject to RLS) on every table | Fixed (060) |
 | Hostel warden, librarian and HR lookups used `profiles`, which those roles cannot read — matches silently returned nothing, so out-passes/book issues were saved without the student link and HR could not list staff | Fixed (students directory, 061) |
+| **SECURITY (dev server)**: the development admin API accepted `Authorization: Bearer mock-test-role:admin:…` as a real administrator and trusted `user_metadata.role` (user-editable); the Vite dev server listens on all interfaces | Fixed (opt-in env flag; role from profiles) |
+| Legacy admission paths bypassed the lifecycle (merit-list inserts with invented scores, `admissionService` set status 'accepted' on payment) | Removed / replaced |

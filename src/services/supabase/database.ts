@@ -5,7 +5,10 @@ import { apiUrl } from '@/lib/apiBase';
 
 async function callAdminBackendAction(action: string, payload: Record<string, any>): Promise<any> {
   const { data: { session } } = await supabase.auth.getSession();
-  const token = session?.access_token || (typeof process !== 'undefined' ? 'mock-test-role:admin:ed0ef274-5dd5-4775-accb-97119899cc00' : '');
+  // Node-based test runs have no browser session; they opt in to the test token explicitly. A browser never uses it.
+  const isNodeTest = typeof window === 'undefined' && typeof process !== 'undefined';
+  if (isNodeTest && !session?.access_token) process.env.ALLOW_MOCK_TEST_TOKENS = '1';
+  const token = session?.access_token || (isNodeTest ? 'mock-test-role:admin:ed0ef274-5dd5-4775-accb-97119899cc00' : '');
   if (!token) return null;
 
   // If in Node.js test environment, call handleAdminUserOperation directly
