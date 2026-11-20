@@ -283,18 +283,20 @@ export async function handleAdminUserOperation(token: string, body: any): Promis
       }
 
       case 'collect_fee_payment': {
-        const { payment } = body;
-        try {
-          const { data, error } = await supabaseAdmin.from('fee_payments').insert({
-            ...payment,
-            collected_by: callerUser?.id,
-            created_at: new Date().toISOString()
-          }).select().maybeSingle();
-          if (!error && data) {
-            return { status: 200, body: { success: true, payment: data } };
-          }
-        } catch {}
-        return { status: 200, body: { success: true, payment: payment || {} } };
+        // Same transactional, idempotent path as the edge function (see supabase/migrations/035).
+        const p = body.payment ?? {};
+        const amount = Number(p.amount);
+        if (!p.student_fee_id || !Number.isFinite(amount) || amount <= 0) {
+          return { status: 400, body: { error: 'payment.student_fee_id and a positive payment.amount are required.', code: 'VALIDATION_ERROR' } };
+        }
+        const { data, error } = await supabaseAdmin.rpc('record_fee_payment', {
+          p_student_fee_id: p.student_fee_id, p_amount: amount, p_payment_mode: String(p.payment_mode ?? ''),
+          p_reference: p.transaction_reference ?? null, p_idempotency_key: String(p.idempotency_key ?? ''),
+          p_collected_by: callerUser?.id, p_remarks: p.remarks ?? null,
+        });
+        if (error) return { status: 500, body: { error: 'Payment could not be recorded.', code: 'PAYMENT_FAILED' } };
+        if (!data?.success) return { status: 400, body: { error: data?.error ?? 'Payment rejected.', code: data?.code ?? 'PAYMENT_REJECTED' } };
+        return { status: 200, body: data };
       }
 
       case 'place_store_order': {

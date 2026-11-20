@@ -47,8 +47,6 @@ export function StudentFeesTab() {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Pay Form
-  const [payAmount, setPayAmount] = useState<number>(25000);
-  const [paymentMode, setPaymentMode] = useState<string>('Online_UPI');
 
   // Scholarship Application Form
   const [selectedScholarshipId, setSelectedScholarshipId] = useState<string>('');
@@ -87,60 +85,6 @@ export function StudentFeesTab() {
   const totalPaid = fees.reduce((acc, f) => acc + Number(f.paid_amount || 0), 0);
   const grossTotal = totalFeeDue + totalPaid;
   const paymentPct = grossTotal > 0 ? Math.round((totalPaid / grossTotal) * 100) : 0;
-
-  // Handle Online Fee Payment
-  const handlePayFee = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!user?.id) return;
-    setIsSubmitting(true);
-    try {
-      const res = await db.processStudentFeePayment({
-        studentId: user.id,
-        studentName: user.name || 'Student',
-        amount: Number(payAmount),
-        paymentMethod: paymentMode,
-      });
-
-      if (res.success) {
-        // Generate verifiable institutional receipt
-        const receiptNo = `AIP-REC-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`;
-        const newReceipt = await db.generateFeeReceipt({
-          receipt_number: receiptNo,
-          student_id: user.id,
-          student_name: user.name || 'Student',
-          roll_number: user.roll_number || user.student_id || 'STU-2026-0001',
-          department: user.department || 'B.Sc Medical Laboratory Technology (B.Sc MLT)',
-          academic_year: '2026-2027',
-          semester: user.class_name || 'Semester 1',
-          fee_type: 'Semester Tuition & Composite Academic Installment',
-          gross_amount: Number(payAmount),
-          discount_applied: 0,
-          amount_paid: Number(payAmount),
-          balance_remaining: Math.max(0, totalFeeDue - Number(payAmount)),
-          payment_mode: paymentMode,
-          transaction_reference: `UPI-TXN-${Date.now().toString().slice(-8)}`,
-          qr_verification_token: `VERIFY-${receiptNo}-${Date.now()}`,
-        });
-
-        toast({
-          title: 'Fee Payment Successful',
-          description: `₹${Number(payAmount).toLocaleString('en-IN')} paid. Receipt generated.`,
-        });
-
-        setPayModalOpen(false);
-        loadData();
-
-        if (newReceipt) {
-          setSelectedReceipt(newReceipt);
-          setReceiptModalOpen(true);
-        }
-      } else {
-        toast({ title: 'Payment Failed', description: res.error, variant: 'destructive' });
-      }
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
 
   // Handle Apply Scholarship
   const handleApplyScholarship = async (e: React.FormEvent) => {
@@ -211,7 +155,7 @@ export function StudentFeesTab() {
             disabled={totalFeeDue <= 0}
             className="h-8 text-xs font-bold bg-[#1D61E7] hover:bg-blue-700 text-white rounded-xl shadow-xs"
           >
-            <CreditCard className="w-3.5 h-3.5 mr-1" /> Pay Semester Fee
+            <CreditCard className="w-3.5 h-3.5 mr-1" /> How to Pay
           </Button>
         </div>
       </div>
@@ -262,7 +206,7 @@ export function StudentFeesTab() {
           <Card className="bg-white text-center py-8 border border-slate-200">
             <CardContent className="space-y-2">
               <Receipt className="w-8 h-8 mx-auto text-slate-300" />
-              <p className="text-xs text-slate-500">No payment receipts generated yet. Pay an installment to generate a verified receipt.</p>
+              <p className="text-xs text-slate-500">No receipts yet. A verified receipt appears here once the accounts office records your payment.</p>
             </CardContent>
           </Card>
         ) : (
@@ -356,56 +300,26 @@ export function StudentFeesTab() {
       )}
 
       {/* Pay Semester Fee Dialog */}
+      {/* How to pay: online self-service payment is not enabled (no payment gateway configured) */}
       <Dialog open={payModalOpen} onOpenChange={setPayModalOpen}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle className="text-base font-bold">Pay Semester Academic Fee</DialogTitle>
+            <DialogTitle className="text-base font-bold">Pay Semester Fee</DialogTitle>
           </DialogHeader>
-          <form onSubmit={handlePayFee} className="space-y-4 text-xs">
-            <div>
-              <Label className="text-xs font-bold">Payment Amount (INR)</Label>
-              <Input
-                type="number"
-                value={payAmount}
-                onChange={(e) => setPayAmount(Number(e.target.value))}
-                max={totalFeeDue || 80000}
-                min={1000}
-                className="h-9 text-sm mt-1"
-                required
-              />
-              <p className="text-[10px] text-slate-400 mt-1">Outstanding dues: ₹{totalFeeDue.toLocaleString('en-IN')}</p>
+          <div className="space-y-3 text-xs">
+            <div className="rounded-xl border bg-amber-50 border-amber-200 p-3">
+              <div className="text-[11px] text-amber-800">Outstanding dues</div>
+              <div className="text-2xl font-bold text-amber-700">₹{totalFeeDue.toLocaleString('en-IN')}</div>
             </div>
-
-            <div>
-              <Label className="text-xs font-bold">Payment Mode</Label>
-              <Select value={paymentMode} onValueChange={setPaymentMode}>
-                <SelectTrigger className="h-9 text-xs mt-1"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="Online_UPI">UPI (Google Pay, PhonePe, Paytm)</SelectItem>
-                  <SelectItem value="Card">Debit / Credit Card</SelectItem>
-                  <SelectItem value="Bank_Challan">Netbanking / Direct Bank Transfer</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-[11px] text-emerald-800 space-y-1">
-              <div className="font-bold flex items-center">
-                <CheckCircle2 className="w-3.5 h-3.5 mr-1" />
-                Verified Bank Gateway Simulation
-              </div>
-              <div>Instant institutional receipt with digital signature will be generated immediately.</div>
-            </div>
-
-            <DialogFooter className="pt-2">
-              <Button type="button" variant="outline" size="sm" onClick={() => setPayModalOpen(false)} className="h-8 text-xs">
-                Cancel
-              </Button>
-              <Button type="submit" size="sm" disabled={isSubmitting} className="h-8 text-xs font-bold bg-[#1D61E7] text-white">
-                {isSubmitting ? <Loader2 className="w-3.5 h-3.5 animate-spin mr-1" /> : null}
-                Pay ₹{payAmount.toLocaleString('en-IN')} & Generate Receipt
-              </Button>
-            </DialogFooter>
-          </form>
+            <p className="text-slate-600">
+              Online payment is not enabled yet. Please pay at the college accounts desk (cash, UPI, card, bank transfer or
+              cheque). Your receipt will appear in the receipt list on this page once the accounts office
+              records your payment.
+            </p>
+          </div>
+          <DialogFooter className="pt-2">
+            <Button size="sm" onClick={() => setPayModalOpen(false)} className="h-8 text-xs">Close</Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 

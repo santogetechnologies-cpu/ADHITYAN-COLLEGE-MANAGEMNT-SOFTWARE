@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useRealtimeSubscription } from '@/hooks/useRealtimeSubscription';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -87,13 +87,18 @@ export default function FinanceManagerDashboard() {
   const [feeStatusFilter, setFeeStatusFilter] = useState('all');
 
   // Forms
-  const [paymentForm, setPaymentForm] = useState({
+  const EMPTY_PAYMENT = {
     student_id: '',
     student_name: '',
+    student_fee_id: '',
     amount: '',
     payment_method: 'UPI',
+    reference: '',
     notes: ''
-  });
+  };
+  const [paymentForm, setPaymentForm] = useState(EMPTY_PAYMENT);
+  // One key per payment attempt: a double click / retry after a timeout returns the same receipt.
+  const paymentKeyRef = useRef<string>(crypto.randomUUID());
 
   const [newInvoice, setNewInvoice] = useState({
     student_id: '',
@@ -234,38 +239,67 @@ export default function FinanceManagerDashboard() {
     });
   }, [studentFees, feeSearch, feeCourseFilter, feeSemesterFilter, feeStatusFilter]);
 
+  // Open invoices of the student chosen in the payment dialog (total_due = outstanding balance)
+  const openFeesForPayment = useMemo(
+    () => studentFees.filter((f: any) => f.student_id === paymentForm.student_id && Number(f.total_due) > 0),
+    [studentFees, paymentForm.student_id]
+  );
+  const selectedPaymentFee: any = openFeesForPayment.find((f: any) => f.id === paymentForm.student_fee_id);
+  const REFERENCE_REQUIRED = ['UPI', 'Card', 'Bank_Transfer', 'Cheque', 'Online_Gateway'];
+
+  const openCollectDialog = (preset?: Partial<typeof EMPTY_PAYMENT>) => {
+    paymentKeyRef.current = crypto.randomUUID();
+    setPaymentForm({ ...EMPTY_PAYMENT, ...preset });
+    setCollectPaymentOpen(true);
+  };
+
   // Handle Record Payment
   const handleRecordPayment = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (submitting) return;
     const amountNum = Number(paymentForm.amount);
-    if (!paymentForm.student_name.trim() || isNaN(amountNum) || amountNum <= 0) {
-      toast({ title: 'Validation Error', description: 'Please select a valid student and positive payment amount.', variant: 'destructive' });
-      return;
+    const balance = Number(selectedPaymentFee?.total_due ?? 0);
+    const fail = (description: string) =>
+      toast({ title: 'Check the payment details', description, variant: 'destructive' });
+
+    if (!paymentForm.student_id) return fail('Select an enrolled student.');
+    if (!selectedPaymentFee) return fail('Select the invoice this payment is for.');
+    if (!Number.isFinite(amountNum) || amountNum <= 0) return fail('Enter an amount greater than zero.');
+    if (amountNum > balance) return fail(`Amount cannot exceed the outstanding balance of ₹${balance.toLocaleString('en-IN')}.`);
+    if (REFERENCE_REQUIRED.includes(paymentForm.payment_method) && paymentForm.reference.trim().length < 4) {
+      return fail('Enter the transaction / cheque reference (at least 4 characters).');
     }
+
     setSubmitting(true);
     try {
       const res = await db.recordFeePayment({
         studentId: paymentForm.student_id,
         studentName: paymentForm.student_name,
+        studentFeeId: paymentForm.student_fee_id,
         amount: amountNum,
-        paymentMethod: paymentForm.payment_method,
-        notes: paymentForm.notes
+        paymentMethod: paymentForm.payment_method as any,
+        reference: paymentForm.reference.trim() || undefined,
+        notes: paymentForm.notes.trim() || undefined,
+        idempotencyKey: paymentKeyRef.current,
       });
       if (res.success) {
-        toast({ 
-          title: 'Payment Recorded', 
-          description: `₹${amountNum.toLocaleString('en-IN')} payment received from ${paymentForm.student_name} via ${paymentForm.payment_method}. Official receipt generated.` 
+        toast({
+          title: res.duplicate ? 'Payment already recorded' : 'Payment recorded',
+          description: res.duplicate
+            ? 'This payment was already saved earlier; no second charge was made.'
+            : `₹${amountNum.toLocaleString('en-IN')} received from ${paymentForm.student_name}. Receipt issued.`,
         });
         setCollectPaymentOpen(false);
-        setPaymentForm({ student_id: '', student_name: '', amount: '', payment_method: 'UPI', notes: '' });
+        setPaymentForm(EMPTY_PAYMENT);
+        paymentKeyRef.current = crypto.randomUUID();
         loadFinanceData();
-
         if (res.receipt) {
           setSelectedReceipt(res.receipt);
           setReceiptModalOpen(true);
         }
       } else {
-        toast({ title: 'Payment Failed', description: res.error, variant: 'destructive' });
+        // keep the dialog and the same key: the user can fix the input and retry safely
+        toast({ title: 'Payment not recorded', description: res.error, variant: 'destructive' });
       }
     } catch (err: any) {
       toast({ title: 'Error', description: err.message, variant: 'destructive' });
@@ -274,7 +308,6 @@ export default function FinanceManagerDashboard() {
     }
   };
 
-  // Handle Create Fee Invoice
   const handleCreateFeeInvoice = async (e: React.FormEvent) => {
     e.preventDefault();
     const dueNum = Number(newInvoice.total_due);
@@ -445,7 +478,7 @@ export default function FinanceManagerDashboard() {
             <Plus className="h-3.5 w-3.5 mr-1.5 text-purple-600" />
             Issue Invoice
           </Button>
-          <Button size="sm" onClick={() => setCollectPaymentOpen(true)} className="h-8 text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs">
+          <Button size="sm" onClick={() => openCollectDialog()} className="h-8 text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs">
             <CreditCard className="h-3.5 w-3.5 mr-1.5" />
             Collect Fee Payment
           </Button>
@@ -738,7 +771,7 @@ export default function FinanceManagerDashboard() {
                 <Button size="sm" onClick={() => setAddFeeInvoiceOpen(true)} className="h-8 text-xs">
                   <Plus className="w-3.5 h-3.5 mr-1" /> Single Invoice
                 </Button>
-                <Button size="sm" onClick={() => setCollectPaymentOpen(true)} className="h-8 text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white">
+                <Button size="sm" onClick={() => openCollectDialog()} className="h-8 text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white">
                   <CreditCard className="w-3.5 h-3.5 mr-1" /> Collect Payment
                 </Button>
               </div>
@@ -815,16 +848,12 @@ export default function FinanceManagerDashboard() {
                                 <Button
                                   size="sm"
                                   className="h-7 text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg"
-                                  onClick={() => {
-                                    setPaymentForm({
-                                      student_id: fee.student_id || '',
-                                      student_name: fee.student_name,
-                                      amount: String(fee.total_due),
-                                      payment_method: 'UPI',
-                                      notes: `Payment for ${fee.class_name}`
-                                    });
-                                    setCollectPaymentOpen(true);
-                                  }}
+                                  onClick={() => openCollectDialog({
+                                    student_id: fee.student_id || '',
+                                    student_name: fee.student_name,
+                                    student_fee_id: fee.id,
+                                    amount: String(fee.total_due),
+                                  })}
                                 >
                                   Collect
                                 </Button>
@@ -1100,10 +1129,41 @@ export default function FinanceManagerDashboard() {
                     ...prev,
                     student_id: st?.id || '',
                     student_name: st?.name || '',
+                    student_fee_id: '',
+                    amount: '',
                   }));
                 }}
                 placeholder="Search by AIP Student ID or Name..."
               />
+            </div>
+            <div>
+              <Label className="text-xs font-bold">Invoice *</Label>
+              <Select
+                value={paymentForm.student_fee_id}
+                onValueChange={(id) => {
+                  const f: any = openFeesForPayment.find((x: any) => x.id === id);
+                  setPaymentForm(prev => ({ ...prev, student_fee_id: id, amount: f ? String(f.total_due) : prev.amount }));
+                }}
+                disabled={!paymentForm.student_id || openFeesForPayment.length === 0}
+              >
+                <SelectTrigger className="h-8 text-xs mt-1">
+                  <SelectValue placeholder={
+                    !paymentForm.student_id ? 'Select a student first'
+                      : openFeesForPayment.length === 0 ? 'No outstanding invoices' : 'Select invoice'
+                  } />
+                </SelectTrigger>
+                <SelectContent>
+                  {openFeesForPayment.map((f: any) => (
+                    <SelectItem key={f.id} value={f.id}>
+                      {f.class_name || 'Fee'} · due ₹{Number(f.total_due).toLocaleString('en-IN')}
+                      {f.due_date ? ` · by ${f.due_date}` : ''}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {paymentForm.student_id && openFeesForPayment.length === 0 && (
+                <p className="text-[11px] text-slate-500 mt-1">This student has nothing outstanding. Issue an invoice first.</p>
+              )}
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
@@ -1111,42 +1171,62 @@ export default function FinanceManagerDashboard() {
                 <Input
                   type="number"
                   min="1"
+                  max={selectedPaymentFee ? Number(selectedPaymentFee.total_due) : undefined}
+                  step="0.01"
                   placeholder="e.g. 25000"
                   value={paymentForm.amount}
                   onChange={(e) => setPaymentForm({ ...paymentForm, amount: e.target.value })}
                   className="h-8 text-xs mt-1"
                   required
                 />
+                {selectedPaymentFee && (
+                  <p className="text-[11px] text-slate-500 mt-1">
+                    Outstanding: ₹{Number(selectedPaymentFee.total_due).toLocaleString('en-IN')}
+                  </p>
+                )}
               </div>
               <div>
                 <Label className="text-xs font-bold">Payment Method</Label>
-                <Select 
-                  value={paymentForm.payment_method} 
+                <Select
+                  value={paymentForm.payment_method}
                   onValueChange={(val) => setPaymentForm({ ...paymentForm, payment_method: val })}
                 >
                   <SelectTrigger className="h-8 text-xs mt-1"><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="UPI">UPI (GooglePay / PhonePe / Paytm)</SelectItem>
-                    <SelectItem value="Card Payment">Debit / Credit Card</SelectItem>
-                    <SelectItem value="Net Banking">Net Banking / NEFT / RTGS</SelectItem>
-                    <SelectItem value="Cash">Cash / Accounts Front Desk</SelectItem>
-                    <SelectItem value="Demand Draft">Demand Draft / Cheque</SelectItem>
+                    <SelectItem value="Cash">Cash (accounts desk)</SelectItem>
+                    <SelectItem value="UPI">UPI</SelectItem>
+                    <SelectItem value="Card">Debit / Credit card</SelectItem>
+                    <SelectItem value="Bank_Transfer">Bank transfer (NEFT / RTGS / IMPS)</SelectItem>
+                    <SelectItem value="Cheque">Cheque / Demand draft</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
             </div>
             <div>
-              <Label className="text-xs font-bold">Notes / Transaction Reference (Optional)</Label>
+              <Label className="text-xs font-bold">
+                Transaction / cheque reference{REFERENCE_REQUIRED.includes(paymentForm.payment_method) ? ' *' : ' (optional)'}
+              </Label>
               <Input
-                placeholder="e.g. Bank Ref / Cheque No / Remarks"
+                placeholder="UPI ref, card approval code, UTR or cheque no."
+                value={paymentForm.reference}
+                onChange={(e) => setPaymentForm({ ...paymentForm, reference: e.target.value })}
+                className="h-8 text-xs mt-1"
+                maxLength={64}
+              />
+            </div>
+            <div>
+              <Label className="text-xs font-bold">Remarks (optional)</Label>
+              <Input
+                placeholder="Shown on the ledger entry"
                 value={paymentForm.notes}
                 onChange={(e) => setPaymentForm({ ...paymentForm, notes: e.target.value })}
                 className="h-8 text-xs mt-1"
+                maxLength={200}
               />
             </div>
             <DialogFooter className="pt-2">
               <Button type="button" variant="outline" size="sm" onClick={() => setCollectPaymentOpen(false)} className="h-8 text-xs">Cancel</Button>
-              <Button type="submit" size="sm" disabled={submitting || !paymentForm.student_name} className="h-8 text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white">
+              <Button type="submit" size="sm" disabled={submitting || !paymentForm.student_fee_id} className="h-8 text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white">
                 {submitting ? <Loader2 className="w-3.5 h-3.5 animate-spin mr-1" /> : null}
                 Confirm Payment & Issue Receipt
               </Button>

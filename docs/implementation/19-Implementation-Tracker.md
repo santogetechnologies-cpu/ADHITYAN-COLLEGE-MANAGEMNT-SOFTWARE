@@ -51,3 +51,13 @@ Legend: ✅ done & verified as stated · 🟡 written, not runnable here · ⬜ 
 2. Port the dev-only test token to a test-only guard, delete it from `src/server/adminBackend.ts`; add Deno tests for `admin-api`.
 3. Student information system: enrollment + identifier + status-history tables, then admission→student conversion RPC (transactional/idempotent).
 4. Fee engine (structures, versions, invoices, ledger) on top of `record_fee_payment`; then sidebar/app shell.
+
+## Module 1 — Fee collection (UI → API → DB) — increment 2
+| Item | Status | Notes |
+|------|--------|-------|
+| `record_fee_payment` aligned to app convention (`student_fees.total_due` = outstanding balance) + posts ledger row | ✅ SQL | smoke test 17/17 on scratch DB. (The first version assumed `total_due − paid_amount`; that was my error and is fixed) |
+| `db.recordFeePayment` → single atomic server call (was 4 browser writes, `Math.random` receipt no., fake roll no. fallback, ledger insert on non-existent columns) | 🟡 code, builds | not run against a backend |
+| Finance "Collect payment" dialog: invoice picker, outstanding shown + amount capped, valid payment modes, required reference, idempotency key, row "Collect" passes the invoice id | 🟡 code, builds | needs staging click-through |
+| Parent/Student "Pay" were **simulated** (no gateway; marked fees paid from the browser, parent flow issued two receipts; would error after migration 032). Replaced by an honest "how to pay at the accounts desk" panel; parent totals bug (outstanding subtracted twice) fixed | 🟡 code, builds | **Online payment still needs a gateway (decision + keys + verified webhook function)** |
+| `collegeDataService.recordFeePayment` / `FeesManagementView` (third implementation, admin console) | ⬜ | still the old path |
+| Fee structures, versioned invoices, concessions/refunds through approval, installments, late fees | ⬜ | |

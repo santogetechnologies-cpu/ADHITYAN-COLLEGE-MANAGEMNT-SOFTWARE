@@ -34,6 +34,7 @@ DECLARE
     v_rec_id   UUID;
     v_rec_no   TEXT;
     v_new_paid NUMERIC(12,2);
+    v_new_due  NUMERIC(12,2);
 BEGIN
     IF p_idempotency_key IS NULL OR length(trim(p_idempotency_key)) < 8 THEN
         RETURN jsonb_build_object('success', false, 'code', 'IDEMPOTENCY_KEY_REQUIRED', 'error', 'An idempotency key (>= 8 chars) is required.');
@@ -56,9 +57,14 @@ BEGIN
     IF NOT FOUND THEN
         RETURN jsonb_build_object('success', false, 'code', 'FEE_NOT_FOUND', 'error', 'Fee record not found.');
     END IF;
-    IF p_amount > (v_fee.total_due - v_fee.paid_amount) THEN
+    -- App convention (StudentFeesTab, FinanceManagerDashboard): total_due = OUTSTANDING balance,
+    -- paid_amount = cumulative paid. A payment moves money from total_due to paid_amount.
+    IF v_fee.total_due <= 0 THEN
+        RETURN jsonb_build_object('success', false, 'code', 'NOTHING_DUE', 'error', 'No balance is due on this fee record.');
+    END IF;
+    IF p_amount > v_fee.total_due THEN
         RETURN jsonb_build_object('success', false, 'code', 'OVERPAYMENT',
-            'error', format('Amount exceeds outstanding balance (%s).', v_fee.total_due - v_fee.paid_amount));
+            'error', format('Amount exceeds outstanding balance (%s).', v_fee.total_due));
     END IF;
 
     INSERT INTO public.fee_payments (student_fee_id, student_id, amount, payment_mode, transaction_reference,
@@ -68,9 +74,11 @@ BEGIN
     RETURNING id INTO v_pay_id;
 
     v_new_paid := v_fee.paid_amount + p_amount;
+    v_new_due  := v_fee.total_due - p_amount;
     UPDATE public.student_fees
        SET paid_amount = v_new_paid,
-           status = CASE WHEN v_new_paid >= total_due THEN 'paid' ELSE 'partially_paid' END
+           total_due = v_new_due,
+           status = CASE WHEN v_new_due = 0 THEN 'paid' ELSE 'partially_paid' END
      WHERE id = v_fee.id;
 
     SELECT * INTO v_prof FROM public.profiles WHERE id = v_fee.student_id;
@@ -80,16 +88,24 @@ BEGIN
                                      transaction_reference, cashier_user_id, qr_verification_token)
     VALUES (v_rec_no, v_fee.id, v_fee.student_id, COALESCE(v_prof.name, v_fee.student_name),
             COALESCE(v_prof.student_id, v_prof.roll_number, 'N/A'), COALESCE(v_prof.department, 'N/A'),
-            v_fee.total_due, p_amount, v_fee.total_due - v_new_paid, p_payment_mode,
+            v_fee.total_due + v_fee.paid_amount, p_amount, v_new_due, p_payment_mode,
             COALESCE(NULLIF(trim(p_reference), ''), v_pay_id::TEXT), p_collected_by,
             encode(gen_random_bytes(16), 'hex'))
     RETURNING id INTO v_rec_id;
 
     UPDATE public.fee_payments SET receipt_id = v_rec_id WHERE id = v_pay_id;
 
+    -- Ledger row (same transaction). The previous client code inserted non-existent columns
+    -- (payment_method, date) and failed silently, so fee income never reached the ledger.
+    INSERT INTO public.finance_transactions (type, amount, department, description, status)
+    VALUES ('Fee Payment', p_amount, 'Academic Fees',
+            format('Fee receipt %s: %s via %s%s', v_rec_no, COALESCE(v_prof.name, v_fee.student_name), p_payment_mode,
+                   CASE WHEN NULLIF(trim(p_reference), '') IS NULL THEN '' ELSE ' (ref ' || trim(p_reference) || ')' END),
+            'Approved');
+
     RETURN jsonb_build_object('success', true, 'duplicate', false, 'payment_id', v_pay_id,
         'receipt_id', v_rec_id, 'receipt_number', v_rec_no,
-        'balance_remaining', v_fee.total_due - v_new_paid);
+        'balance_remaining', v_new_due);
 EXCEPTION WHEN unique_violation THEN
     -- concurrent retry with the same key / bank reference
     SELECT * INTO v_existing FROM public.fee_payments

@@ -4505,130 +4505,57 @@ export const db = {
     }
   },
 
+  /**
+   * Desk fee collection (finance staff). One atomic server-side operation: payment row, fee balance,
+   * receipt and ledger entry are written in a single transaction and a retry with the same
+   * idempotencyKey returns the original receipt instead of charging twice.
+   * Online self-service payment is NOT handled here (needs a payment gateway; see FEES module notes).
+   */
   async recordFeePayment(params: {
     studentId: string;
     studentName: string;
     amount: number;
-    paymentMethod: string;
+    paymentMethod: 'Cash' | 'UPI' | 'Card' | 'Bank_Transfer' | 'Cheque' | 'Online_Gateway';
+    studentFeeId?: string;
+    reference?: string;
     notes?: string;
-  }): Promise<{ success: boolean; transaction?: any; receipt?: any; error?: string }> {
+    idempotencyKey?: string;
+  }): Promise<{ success: boolean; receipt?: any; duplicate?: boolean; error?: string; code?: string }> {
     try {
-      // 1. Create finance transaction
-      let tx: any = null;
-      const { data, error: txErr } = await supabase
-        .from('finance_transactions')
-        .insert({
-          type: 'Fee Payment',
-          amount: params.amount,
-          department: 'Academic Fees',
-          description: `Fee payment of ₹${params.amount} for ${params.studentName} via ${params.paymentMethod}`,
-          payment_method: params.paymentMethod,
-          date: new Date().toISOString().split('T')[0],
-          status: 'Approved',
-        })
-        .select()
-        .single();
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) return { success: false, error: 'Your session has expired. Please sign in again.', code: 'SESSION_EXPIRED' };
 
-      if (!txErr && data) {
-        tx = data;
-      } else {
-        const admin = await getAdminClient();
-        if (admin) {
-          const { data: aData } = await admin
-            .from('finance_transactions')
-            .insert({
-              type: 'Fee Payment',
-              amount: params.amount,
-              department: 'Academic Fees',
-              description: `Fee payment of ₹${params.amount} for ${params.studentName} via ${params.paymentMethod}`,
-              payment_method: params.paymentMethod,
-              date: new Date().toISOString().split('T')[0],
-              status: 'Approved',
-            })
-            .select()
-            .single();
-          if (aData) tx = aData;
-        }
+      let feeId = params.studentFeeId;
+      if (!feeId) {
+        const open = (await this.getStudentFees(params.studentId)).filter((f: any) => Number(f.total_due) > 0);
+        if (open.length === 0) return { success: false, error: 'This student has no outstanding fee record.', code: 'NOTHING_DUE' };
+        if (open.length > 1) return { success: false, error: 'This student has several open invoices. Choose the invoice to pay.', code: 'AMBIGUOUS_INVOICE' };
+        feeId = open[0].id;
       }
 
-      // 2. Update student_fees record
-      let targetFee: any = null;
-      let newDue = 0;
-      let newPaid = params.amount;
-      const fees = await this.getStudentFees(params.studentId);
-
-      if (fees && fees.length > 0) {
-        const fee = fees[0];
-        targetFee = fee;
-        newPaid = Number(fee.paid_amount || 0) + Number(params.amount);
-        newDue = Math.max(0, Number(fee.total_due || 0) - Number(params.amount));
-        const newStatus = newDue === 0 ? 'paid' : 'partially_paid';
-
-        const admin = await getAdminClient();
-        const targetClient = admin || supabase;
-        await targetClient
-          .from('student_fees')
-          .update({
-            paid_amount: newPaid,
-            total_due: newDue,
-            status: newStatus,
-          })
-          .eq('id', fee.id);
-      }
-
-      // 3. Issue official verifiable FeeReceipt
-      const studentProfile = params.studentId ? await this.getProfile(params.studentId) : null;
-      const receiptNo = `REC-${new Date().getFullYear()}-${Math.floor(10000 + Math.random() * 90000)}`;
-      const generatedReceipt = await this.generateFeeReceipt({
-        receipt_number: receiptNo,
-        student_fee_id: targetFee?.id || null,
-        student_id: params.studentId,
-        student_name: params.studentName,
-        roll_number: studentProfile?.student_id || studentProfile?.roll_number || 'STU-2026-1001',
-        department: studentProfile?.department || targetFee?.class_name || 'Paramedical Sciences',
-        academic_year: '2026-2027',
-        semester: studentProfile?.semester || 'Semester 1',
-        fee_type: 'Tuition & Academic Composite Fee',
-        gross_amount: Number(targetFee?.total_due || 0) + Number(targetFee?.paid_amount || 0) || params.amount,
-        discount_applied: 0,
-        amount_paid: params.amount,
-        balance_remaining: newDue,
-        payment_mode: params.paymentMethod,
-        transaction_reference: tx?.id || `TXN-${Date.now()}`,
-        qr_verification_token: `QR-AIP-${Date.now()}-${Math.random().toString(36).substring(2, 7).toUpperCase()}`,
+      const response = await fetch(apiUrl('/api/admin/users'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+        body: JSON.stringify({
+          action: 'collect_fee_payment',
+          payment: {
+            student_fee_id: feeId,
+            amount: params.amount,
+            payment_mode: params.paymentMethod,
+            transaction_reference: params.reference || null,
+            idempotency_key: params.idempotencyKey || crypto.randomUUID(),
+            remarks: params.notes || null,
+          },
+        }),
       });
-
-      // 4. Notify Student and linked Parents
-      if (params.studentId) {
-        await this.createNotification({
-          user_id: params.studentId,
-          title: 'Fee Payment Received',
-          message: `Payment of ₹${params.amount.toLocaleString('en-IN')} received via ${params.paymentMethod}. Official receipt #${receiptNo} generated. Balance due: ₹${newDue.toLocaleString('en-IN')}.`,
-          type: 'success',
-          priority: 'high',
-          is_read: false
-        });
-
-        const parentIds = await this.getParentsForStudent(params.studentId);
-        for (const pid of parentIds) {
-          await this.createNotification({
-            user_id: pid,
-            title: 'Ward Fee Payment Received',
-            message: `Payment of ₹${params.amount.toLocaleString('en-IN')} for ${params.studentName} received via ${params.paymentMethod}. Receipt #${receiptNo}. Outstanding balance: ₹${newDue.toLocaleString('en-IN')}.`,
-            type: 'success',
-            priority: 'high',
-            is_read: false
-          });
-        }
+      const json = await response.json().catch(() => ({} as any));
+      if (!response.ok || !json.success) {
+        return { success: false, error: json.error || 'Payment could not be recorded.', code: json.code };
       }
-
-      return {
-        success: true,
-        transaction: tx || { id: 'TXN-' + Date.now(), amount: params.amount },
-        receipt: generatedReceipt
-      };
+      const { data: receipt } = await supabase.from('fee_receipts').select('*').eq('id', json.receipt_id).maybeSingle();
+      return { success: true, receipt: receipt || undefined, duplicate: !!json.duplicate };
     } catch (err: any) {
-      return { success: false, error: err.message || 'Payment processing failed.' };
+      return { success: false, error: err?.message || 'Payment processing failed.' };
     }
   },
 
