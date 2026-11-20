@@ -11,12 +11,16 @@ Deno.serve(async (req) => {
   const { caller, admin } = auth;
   if (!["student", "parent"].includes(caller.role)) return json(req, 403, { error: "Only students and parents can pay online.", code: "FORBIDDEN" });
   const body = await readJson(req, 20_000);
-  if (!body || !Array.isArray(body.items)) return json(req, 400, { error: "items is required.", code: "VALIDATION_ERROR" });
+  const storeOrder = body?.store_order_id ? String(body.store_order_id) : null;
+  if (!body || (!storeOrder && !Array.isArray(body.items))) return json(req, 400, { error: "items (fees) or store_order_id is required.", code: "VALIDATION_ERROR" });
+  if (storeOrder && !/^[0-9a-f-]{36}$/i.test(storeOrder)) return json(req, 400, { error: "Invalid store_order_id.", code: "VALIDATION_ERROR" });
   const cfg = gatewayConfig((k) => Deno.env.get(k));
   if (!cfg) return json(req, 503, { error: "Online payment is not configured.", code: "NOT_CONFIGURED" });
   if (!(await rateLimit(admin, `pay:create:${caller.id}`, 10, 300))) return json(req, 429, { error: "Too many attempts. Wait a few minutes.", code: "RATE_LIMITED" });
 
-  const { data: order, error } = await admin.rpc("payment_order_create", { p_actor: caller.id, p_items: body.items });
+  const { data: order, error } = storeOrder
+    ? await admin.rpc("payment_order_create_store", { p_actor: caller.id, p_store_order: storeOrder })
+    : await admin.rpc("payment_order_create", { p_actor: caller.id, p_items: body.items });
   if (error) { console.error("payment_order_create", error.message); return json(req, 500, { error: "Could not create the order.", code: "SERVER_ERROR" }); }
   if (!order?.success) return json(req, 400, { error: order?.error ?? "Order refused.", code: order?.code ?? "REFUSED" });
   try {

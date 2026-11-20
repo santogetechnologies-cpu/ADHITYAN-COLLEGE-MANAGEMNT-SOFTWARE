@@ -59,6 +59,7 @@ back-fills of NULLs and a de-duplication of `super_admin_releases` rows with the
 | 069_inventory_atomic.sql | **INTEGRITY:** store stock moves are atomic server calls (`inventory_issue/return/order/receive/cancel_order`): exact item match (was fuzzy `ilike`), row locks, no negative stock, returns limited to what the recipient holds, purchase orders can be received in parts or cancelled, urgency follows the minimum; movements can no longer be written directly | 001 |
 | 070_private_admission_documents.sql | **PRIVACY:** admission documents (ID proofs, mark sheets, photos) go to a private `admission-documents` bucket (staff-only, signed links) instead of the publicly readable `documents` bucket; no more base64 copies of documents inside application records. **Action:** files uploaded earlier remain in `documents` — re-upload sensitive ones, then delete the old copies | 003 |
 | 071_wellness_afternoon.sql | The afternoon wellness check-in could never be saved (CHECK allowed only morning/evening) — now allowed | 028 |
+| 072_partial_refunds_settlement_store_payments.sql | **New:** partial / per-fee refunds (counter payments and online payments; the gateway amount is validated against the ledger *before* the gateway is called; receipt voided only when fully refunded), gateway settlement-report import with matching/mismatch/unsettled checks, online payment of store orders (settlement marks the order paid; refund cancels and restocks) | 066, 067, 056 |
 | 036_reconcile_legacy_columns.sql | `timetables.session_type`, `exam_schedules.day_of_week`, `student_attendance.*`, reception columns | 029 |
 
 **Behaviour changes to expect after 032:** buckets `documents`, `attachments`, `student_documents`, `staff_documents`
@@ -72,7 +73,7 @@ Not carried over on purpose: multi-college tables (`colleges`, `college_*`, `pla
 ```bash
 psql "$STAGING_DB_URL" -v ON_ERROR_STOP=1 -f supabase/tests/smoke_028_037.sql   # synthetic data, rolls back
 ```
-All lines must read PASS (377 checks). Edge-function checks: `scripts/test-edge-gate.sh` (type-check + authorization/validation cases; needs no database). Then in the SQL editor: `select count(*) from public.profiles where role is null;` (must be 0).
+All lines must read PASS (395 checks). Edge-function checks: `scripts/test-edge-gate.sh` (type-check + authorization/validation cases; needs no database). Then in the SQL editor: `select count(*) from public.profiles where role is null;` (must be 0).
 
 ### Rollback
 Each file is one transaction, so a failure leaves nothing half-applied. To undo a *successful* run use the backup/PITR from

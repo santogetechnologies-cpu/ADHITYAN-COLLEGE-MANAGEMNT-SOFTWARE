@@ -919,6 +919,57 @@ RESET ROLE;
 SELECT pg_temp.chk('an afternoon check-in can be saved', (SELECT true FROM (SELECT 1) x WHERE NOT pg_temp.fails($q$INSERT INTO public.wellness_checkins (user_id, checkin_type, date) VALUES ('c0000000-0000-0000-0000-000000000001','afternoon',CURRENT_DATE)$q$)));
 SELECT pg_temp.chk('an unknown check-in type is still refused', pg_temp.fails($q$INSERT INTO public.wellness_checkins (user_id, checkin_type, date) VALUES ('c0000000-0000-0000-0000-000000000001','midnight',CURRENT_DATE)$q$));
 
+-- ---- 072 partial refunds / settlement / store payments ----
+-- fresh fee + online order of 300 split over one fee, paid, then refunded in two parts
+INSERT INTO public.student_fees(id,student_id,student_name,class_name,total_due,paid_amount,due_date,status,original_amount) VALUES ('c9c00000-0000-0000-0000-000000000001','c0000000-0000-0000-0000-0000000000c1','Place Student','ClassA',300,0,CURRENT_DATE+30,'pending',300);
+UPDATE public.institutional_settings SET online_payments_enabled = true;
+CREATE TEMP TABLE _pp AS SELECT public.payment_order_create('c0000000-0000-0000-0000-0000000000c1', jsonb_build_array(jsonb_build_object('student_fee_id','c9c00000-0000-0000-0000-000000000001','amount',300))) AS r;
+SELECT public.payment_order_attach((SELECT (r->>'order_id')::uuid FROM _pp), 'order_PP1');
+CREATE TEMP TABLE _pps AS SELECT public.payment_order_settle('order_PP1','pay_PP1',30000,'evt_pp1','payment.captured','{}'::jsonb) AS r;
+SELECT pg_temp.chk('order paid in full', (SELECT (r->>'success')='true' FROM _pps) AND (SELECT paid_amount=300 AND total_due=0 FROM public.student_fees WHERE id='c9c00000-0000-0000-0000-000000000001'));
+SELECT pg_temp.chk('refund larger than the payment is refused before any gateway call', (public.payment_order_refund_check((SELECT (r->>'order_id')::uuid FROM _pp), jsonb_build_array(jsonb_build_object('student_fee_id','c9c00000-0000-0000-0000-000000000001','amount',301)))->>'code')='EXCEEDS_PAYMENT');
+SELECT pg_temp.chk('check returns the gateway amount for a part refund', (public.payment_order_refund_check((SELECT (r->>'order_id')::uuid FROM _pp), jsonb_build_array(jsonb_build_object('student_fee_id','c9c00000-0000-0000-0000-000000000001','amount',100)))->>'amount_paise')='10000');
+CREATE TEMP TABLE _r1 AS SELECT public.payment_order_refund_apply((SELECT (r->>'order_id')::uuid FROM _pp),'Partial: course dropped','c0000000-0000-0000-0000-000000000008','rfnd_PP1', jsonb_build_array(jsonb_build_object('student_fee_id','c9c00000-0000-0000-0000-000000000001','amount',100))) AS r;
+SELECT pg_temp.chk('a part refund restores exactly that amount, receipt stays valid', (SELECT (r->>'refunded')::numeric=100 FROM _r1)
+  AND (SELECT paid_amount=200 AND total_due=100 FROM public.student_fees WHERE id='c9c00000-0000-0000-0000-000000000001')
+  AND (SELECT status='Completed' AND refunded_amount=100 FROM public.fee_payments WHERE transaction_reference='pay_PP1')
+  AND (SELECT status='Partially_Refunded' AND refunded_amount=100 FROM public.payment_orders WHERE gateway_order_id='order_PP1')
+  AND (SELECT count(*)=0 FROM public.fee_receipts r2 JOIN public.fee_payments fp ON fp.receipt_id=r2.id WHERE fp.transaction_reference='pay_PP1' AND r2.voided_at IS NOT NULL));
+SELECT pg_temp.chk('repeating the same gateway refund id is a no-op', (public.payment_order_refund_apply((SELECT (r->>'order_id')::uuid FROM _pp),'again','c0000000-0000-0000-0000-000000000008','rfnd_PP1')->>'duplicate')='true' AND (SELECT paid_amount=200 FROM public.student_fees WHERE id='c9c00000-0000-0000-0000-000000000001'));
+CREATE TEMP TABLE _r2 AS SELECT public.payment_order_refund_apply((SELECT (r->>'order_id')::uuid FROM _pp),'Rest refunded','c0000000-0000-0000-0000-000000000008','rfnd_PP2') AS r;
+SELECT pg_temp.chk('the remainder completes the refund and voids the receipt', (SELECT (r->>'refunded')::numeric=200 FROM _r2) AND (SELECT status='Refunded' FROM public.payment_orders WHERE gateway_order_id='order_PP1')
+  AND (SELECT status='Reversed' FROM public.fee_payments WHERE transaction_reference='pay_PP1') AND (SELECT count(*)=1 FROM public.fee_receipts r2 JOIN public.fee_payments fp ON fp.receipt_id=r2.id WHERE fp.transaction_reference='pay_PP1' AND r2.voided_at IS NOT NULL));
+CREATE TEMP TABLE _cash AS SELECT public.record_fee_payment('c9c00000-0000-0000-0000-000000000001', 250, 'Cash', 'CASH-PP', 'idem-cash-pp-0001', 'c0000000-0000-0000-0000-000000000008') AS r;
+GRANT ALL ON _cash TO authenticated;
+SET LOCAL ROLE authenticated;
+SELECT set_config('request.jwt.claim.sub','c0000000-0000-0000-0000-000000000008',true);
+SELECT pg_temp.chk('a counter payment can be part-refunded by finance', (SELECT (public.fee_payment_reverse((r->>'payment_id')::uuid,'Refund of an excess collection',100)->>'full')='false' FROM _cash));
+SELECT pg_temp.chk('the part refund left the payment live', (SELECT status='Completed' AND refunded_amount=100 FROM public.fee_payments WHERE transaction_reference='CASH-PP'));
+SELECT pg_temp.chk('cannot refund more than the remaining 150', (SELECT (public.fee_payment_reverse((r->>'payment_id')::uuid,'Too much this time',151)->>'code')='EXCEEDS_PAYMENT' FROM _cash));
+-- settlement import
+CREATE TEMP TABLE _st AS SELECT public.payment_settlement_import('[{"settlement_id":"setl_1","payment_id":"pay_PP1","amount":"300","fee":"6","tax":"1.08","settled_at":"2026-11-01T10:00:00Z"},{"settlement_id":"setl_1","payment_id":"pay_SMOKE2","amount":"250"},{"settlement_id":"setl_1","payment_id":"pay_UNKNOWN","amount":"99"}]'::jsonb) AS r;
+SELECT pg_temp.chk('settlement import classifies matched / mismatch / unknown', (SELECT (r->>'imported')::int=3 AND jsonb_array_length(r->'amount_mismatches')=1 AND jsonb_array_length(r->'unknown_payments')=1 FROM _st));
+SELECT pg_temp.chk('importing the same file again adds nothing', (SELECT (public.payment_settlement_import('[{"settlement_id":"setl_1","payment_id":"pay_PP1","amount":"300"}]'::jsonb)->>'duplicates')='1'));
+SELECT pg_temp.chk('a row without a settlement id is rejected', (public.payment_settlement_import('[{"payment_id":"x","amount":"5"}]'::jsonb)->>'code')='INVALID_ROW');
+SELECT set_config('request.jwt.claim.sub','c0000000-0000-0000-0000-000000000001',true);
+SELECT pg_temp.chk('students cannot import settlements', (public.payment_settlement_import('[{"settlement_id":"s","payment_id":"p","amount":"5"}]'::jsonb)->>'code')='FORBIDDEN');
+RESET ROLE;
+-- store order paid online, then refunded
+UPDATE public.store_products SET stock = 5 WHERE id='c9300000-0000-0000-0000-000000000001';
+SET LOCAL ROLE authenticated;
+SELECT set_config('request.jwt.claim.sub','c0000000-0000-0000-0000-000000000001',true);
+CREATE TEMP TABLE _so2 AS SELECT public.checkout_store_order('c0000000-0000-0000-0000-000000000001','[{"product_id":"c9300000-0000-0000-0000-000000000001","quantity":2}]'::jsonb, 200) AS r;
+RESET ROLE;
+CREATE TEMP TABLE _sp AS SELECT public.payment_order_create_store('c0000000-0000-0000-0000-000000000001', (SELECT (r->>'order_id')::uuid FROM _so2)) AS r;
+SELECT pg_temp.chk('a store order is priced from the order total', (SELECT (r->>'success')='true' AND (r->>'amount_paise')::bigint=20000 FROM _sp));
+SELECT pg_temp.chk('someone else cannot pay for it', (public.payment_order_create_store('c0000000-0000-0000-0000-0000000000c1', (SELECT (r->>'order_id')::uuid FROM _so2))->>'code')='NOT_YOUR_ORDER');
+SELECT public.payment_order_attach((SELECT (r->>'order_id')::uuid FROM _sp), 'order_ST1');
+CREATE TEMP TABLE _sps AS SELECT public.payment_order_settle('order_ST1','pay_ST1',20000,'evt_st1','payment.captured','{}'::jsonb) AS r;
+SELECT pg_temp.chk('settling marks the store order paid', (SELECT (r->>'success')='true' FROM _sps) AND (SELECT payment_status='Paid' FROM public.store_orders WHERE id=(SELECT (r->>'order_id')::uuid FROM _so2)));
+SELECT pg_temp.chk('a paid store order cannot be paid twice', (public.payment_order_create_store('c0000000-0000-0000-0000-000000000001', (SELECT (r->>'order_id')::uuid FROM _so2))->>'code')='NOT_PAYABLE');
+CREATE TEMP TABLE _sr AS SELECT public.payment_order_refund_apply((SELECT (r->>'order_id')::uuid FROM _sp),'Customer cancelled','c0000000-0000-0000-0000-000000000008','rfnd_ST1') AS r;
+SELECT pg_temp.chk('refunding a store payment cancels the order and restocks', (SELECT (r->>'success')='true' FROM _sr) AND (SELECT status='Cancelled' AND payment_status='Refunded' FROM public.store_orders WHERE id=(SELECT (r->>'order_id')::uuid FROM _so2)) AND (SELECT stock=5 FROM public.store_products WHERE id='c9300000-0000-0000-0000-000000000001'));
+
 SELECT name, CASE WHEN ok THEN 'PASS' ELSE 'FAIL' END AS result FROM _r ORDER BY ok, name;
 DO $$ BEGIN
   IF EXISTS (SELECT 1 FROM _r WHERE NOT ok) THEN RAISE EXCEPTION 'SMOKE TEST FAILED'; END IF;

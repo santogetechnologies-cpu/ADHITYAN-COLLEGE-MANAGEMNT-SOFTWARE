@@ -4,22 +4,12 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Loader2 } from 'lucide-react';
-import { supabase } from '@/lib/supabase';
+import { payOnline } from '@/lib/onlinePay';
 import { db } from '@/services/supabase/database';
 import { useToast } from '@/hooks/use-toast';
 import type { StudentFee } from '@/types/database.types';
 
-declare global { interface Window { Razorpay?: any } }
 const inr = (n: number) => `₹${n.toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
-
-function loadCheckout(): Promise<boolean> {
-  if (window.Razorpay) return Promise.resolve(true);
-  return new Promise((resolve) => {
-    const s = document.createElement('script');
-    s.src = 'https://checkout.razorpay.com/v1/checkout.js'; s.onload = () => resolve(true); s.onerror = () => resolve(false);
-    document.body.appendChild(s);
-  });
-}
 
 /** Pay outstanding fees online. Amounts are re-priced and validated on the server; if online payment is off, explains how to pay at the desk. */
 export function OnlinePayDialog({ open, onOpenChange, fees, studentName, onPaid }: { open: boolean; onOpenChange: (o: boolean) => void; fees: StudentFee[]; studentName?: string; onPaid: () => void }) {
@@ -45,21 +35,11 @@ export function OnlinePayDialog({ open, onOpenChange, fees, studentName, onPaid 
     if (picked.some((f) => Number(sel[f.id]) > Number(f.total_due))) return toast({ title: 'An amount is more than that fee\'s balance', variant: 'destructive' });
     setBusy(true);
     try {
-      const { data, error } = await supabase.functions.invoke('payments-create-order', { body: { items } });
-      if (error || !data?.success) throw new Error(data?.error || (error as any)?.message || 'Could not start the payment.');
-      if (!(await loadCheckout())) throw new Error('The payment window could not be loaded. Check your connection.');
-      const rz = new window.Razorpay({
-        key: data.key_id, order_id: data.gateway_order_id, amount: data.amount_paise, currency: 'INR', name: 'Fee payment', description: studentName ? `Fees for ${studentName}` : 'Fees',
-        handler: async (r: any) => {
-          const v = await supabase.functions.invoke('payments-verify', { body: { razorpay_order_id: r.razorpay_order_id, razorpay_payment_id: r.razorpay_payment_id, razorpay_signature: r.razorpay_signature } });
-          if (v.data?.success) toast({ title: 'Payment received', description: 'Your receipt is in the receipt list.' });
-          else toast({ title: 'Payment is being confirmed', description: v.data?.message || 'If money was debited it will be applied automatically within a few minutes.' });
-          onPaid(); onOpenChange(false);
-        },
-        modal: { ondismiss: () => setBusy(false) },
-      });
-      rz.on('payment.failed', (r: any) => toast({ title: 'Payment failed', description: r?.error?.description || 'Nothing was charged.', variant: 'destructive' }));
-      rz.open();
+      const r = await payOnline({ items }, studentName ? `Fees for ${studentName}` : 'Fees');
+      if (r.status === 'paid') toast({ title: 'Payment received', description: 'Your receipt is in the receipt list.' });
+      else if (r.status === 'pending') toast({ title: 'Payment is being confirmed', description: r.message });
+      else if (r.status === 'failed') toast({ title: 'Payment failed', description: r.message, variant: 'destructive' });
+      if (r.status === 'paid' || r.status === 'pending') { onPaid(); onOpenChange(false); }
     } catch (e: any) { toast({ title: 'Payment not started', description: e.message, variant: 'destructive' }); }
     finally { setBusy(false); }
   };

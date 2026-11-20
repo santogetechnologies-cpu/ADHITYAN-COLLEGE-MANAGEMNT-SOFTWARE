@@ -226,7 +226,7 @@ Legend: ✅ done & verified as stated · 🟡 written, not runnable here · ⬜ 
 | Server-priced orders, state machine with restock, no direct order writes | ✅ SQL | 8 smoke checks |
 | Cross-role notifications delivered through `notify_users/notify_roles`; `db.createNotification` routes by recipient; `db.notifyMany` for bulk; receptionist and transport-emergency bulk inserts moved to it; invalid priority 'normal' and user ids 'admin'/'all' handled | ✅ SQL (7 checks, 258 total), 🟡 app | build |
 | Browser-side fallback that decremented stock and wrote orders directly removed; manager order updates now persist | 🟡 UI | build |
-| Online payment for store orders | ⬜ | |
+| Online payment for store orders | ✅ (072) | |
 | Inventory issue/return/purchase orders: atomic server functions (069), receive/cancel buttons on purchase orders | ✅ SQL (14 checks, 372 total), 🟡 UI | |
 
 ## Teacher / Parent / Student dashboards, assignments (058) and sign-in flags (059)
@@ -293,7 +293,7 @@ Legend: ✅ done & verified as stated · 🟡 written, not runnable here · ⬜ 
 |------|--------|----------|
 | Reverse/refund with ledger restoration, void receipts, idempotent, finance-only; reconciliation exceptions | ✅ SQL | 11 smoke checks (339 total) |
 | Finance "Online payments" tab: refund online orders, reverse counter payments, 30-day reconciliation | 🟡 UI | build |
-| Partial refunds, refund of one fee within a multi-fee order, gateway settlement-file import | ⬜ | |
+| Partial refunds, refund of one fee within a multi-fee order, gateway settlement-file import | ✅ (072) | |
 
 ## Revaluation and supplementary exams (068)
 | Item | Status | Evidence |
@@ -307,3 +307,10 @@ Legend: ✅ done & verified as stated · 🟡 written, not runnable here · ⬜ 
 |------|--------|----------|
 | The Supabase client was typed with an out-of-date `Database` type that turned every insert/update into `never` — client is now untyped (`SupabaseClient<any>`), UserRole definitions aligned (21 roles), missing optional fields added | ✅ | TS errors 608 → 68 (remaining: deprecated multi-college/platform-admin code, tests, minor typings) |
 | Real defects found this way and fixed: concerns saved/read through a document-table workaround and unknown column `student_name`; shortage warnings wrote non-existent columns (never saved); parent attendance compared 'Present'/'Late' to lower-case values (everything showed as absent); admin dashboard complaint counts and faculty-deployment score; linked-guardian list showed blank names and always "Verified"; afternoon wellness check-in rejected by the database; my earlier edit broke StudentDashboard (`acc`) | ✅ | |
+
+## Partial refunds, settlement import, store payments (072)
+| Item | Status | Evidence |
+|------|--------|----------|
+| Part/per-fee refunds (online + counter), settlement import, store order payment/refund | ✅ SQL | 18 smoke checks (395 total) |
+| Finance: refund dialog with per-fee amounts, partial counter reversal, settlement CSV import; student: "Pay online" and "Cancel order" on store orders | 🟡 UI | build |
+| Store order display showed `NaN` totals per item (orders store `unit_price`, the screen read `price`) | fixed | |

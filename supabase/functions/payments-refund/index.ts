@@ -1,4 +1,5 @@
-// POST { order_id, reason }  — finance/admin only. Refunds the whole online payment at the gateway, then corrects the fee ledger.
+// POST { order_id, reason, items?: [{ student_fee_id, amount }] } — finance/admin only. Refunds the whole online payment (or the chosen
+// part) at the gateway, then corrects the fee ledger. The amount is validated against the ledger BEFORE the gateway is called.
 // If the gateway succeeds but the ledger update fails, the response says so; calling again is safe (the order is still Paid/Review
 // and the gateway refuses a second refund of the same payment, in which case finance fixes the ledger from the Online payments tab).
 import { json, preflight, readJson } from "../_shared/http.ts";
@@ -17,18 +18,19 @@ Deno.serve(async (req) => {
   const cfg = gatewayConfig((k) => Deno.env.get(k));
   if (!cfg) return json(req, 503, { error: "Online payment is not configured.", code: "NOT_CONFIGURED" });
 
-  const { data: o } = await admin.from("payment_orders").select("id, status, amount, gateway_payment_id").eq("id", orderId).maybeSingle();
-  if (!o) return json(req, 404, { error: "Order not found.", code: "NOT_FOUND" });
-  if (!["Paid", "Review"].includes(o.status) || !o.gateway_payment_id) return json(req, 400, { error: "Only a paid order, or one under review, can be refunded.", code: "NOT_REFUNDABLE" });
+  const items = Array.isArray(b?.items) && b.items.length ? b.items : null;
+  const { data: chk, error: chkErr } = await admin.rpc("payment_order_refund_check", { p_order: orderId, p_items: items });
+  if (chkErr) { console.error("refund check", chkErr.message); return json(req, 500, { error: "Could not check the refund.", code: "SERVER_ERROR" }); }
+  if (!chk?.success) return json(req, 400, { error: chk?.error ?? "Not refundable.", code: chk?.code ?? "NOT_REFUNDABLE" });
   let refundId: string;
   try {
-    refundId = (await refundGatewayPayment(cfg, o.gateway_payment_id, Math.round(Number(o.amount) * 100), { erp_order: o.id, reason: reason.slice(0, 100) })).id;
+    refundId = (await refundGatewayPayment(cfg, chk.gateway_payment_id, chk.amount_paise, { erp_order: orderId, reason: reason.slice(0, 100) })).id;
   } catch (e) {
     console.error("gateway refund", (e as Error).message);
     return json(req, 502, { error: `The gateway did not refund: ${(e as Error).message}`, code: "GATEWAY_ERROR" });
   }
-  const { data, error } = await admin.rpc("payment_order_refund_apply", { p_order: o.id, p_reason: reason, p_actor: caller.id, p_gateway_refund_id: refundId });
-  await audit(admin, caller, "online_payment_refunded", "payment_orders", o.id, { refund_id: refundId, amount: o.amount });
+  const { data, error } = await admin.rpc("payment_order_refund_apply", { p_order: orderId, p_reason: reason, p_actor: caller.id, p_gateway_refund_id: refundId, p_items: items });
+  await audit(admin, caller, "online_payment_refunded", "payment_orders", orderId, { refund_id: refundId, amount: chk.amount });
   if (error || !data?.success) {
     console.error("refund apply", error?.message ?? data?.error);
     return json(req, 500, { error: `The gateway refunded (ref ${refundId}) but the fee ledger could not be updated: ${data?.error ?? error?.message}. Reverse the payments manually.`, code: "LEDGER_NOT_UPDATED", gateway_refund_id: refundId });
