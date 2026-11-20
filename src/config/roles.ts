@@ -100,31 +100,31 @@ export const ROLE_CONFIGS: Record<UserRole, RoleConfig> = {
     role: 'finance_manager',
     label: 'Finance Manager',
     home: '/dashboard/finance_manager',
-    allowedRoutes: ['/dashboard', '/admin/finance', '/admin/finance-manager', '/admin/accounts'],
+    allowedRoutes: ['/dashboard', '/finance', '/accounts'],
     navItems: [
       { label: 'Finance Hub', path: '/dashboard/finance_manager' },
-      { label: 'Fee Schedules', path: '/admin/finance' },
-      { label: 'Accounting Ledger', path: '/admin/accounts' },
+      { label: 'Fees & Fee Setup', path: '/finance' },
+      { label: 'Accounting Ledger', path: '/accounts' },
     ],
   },
   financier: {
     role: 'financier',
     label: 'Financier & Cashier',
     home: '/dashboard/financier',
-    allowedRoutes: ['/dashboard', '/admin/finance', '/dashboard/financier'],
+    allowedRoutes: ['/dashboard', '/finance', '/dashboard/financier'],
     navItems: [
       { label: 'Cashier Desk', path: '/dashboard/financier' },
-      { label: 'Fee Transactions', path: '/admin/finance' },
+      { label: 'Fee Transactions', path: '/finance' },
     ],
   },
   accountant: {
     role: 'accountant',
     label: 'Accounts Officer',
     home: '/dashboard/accountant',
-    allowedRoutes: ['/dashboard', '/admin/accounts', '/dashboard/accountant'],
+    allowedRoutes: ['/dashboard', '/accounts', '/dashboard/accountant'],
     navItems: [
       { label: 'Accounts Dashboard', path: '/dashboard/accountant' },
-      { label: 'Institutional Ledger', path: '/admin/accounts' },
+      { label: 'Institutional Ledger', path: '/accounts' },
     ],
   },
   store_manager: {
@@ -171,11 +171,15 @@ export const ROLE_CONFIGS: Record<UserRole, RoleConfig> = {
     role: 'receptionist',
     label: 'Front Desk Receptionist',
     home: '/dashboard/receptionist',
-    allowedRoutes: ['/dashboard', '/admin/receptionist', '/dashboard/receptionist', '/admission-management', '/admin/account-provisioning', '/account-provisioning'],
-    navItems: [],
+    allowedRoutes: ['/dashboard', '/dashboard/receptionist', '/admission-management', '/account-provisioning'],
+    navItems: [
+      { label: 'Front Desk', path: '/dashboard/receptionist' },
+      { label: 'Admissions', path: '/admission-management' },
+      { label: 'Student & Parent Accounts', path: '/account-provisioning' },
+    ],
   },
   naac_coordinator: {
-    role: 'admin', // Resolved to admin access as required
+    role: 'naac_coordinator',
     label: 'NAAC Coordinator',
     home: '/admin/naac',
     allowedRoutes: ['/admin/naac', '/dashboard'],

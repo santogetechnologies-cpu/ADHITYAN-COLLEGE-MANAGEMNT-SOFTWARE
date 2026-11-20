@@ -15,4 +15,7 @@ See `01-Executive-Audit.md` for the full table with status. Quick index:
 | DB | phase_1_4_1 SQL defects (DB-4) | Fixed 029–033 |
 | Config | Config drafts/rollback not persisted | Open |
 | Frontend | Role from user_metadata / e-mail prefix in AuthContext | Fixed (profiles.role only) |
-| Frontend | `naac_coordinator`→admin, receptionist has no nav items | Open |
+| Frontend | `naac_coordinator` config said role `admin` (not used by the guards, but wrong) | Fixed |
+| Frontend | Receptionist had an empty menu | Fixed (Front Desk, Admissions, Student & Parent Accounts) |
+| Frontend | Finance manager / financier / accountant menu items pointed at `/admin/finance` and `/admin/accounts`, which only admin/principal may open (clicking bounced them) | Fixed: new `/finance` and `/accounts` routes; `node scripts/check-navigation.cjs` verifies all 21 roles |
+| Frontend | Control Center (roles, modules, workflows) and the visual form customizer are stored in each browser's `localStorage`: an admin's customization never reaches other users/devices | Open (next) |

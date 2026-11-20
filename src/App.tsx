@@ -274,6 +274,24 @@ const App = () => (
                   }
                 />
 
+                {/* Finance workspaces for the finance roles (the /admin layout is admin/principal only) */}
+                <Route
+                  path="/finance"
+                  element={
+                    <ProtectedRoute allowedRoles={['finance_manager', 'financier', 'admin', 'principal']}>
+                      <FinanceManagerDashboard />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/accounts"
+                  element={
+                    <ProtectedRoute allowedRoles={['finance_manager', 'accountant', 'admin', 'principal']}>
+                      <FinanceManagerDashboard />
+                    </ProtectedRoute>
+                  }
+                />
+
                 {/* Admin Management System (Nested) */}
                 <Route
                   path="/admin"

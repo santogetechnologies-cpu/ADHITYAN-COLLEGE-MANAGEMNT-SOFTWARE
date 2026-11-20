@@ -51,6 +51,7 @@ import { db } from '@/services/supabase/database';
 import { StudentFee, FinanceTransaction, Profile, FeeReceipt } from '@/types/database.types';
 import { useToast } from '@/hooks/use-toast';
 import { FeeSetup } from '@/components/finance/FeeSetup';
+import { useAuth } from '@/context/AuthContext';
 import { FeeAdjustDialog, type AdjustableFee } from '@/components/finance/FeeAdjustDialog';
 import { StudentRecordSearch } from '@/components/shared/StudentRecordSearch';
 import { ScholarshipManager } from '@/components/finance/ScholarshipManager';
@@ -76,6 +77,9 @@ export default function FinanceManagerDashboard() {
   // Dialog States
   const [collectPaymentOpen, setCollectPaymentOpen] = useState(false);
   const [adjustFee, setAdjustFee] = useState<AdjustableFee | null>(null);
+  const { user: currentUser } = useAuth();
+  // only these roles may configure fees, bill them, or adjust them (the server enforces the same rule)
+  const canConfigureFees = currentUser?.role === 'admin' || currentUser?.role === 'finance_manager';
   const [addFeeInvoiceOpen, setAddFeeInvoiceOpen] = useState(false);
   const [payrollDialogOpen, setPayrollDialogOpen] = useState(false);
   const [refundDialogOpen, setRefundDialogOpen] = useState(false);
@@ -510,14 +514,16 @@ export default function FinanceManagerDashboard() {
         >
           Student Fee Accounts ({studentFees.length})
         </Button>
-        <Button
-          size="sm"
-          variant={activeFinanceTab === 'structures' ? 'default' : 'outline'}
-          onClick={() => setActiveFinanceTab('structures')}
-          className="text-xs font-bold"
-        >
-          Fee Setup
-        </Button>
+        {canConfigureFees && (
+          <Button
+            size="sm"
+            variant={activeFinanceTab === 'structures' ? 'default' : 'outline'}
+            onClick={() => setActiveFinanceTab('structures')}
+            className="text-xs font-bold"
+          >
+            Fee Setup
+          </Button>
+        )}
         <Button
           size="sm"
           variant={activeFinanceTab === 'expenses' ? 'default' : 'outline'}
@@ -875,9 +881,11 @@ export default function FinanceManagerDashboard() {
                                 >
                                   <Bell className="w-3 h-3 mr-1" /> Remind
                                 </Button>
-                                <Button size="sm" variant="outline" className="h-7 text-xs rounded-lg" onClick={() => setAdjustFee(fee)}>
-                                  Adjust
-                                </Button>
+                                {canConfigureFees && (
+                                  <Button size="sm" variant="outline" className="h-7 text-xs rounded-lg" onClick={() => setAdjustFee(fee)}>
+                                    Adjust
+                                  </Button>
+                                )}
                               </>
                             )}
 
@@ -954,7 +962,7 @@ export default function FinanceManagerDashboard() {
       )}
 
       {/* 3. FEE STRUCTURES TAB */}
-      {activeFinanceTab === 'structures' && (
+      {activeFinanceTab === 'structures' && canConfigureFees && (
         <FeeSetup />
       )}
 
