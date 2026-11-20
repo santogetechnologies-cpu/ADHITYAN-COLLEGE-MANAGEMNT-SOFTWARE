@@ -1,4 +1,4 @@
--- Smoke test for migrations 028-042. Synthetic data only; everything is rolled back.
+-- Smoke test for migrations 028-043. Synthetic data only; everything is rolled back.
 -- Run against a SCRATCH/STAGING database that has 001-015 + 028-037 applied (never production):
 --   psql "$STAGING_DB_URL" -v ON_ERROR_STOP=1 -f supabase/tests/smoke_028_037.sql
 -- Any failed assertion raises an exception and the script exits non-zero.
@@ -242,6 +242,21 @@ SELECT pg_temp.chk('admission config functions not callable by authenticated', h
 SET LOCAL ROLE authenticated;
 SELECT set_config('request.jwt.claim.sub','c0000000-0000-0000-0000-000000000001',true);
 SELECT pg_temp.chk('student cannot read admission configuration', (SELECT count(*)=0 FROM public.admission_routes) AND (SELECT count(*)=0 FROM public.admission_form_fields));
+RESET ROLE;
+
+-- ===================== 043 library renew =====================
+INSERT INTO public.library_books(id,book_code,title,author,category,subject,class_level,type,status,total_copies,available_copies)
+  VALUES ('c8000000-0000-0000-0000-000000000001','LIB-SMK','Smoke Book','A','c','s','1','Physical','Available',2,2);
+SET LOCAL ROLE authenticated;
+SELECT set_config('request.jwt.claim.sub','c0000000-0000-0000-0000-000000000003',true);   -- librarian
+SELECT pg_temp.chk('librarian issues a book', (public.issue_library_book('c8000000-0000-0000-0000-000000000001','c0000000-0000-0000-0000-000000000001',CURRENT_DATE+7)->>'success')='true');
+SELECT pg_temp.chk('issue decrements copies exactly once', (SELECT available_copies=1 FROM public.library_books WHERE id='c8000000-0000-0000-0000-000000000001'));
+SELECT pg_temp.chk('librarian can see issued books (RLS)', (SELECT count(*)>=1 FROM public.book_issues WHERE book_code='LIB-SMK'));
+SELECT pg_temp.chk('renew extends the due date by 14 days', (public.renew_library_book((SELECT id FROM public.book_issues WHERE book_code='LIB-SMK' AND status='Issued' LIMIT 1))->>'due_date')::date = CURRENT_DATE+7+14);
+SELECT pg_temp.chk('second renewal allowed', (public.renew_library_book((SELECT id FROM public.book_issues WHERE book_code='LIB-SMK' AND status='Issued' LIMIT 1))->>'renew_count')='2');
+SELECT pg_temp.chk('third renewal refused (limit 2)', (public.renew_library_book((SELECT id FROM public.book_issues WHERE book_code='LIB-SMK' AND status='Issued' LIMIT 1))->>'error') LIKE '%maximum%');
+SELECT set_config('request.jwt.claim.sub','c0000000-0000-0000-0000-000000000001',true);   -- student
+SELECT pg_temp.chk('student cannot renew', (public.renew_library_book((SELECT id FROM public.book_issues WHERE book_code='LIB-SMK' LIMIT 1))->>'error') LIKE 'Not authorized%');
 RESET ROLE;
 
 SET LOCAL ROLE anon;

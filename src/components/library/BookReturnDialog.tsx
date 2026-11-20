@@ -20,6 +20,7 @@ interface BookReturnDialogProps {
 }
 
 export const BookReturnDialog = ({ children, onBookReturned }: BookReturnDialogProps) => {
+  const [submitting, setSubmitting] = useState(false);
   const [open, setOpen] = useState(false);
   const [scannerOpen, setScannerOpen] = useState(false);
   const [step, setStep] = useState<'scan' | 'details' | 'confirm'>('scan');
@@ -48,8 +49,10 @@ export const BookReturnDialog = ({ children, onBookReturned }: BookReturnDialogP
   useEffect(() => {
     async function loadIssues() {
       try {
-        const issues = await db.getBookIssues();
-        setActiveIssues((issues || []).filter(i => i.status === 'Issued'));
+        // db.getBookIssues() does not exist (the call threw and the list stayed empty, so no book could ever
+        // be found for return). Overdue books must be returnable too: they are the ones that carry fines.
+        const issues = await db.getIssuedBooks();
+        setActiveIssues((issues || []).filter(i => i.status === 'Issued' || i.status === 'Overdue'));
       } catch (err) {
         console.warn('Load active issues warning:', err);
       }
@@ -162,30 +165,24 @@ export const BookReturnDialog = ({ children, onBookReturned }: BookReturnDialogP
         status: 'Returned'
       };
 
-      try {
-        if (issuedBookData.issueId) {
-          try {
-            await libraryService.returnBook(issuedBookData.issueId, calculateTotalFine());
-          } catch (rpcErr) {
-            console.warn('RPC return_library_book fallback to db.returnBook:', rpcErr);
-            await db.returnBook(issuedBookData.issueId);
-          }
-        }
-        toast({
-          title: "Book Return Processed",
-          description: `Successfully recorded return for "${issuedBookData.title}".`,
-        });
-      } catch (err: any) {
-        toast({
-          title: "Return Failed",
-          description: err.message || "Failed to process book return.",
-          variant: "destructive"
-        });
+      if (!issuedBookData.issueId) {
+        toast({ title: "Cannot return", description: "This issue record could not be identified. Search the book again.", variant: "destructive" });
+        return;
       }
-      
-      onBookReturned?.(returnData);
-      resetDialog();
-      setOpen(false);
+      if (submitting) return;
+      setSubmitting(true);
+      try {
+        // One atomic server call; no fallback that would skip the already-returned / authorisation checks.
+        await libraryService.returnBook(issuedBookData.issueId, calculateTotalFine());
+        toast({ title: "Book Return Processed", description: `Successfully recorded return for "${issuedBookData.title}".` });
+        onBookReturned?.(returnData);
+        resetDialog();
+        setOpen(false);
+      } catch (err: any) {
+        toast({ title: "Return Failed", description: err.message || "Failed to process book return.", variant: "destructive" });
+      } finally {
+        setSubmitting(false);
+      }
     }
   };
 
@@ -444,7 +441,7 @@ export const BookReturnDialog = ({ children, onBookReturned }: BookReturnDialogP
                 <Button variant="outline" className="flex-1" onClick={() => setStep('scan')}>
                   Back
                 </Button>
-                <Button className="flex-1" onClick={handleReturnBook}>
+                <Button className="flex-1" onClick={handleReturnBook} disabled={submitting}>
                   Complete Return
                 </Button>
               </div>

@@ -99,6 +99,18 @@ export const libraryService = {
     }
   },
 
+  /** Extends the due date (14 days by default; the server enforces the renewal limit and who may renew). */
+  async renewBook(issueId: string, days: number = 14): Promise<{ due_date: string; renew_count: number }> {
+    try {
+      const { data, error } = await supabase.rpc('renew_library_book', { p_issue_id: issueId, p_days: days });
+      if (error) throw error;
+      if (!data || data.success === false) throw new Error(data?.error || 'Failed to renew book');
+      return data;
+    } catch (error) {
+      throw handleSupabaseError(error, 'Failed to renew book');
+    }
+  },
+
   async returnBook(issueId: string, fineAmount: number = 0): Promise<any> {
     try {
       const { data, error } = await supabase.rpc('return_library_book', {

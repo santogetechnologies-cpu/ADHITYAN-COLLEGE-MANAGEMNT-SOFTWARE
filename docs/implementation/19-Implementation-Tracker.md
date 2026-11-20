@@ -122,3 +122,14 @@ Legend: ✅ done & verified as stated · 🟡 written, not runnable here · ⬜ 
 | Admission form: route + quota selectors, configured fields per section, configured document checklist, server field errors shown on the field | 🟡 | |
 | Merit tab: quota selector, seats from matrix | 🟡 | |
 | Not yet: per-course custom document upload labels in verification tab, reservation roster rules (e.g. % reservation), seat-overflow guard when approving by hand | ⬜ | |
+
+## Module scan (roles, navigation, flows)
+| Item | Status | Evidence |
+|------|--------|----------|
+| Every role's menu vs the routes (route exists, role may open it, roles.ts allows it, no empty menu) | ✅ | `node scripts/check-navigation.cjs` → 0 problems, 21 roles / 71 routes (was 5: finance menus bounced, empty receptionist menu) |
+| API actions called by the frontend vs implemented | ✅ | no missing action (the earlier mismatches were audit-log labels) |
+| Tables / RPCs used by code vs migrated database | ✅ | only the intentionally excluded multi-college tables remain |
+| Library: issue / return / renew + librarian RLS | ✅ SQL (119 smoke checks), 🟡 UI | |
+| 127 buttons with no handler (static scan) | ⬜ triage | `docs/audit/10-Dead-Buttons.md`, `scripts/find-dead-buttons.cjs` |
+| Control Center / module / workflow / form customizations stored in each browser's `localStorage` (not shared) | ⬜ **next** | `multiCollegeService`, `superAdminService`, `workflowEngineService`, `visualCustomizationService` |
+| Remaining dashboards (HR, hostel, placement, transport, store, exam, certificates, alumni, medical, sports, NAAC) | ⬜ | not yet traced end to end |

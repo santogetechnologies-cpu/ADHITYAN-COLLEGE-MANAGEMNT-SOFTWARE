@@ -13,6 +13,7 @@ import { BookReturnDialog } from './BookReturnDialog';
 import { format } from 'date-fns';
 import { db } from '@/services/supabase/database';
 import { toast } from 'sonner';
+import { libraryService } from '@/services/libraryService';
 
 interface IssuedBookItem {
   id: string | number;
@@ -87,65 +88,18 @@ export const BookTracking = () => {
   useRealtimeSubscription({ table: 'book_issues', onChange: fetchTrackingData, onReconnect: fetchTrackingData });
   useRealtimeSubscription({ table: 'library_books', onChange: fetchTrackingData, onReconnect: fetchTrackingData });
 
-  const handleBookIssued = async (issueData: any) => {
-    const newBook: IssuedBookItem = {
-      id: Date.now().toString(),
-      bookTitle: issueData.bookTitle,
-      bookId: issueData.bookId,
-      studentName: issueData.studentName,
-      studentId: issueData.studentId,
-      rollNo: issueData.studentId,
-      class: 'Class 10A',
-      issueDate: issueData.issueDate,
-      dueDate: issueData.dueDate,
-      returnDate: null,
-      status: 'Issued',
-      daysOverdue: 0,
-      renewCount: 0
-    };
+  // The dialogs save through the server; the list is simply reloaded from the database
+  // (no optimistic rows, no second write).
+  const handleBookIssued = () => { void fetchTrackingData(); };
+  const handleBookReturned = () => { void fetchTrackingData(); };
 
-    setIssuedBooks(prev => [newBook, ...prev]);
-    toast.success(`Book "${issueData.bookTitle}" issued successfully`);
-
+  const handleRenew = async (book: IssuedBookItem) => {
     try {
-      const created = await db.issueBook({
-        book_id: issueData.bookId,
-        book_title: issueData.bookTitle,
-        book_code: issueData.bookId,
-        student_name: issueData.studentName,
-        student_id: issueData.studentId,
-        roll_no: issueData.studentId,
-        class_name: 'Class 10A',
-        issue_date: issueData.issueDate,
-        due_date: issueData.dueDate,
-        status: 'Issued',
-        days_overdue: 0,
-        renew_count: 0
-      });
-      if (created) {
-        setIssuedBooks(prev => prev.map(b => b.id === newBook.id ? { ...b, id: created.id } : b));
-      }
-    } catch (err) {
-      console.error('Failed to persist book issue:', err);
-    }
-  };
-
-  const handleBookReturned = async (returnData: any) => {
-    const returnDateStr = returnData.returnDate || format(new Date(), 'yyyy-MM-dd');
-    setIssuedBooks(prev => prev.map(book => 
-      (book.bookId === returnData.bookId || book.id === returnData.id)
-        ? { ...book, status: 'Returned', returnDate: returnDateStr }
-        : book
-    ));
-    toast.success('Book returned successfully');
-
-    try {
-      const target = issuedBooks.find(b => b.bookId === returnData.bookId);
-      if (target && typeof target.id === 'string' && target.id.length > 10) {
-        await db.returnBook(target.id);
-      }
-    } catch (err) {
-      console.error('Failed to persist book return:', err);
+      const r = await libraryService.renewBook(String(book.id));
+      toast.success(`Renewed "${book.bookTitle}" until ${r.due_date}`);
+      await fetchTrackingData();
+    } catch (err: any) {
+      toast.error(err?.message || 'Could not renew this book');
     }
   };
 
@@ -368,7 +322,7 @@ export const BookTracking = () => {
                                 Return
                               </Button>
                             </BookReturnDialog>
-                            <Button variant="outline" size="sm" onClick={() => toast.success(`Renewed ${book.bookTitle} for 14 days`)}>
+                            <Button variant="outline" size="sm" onClick={() => handleRenew(book)}>
                               Renew
                             </Button>
                           </>
