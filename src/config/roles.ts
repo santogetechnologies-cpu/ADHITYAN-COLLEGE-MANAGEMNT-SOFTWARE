@@ -47,11 +47,12 @@ export const ROLE_CONFIGS: Record<UserRole, RoleConfig> = {
     role: 'principal',
     label: 'Principal / Dean',
     home: '/dashboard/principal',
-    allowedRoutes: ['/dashboard', '/principal', '/dashboard/principal', '/admin/departments', '/admin/timetable', '/admin/teachers', '/admin/naac', '/disciplinary-management', '/certificate-generation', '/exam-management', '/report-concern', '/admin/account-provisioning', '/account-provisioning'],
+    allowedRoutes: ['/dashboard', '/principal', '/admission-management', '/dashboard/principal', '/admin/departments', '/admin/timetable', '/admin/teachers', '/admin/naac', '/disciplinary-management', '/certificate-generation', '/exam-management', '/report-concern', '/admin/account-provisioning', '/account-provisioning'],
     navItems: [
       { label: 'Executive Dashboard', path: '/dashboard/principal' },
       { label: 'Departments', path: '/admin/departments' },
       { label: 'Timetable', path: '/admin/timetable' },
+      { label: 'Admissions', path: '/admission-management' },
       { label: 'Certificates', path: '/certificate-generation' },
       { label: 'Disciplinary Council', path: '/disciplinary-management' },
       { label: 'NAAC Review', path: '/admin/naac' },
