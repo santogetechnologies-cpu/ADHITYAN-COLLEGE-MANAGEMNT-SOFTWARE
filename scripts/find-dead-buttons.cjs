@@ -1,5 +1,5 @@
 // Static scan for buttons with no click handler. Run from the repo root: node scripts/find-dead-buttons.cjs [--json]
-// Output is a triage list: buttons passed as children to dialog wrappers are false positives.
+// Output is a triage list. `wrapper` is the nearest custom component around the button; when set, that component probably supplies the click (false positive).
 const ts = require('typescript'); const fs = require('fs'); const path = require('path');
 function walkDir(d, out=[]) { for (const f of fs.readdirSync(d)) { const p = path.join(d, f); const st = fs.statSync(p);
   if (st.isDirectory()) { if (!['node_modules','ui','__tests__'].includes(f)) walkDir(p, out); } else if (/\.tsx$/.test(f)) out.push(p); } return out; }
@@ -22,7 +22,11 @@ for (const file of files) {
       if (!handler && !isSubmit && !hasSpread && !insideTrigger && !insideForm) {
         const { line } = sf.getLineAndCharacterOfPosition(open.getStart());
         const label = ts.isJsxElement(node) ? node.children.map(c => c.getText()).join(' ').replace(/\s+/g,' ').slice(0,60) : '';
-        rows.push({ file, line: line + 1, label });
+        const LAYOUT = /^(div|span|p|section|ul|li|ol|td|th|tr|label|h[1-6]|nav|header|footer|main|aside|form|Fragment|React\.Fragment|Card\w*|Table\w*|Tabs\w*|Dialog\w*|AlertDialog\w*|Sheet\w*|Popover\w*|DropdownMenu\w*|Collapsible\w*|Accordion\w*|Tooltip\w*|Select\w*|Command\w*|ScrollArea|Separator|Form\w*|motion\.\w+)$/;
+        // only the DIRECT parent can supply the click (a custom component that receives the button as its children)
+        const parent = ancestors[ancestors.length - 1];
+        const wrapper = parent && /^[A-Z]/.test(parent) && !LAYOUT.test(parent) ? parent : null;
+        rows.push({ file, line: line + 1, label, wrapper: wrapper || null });
       }
     }
     const tag = open ? open.tagName.getText() : null;

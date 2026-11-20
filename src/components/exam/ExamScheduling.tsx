@@ -1,362 +1,246 @@
-import { useState, useEffect, useCallback } from 'react';
-import { useRealtimeSubscription } from '@/hooks/useRealtimeSubscription';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Calendar } from '@/components/ui/calendar';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { CalendarIcon, Plus, Edit, Trash2, Eye, Loader2 } from 'lucide-react';
-import { format } from 'date-fns';
-import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Card, CardContent } from '@/components/ui/card';
-import { ExamDetailsDialog } from './ExamDetailsDialog';
-import { HallTicketDialog } from './HallTicketDialog';
-import { db } from '@/services/supabase/database';
-import { examService } from '@/services/examService';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { AlertTriangle, CalendarPlus, FilePlus2, Loader2, Trash2 } from 'lucide-react';
+import { useRealtimeSubscription } from '@/hooks/useRealtimeSubscription';
+import { examService, type ExamItem, type ExamScheduleItem } from '@/services/examService';
+import { supabase } from '@/lib/supabase';
 import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/context/AuthContext';
 import { OFFICIAL_COURSES } from '@/constants/courses';
+
+const sb: any = supabase;   // generated typings in this repo do not resolve update payloads
+
+const statusStyle: Record<string, string> = {
+  Scheduled: 'bg-sky-100 text-sky-800 border-sky-200',
+  Ongoing: 'bg-amber-100 text-amber-800 border-amber-200',
+  Completed: 'bg-slate-100 text-slate-700 border-slate-200',
+  'Results Published': 'bg-emerald-100 text-emerald-800 border-emerald-200',
+};
 
 export const ExamScheduling = () => {
   const { toast } = useToast();
+  const { user } = useAuth();
+  const canManage = ['admin', 'principal', 'coe'].includes(user?.role ?? '');
+
   const [loading, setLoading] = useState(true);
-  const [submitting, setSubmitting] = useState(false);
-  const [newExamDialogOpen, setNewExamDialogOpen] = useState(false);
-  const [examSchedules, setExamSchedules] = useState<any[]>([]);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [exams, setExams] = useState<ExamItem[]>([]);
+  const [papers, setPapers] = useState<ExamScheduleItem[]>([]);
 
-  const [newExam, setNewExam] = useState({
-    examName: '',
-    class: '',
-    subject: '',
-    hall: '',
-    time: '',
-    date: null as Date | null
-  });
+  const [examOpen, setExamOpen] = useState(false);
+  const [paperOpen, setPaperOpen] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [ex, setEx] = useState({ name: '', term: '', academic_year: '', start_date: '', end_date: '', course: '', semester: '', exam_category: '' });
+  const [pp, setPp] = useState({ exam_id: '', class_name: '', subject: '', subject_code: '', room: '', exam_date: '', start_time: '09:00', end_time: '12:00', max_marks: '100', passing_marks: '40' });
 
-  const loadSchedules = useCallback(async () => {
-      try {
-        const data = await db.getExamSchedules();
-        if (data && data.length > 0) {
-          const mapped = data.map((d: any) => ({
-            id: d.id,
-            examName: d.subject ? `${d.subject} Exam` : 'Term Examination',
-            class: d.class_name || 'B.VOC MLT - Semester 1',
-            subject: d.subject,
-            date: d.exam_date,
-            time: `${d.start_time} - ${d.end_time}`,
-            hall: d.room || 'Hall A',
-            status: 'Scheduled',
-            duration: '3 hours',
-            totalStudents: 45
-          }));
-          setExamSchedules(mapped);
-        } else {
-          setExamSchedules([]);
-        }
-      } catch (err) {
-        console.error('Failed to load exam schedules:', err);
-      } finally {
-        setLoading(false);
-      }
+  const load = useCallback(async () => {
+    try {
+      const [e, s] = await Promise.all([examService.listExams(), examService.listSchedules()]);
+      setExams(e);
+      setPapers(s);
+      setLoadError(null);
+    } catch (err: any) {
+      setLoadError(err?.message || 'Could not load examinations.');
+    } finally {
+      setLoading(false);
+    }
   }, []);
+  useEffect(() => { void load(); }, [load]);
+  useRealtimeSubscription({ table: 'exam_schedules', onChange: load, onReconnect: load });
+  useRealtimeSubscription({ table: 'exams', onChange: load, onReconnect: load });
 
-  useEffect(() => {
-    loadSchedules();
-  }, [loadSchedules]);
+  const papersByExam = useMemo(() => {
+    const m = new Map<string, ExamScheduleItem[]>();
+    papers.forEach((p) => { const k = p.exam_id || ''; if (!m.has(k)) m.set(k, []); m.get(k)!.push(p); });
+    return m;
+  }, [papers]);
 
-  // Real-time synchronization for examination timetables and room assignments
-  useRealtimeSubscription({ table: 'exam_schedules', onChange: loadSchedules, onReconnect: loadSchedules });
+  const createExam = async () => {
+    setBusy(true);
+    try {
+      const created = await examService.createExam({ ...ex, course: ex.course || undefined, semester: ex.semester || undefined, exam_category: ex.exam_category || undefined });
+      toast({ title: 'Examination created', description: `${created.title}. Now add its papers.` });
+      setExamOpen(false);
+      setEx({ name: '', term: '', academic_year: '', start_date: '', end_date: '', course: '', semester: '', exam_category: '' });
+      await load();
+      setPp((p) => ({ ...p, exam_id: created.id }));
+    } catch (err: any) {
+      toast({ title: 'Examination not created', description: err?.message, variant: 'destructive' });
+    } finally { setBusy(false); }
+  };
 
-  const handleCreateExam = async () => {
-    if (!newExam.examName || !newExam.class || !newExam.subject || !newExam.date) {
-      toast({
-        title: "Incomplete details",
-        description: "Please fill in all required fields.",
-        variant: "destructive"
-      });
+  const createPaper = async () => {
+    const max = Number(pp.max_marks); const pass = Number(pp.passing_marks);
+    if (!pp.exam_id || !pp.class_name || !pp.subject.trim() || !pp.exam_date) {
+      toast({ title: 'Incomplete details', description: 'Choose the examination, class, subject and date.', variant: 'destructive' });
       return;
     }
-
-    setSubmitting(true);
-    try {
-      const dateStr = format(newExam.date, 'yyyy-MM-dd');
-      const timeSlot = newExam.time || '09:00 AM - 12:00 PM';
-      const parts = timeSlot.split(' - ');
-      const startTime = parts[0] || '09:00:00';
-      const endTime = parts[1] || '12:00:00';
-
-      const created = await examService.createSchedule({
-        class_name: newExam.class,
-        subject: newExam.subject,
-        exam_date: dateStr,
-        start_time: startTime,
-        end_time: endTime,
-        room: newExam.hall || 'Hall A',
-        max_marks: 100,
-        passing_marks: 35
-      });
-
-      const examObj = {
-        id: created.id,
-        examName: newExam.examName,
-        class: newExam.class,
-        subject: newExam.subject,
-        date: dateStr,
-        time: timeSlot,
-        hall: newExam.hall || 'Hall A',
-        status: 'Scheduled',
-        duration: '3 hours',
-        totalStudents: 0
-      };
-
-      setExamSchedules(prev => [examObj, ...prev]);
-      setNewExamDialogOpen(false);
-      setNewExam({
-        examName: '',
-        class: '',
-        subject: '',
-        hall: '',
-        time: '',
-        date: null
-      });
-
-      toast({
-        title: "Exam Scheduled",
-        description: `${examObj.examName} has been successfully scheduled.`
-      });
-    } catch (err: any) {
-      toast({
-        title: "Scheduling Failed",
-        description: err.message || "Failed to schedule exam. Clash or validation error.",
-        variant: "destructive"
-      });
-    } finally {
-      setSubmitting(false);
+    if (!Number.isFinite(max) || max <= 0 || !Number.isFinite(pass) || pass < 0 || pass > max) {
+      toast({ title: 'Check the marks', description: 'Maximum marks must be above zero and passing marks cannot exceed it.', variant: 'destructive' });
+      return;
     }
+    setBusy(true);
+    try {
+      await examService.createSchedule({
+        exam_id: pp.exam_id, class_name: pp.class_name, subject: pp.subject.trim(), subject_code: pp.subject_code.trim() || undefined,
+        room: pp.room.trim() || undefined, exam_date: pp.exam_date, start_time: pp.start_time, end_time: pp.end_time, max_marks: max, passing_marks: pass,
+      });
+      toast({ title: 'Paper scheduled', description: `${pp.subject} · ${pp.class_name} · ${pp.exam_date}` });
+      setPaperOpen(false);
+      setPp((p) => ({ ...p, subject: '', subject_code: '' }));
+      await load();
+    } catch (err: any) {
+      toast({ title: 'Paper not scheduled', description: err?.message, variant: 'destructive' });
+    } finally { setBusy(false); }
   };
 
-  const deleteExam = async (examId: any) => {
-    try {
-      await examService.deleteSchedule(String(examId));
-      setExamSchedules(examSchedules.filter(exam => String(exam.id) !== String(examId)));
-      toast({
-        title: "Exam Deleted",
-        description: "Schedule deleted from database."
-      });
-    } catch (err: any) {
-      toast({
-        title: "Delete Failed",
-        description: err.message,
-        variant: "destructive"
-      });
-    }
+  const removePaper = async (id: string) => {
+    if (!window.confirm('Remove this paper from the timetable?')) return;
+    try { await examService.deleteSchedule(id); await load(); }
+    catch (err: any) { toast({ title: 'Paper not removed', description: err?.message, variant: 'destructive' }); }
   };
+
+  const setTimetablePublished = async (exam: ExamItem, published: boolean) => {
+    if (published && (papersByExam.get(exam.id)?.length ?? 0) === 0) {
+      toast({ title: 'Nothing to publish', description: 'Add at least one paper first.', variant: 'destructive' });
+      return;
+    }
+    const { error } = await sb.from('exams').update({ timetable_published: published }).eq('id', exam.id);
+    if (error) { toast({ title: 'Not updated', description: error.message, variant: 'destructive' }); return; }
+    toast({ title: published ? 'Timetable published' : 'Timetable hidden', description: published ? 'Students can now see this examination and its timetable.' : 'Students can no longer see the timetable.' });
+    await load();
+  };
+
+  if (loading) return <div className="flex justify-center py-12"><Loader2 className="w-6 h-6 animate-spin text-muted-foreground" /></div>;
+  if (loadError) return (
+    <Card><CardContent className="p-8 text-center">
+      <p className="text-sm text-destructive flex items-center justify-center gap-1.5"><AlertTriangle className="h-4 w-4" /> {loadError}</p>
+      <Button size="sm" variant="outline" className="mt-3" onClick={() => { setLoading(true); void load(); }}>Retry</Button>
+    </CardContent></Card>
+  );
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
+      <div className="flex flex-wrap justify-between items-center gap-3">
         <div>
-          <h2 className="text-2xl font-semibold">Exam Scheduling</h2>
-          <p className="text-muted-foreground">Schedule exams for different classes and departments</p>
+          <h2 className="text-2xl font-semibold">Examinations & timetable</h2>
+          <p className="text-muted-foreground">Create an examination, add its papers, then publish the timetable to students.</p>
         </div>
-        <Dialog open={newExamDialogOpen} onOpenChange={setNewExamDialogOpen}>
-          <DialogTrigger asChild>
-            <Button className="flex items-center gap-2">
-              <Plus className="h-4 w-4" />
-              Schedule New Exam
+        {canManage && (
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={() => setExamOpen(true)}><FilePlus2 className="h-4 w-4 mr-2" /> New examination</Button>
+            <Button onClick={() => { setPp((p) => ({ ...p, exam_id: p.exam_id || exams[0]?.id || '' })); setPaperOpen(true); }} disabled={exams.length === 0}>
+              <CalendarPlus className="h-4 w-4 mr-2" /> Add paper
             </Button>
-          </DialogTrigger>
-          <DialogContent className="max-w-md">
-            <DialogHeader>
-              <DialogTitle>Schedule New Exam</DialogTitle>
-              <DialogDescription>Create a new examination schedule</DialogDescription>
-            </DialogHeader>
-            <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="examName">Exam Name</Label>
-                  <Input 
-                    id="examName" 
-                    placeholder="Mid Term Exam"
-                    value={newExam.examName}
-                    onChange={(e) => setNewExam({...newExam, examName: e.target.value})}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="class">Program / Course</Label>
-                  <Select value={newExam.class} onValueChange={(value) => setNewExam({...newExam, class: value})}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select program" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {OFFICIAL_COURSES.map(c => (
-                        <SelectItem key={c.id} value={c.name}>{c.name}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-              
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="subject">Subject</Label>
-                  <Select value={newExam.subject} onValueChange={(value) => setNewExam({...newExam, subject: value})}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select subject" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="Mathematics">Mathematics</SelectItem>
-                      <SelectItem value="Physics">Physics</SelectItem>
-                      <SelectItem value="Chemistry">Chemistry</SelectItem>
-                      <SelectItem value="Biology">Biology</SelectItem>
-                      <SelectItem value="English">English</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="hall">Exam Hall</Label>
-                  <Select value={newExam.hall} onValueChange={(value) => setNewExam({...newExam, hall: value})}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select hall" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="Hall A">Hall A</SelectItem>
-                      <SelectItem value="Hall B">Hall B</SelectItem>
-                      <SelectItem value="Hall C">Hall C</SelectItem>
-                      <SelectItem value="Main Auditorium">Main Auditorium</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>Exam Date</Label>
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <Button
-                        variant="outline"
-                        className={cn(
-                          "w-full justify-start text-left font-normal",
-                          !newExam.date && "text-muted-foreground"
-                        )}
-                      >
-                        <CalendarIcon className="mr-2 h-4 w-4" />
-                        {newExam.date ? format(newExam.date, "PPP") : <span>Pick a date</span>}
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0" align="start">
-                      <Calendar
-                        mode="single"
-                        selected={newExam.date}
-                        onSelect={(date) => setNewExam({...newExam, date: date || null})}
-                        initialFocus
-                        className={cn("p-3 pointer-events-auto")}
-                      />
-                    </PopoverContent>
-                  </Popover>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="time">Time Slot</Label>
-                  <Select value={newExam.time} onValueChange={(value) => setNewExam({...newExam, time: value})}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select time" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="09:00 AM - 12:00 PM">09:00 AM - 12:00 PM</SelectItem>
-                      <SelectItem value="02:00 PM - 05:00 PM">02:00 PM - 05:00 PM</SelectItem>
-                      <SelectItem value="06:00 PM - 09:00 PM">06:00 PM - 09:00 PM</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-
-              <Button className="w-full" onClick={handleCreateExam} disabled={submitting}>
-                {submitting ? (
-                  <span className="flex items-center gap-2">
-                    <Loader2 className="w-4 h-4 animate-spin" /> Scheduling...
-                  </span>
-                ) : (
-                  'Schedule Exam'
-                )}
-              </Button>
-            </div>
-          </DialogContent>
-        </Dialog>
+          </div>
+        )}
       </div>
 
-      {loading ? (
-        <div className="flex justify-center items-center py-12">
-          <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
-        </div>
-      ) : (
-        <div className="grid gap-4">
-          {examSchedules.map((exam) => (
-            <Card key={exam.id}>
-              <CardContent className="p-6">
-                <div className="flex justify-between items-start">
-                  <div className="space-y-2">
-                    <div className="flex items-center gap-3">
-                      <h3 className="font-semibold text-lg">{exam.examName}</h3>
-                      <Badge variant={exam.status === 'Confirmed' ? 'default' : 'secondary'}>
-                        {exam.status}
-                      </Badge>
-                    </div>
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                      <div>
-                        <span className="text-muted-foreground">Class:</span>
-                        <p className="font-medium">{exam.class}</p>
-                      </div>
-                      <div>
-                        <span className="text-muted-foreground">Subject:</span>
-                        <p className="font-medium">{exam.subject}</p>
-                      </div>
-                      <div>
-                        <span className="text-muted-foreground">Date & Time:</span>
-                        <p className="font-medium">{exam.date}</p>
-                        <p className="text-xs text-muted-foreground">{exam.time}</p>
-                      </div>
-                      <div>
-                        <span className="text-muted-foreground">Hall:</span>
-                        <p className="font-medium">{exam.hall}</p>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="flex gap-2">
-                    <ExamDetailsDialog examData={exam} mode="view">
-                      <Button variant="outline" size="sm">
-                        <Eye className="h-4 w-4" />
-                      </Button>
-                    </ExamDetailsDialog>
-                    
-                    <ExamDetailsDialog examData={exam} mode="edit">
-                      <Button variant="outline" size="sm">
-                        <Edit className="h-4 w-4" />
-                      </Button>
-                    </ExamDetailsDialog>
-
-                    <HallTicketDialog examData={exam}>
-                      <Button variant="outline" size="sm">
-                        Hall Tickets
-                      </Button>
-                    </HallTicketDialog>
-                    
-                    <Button 
-                      variant="outline" 
-                      size="sm"
-                      onClick={() => deleteExam(exam.id)}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
+      {exams.length === 0 ? (
+        <Card><CardContent className="p-10 text-center text-muted-foreground text-sm">
+          No examinations yet.{canManage ? ' Create one to start scheduling papers.' : ' The examination office has not created any.'}
+        </CardContent></Card>
+      ) : exams.map((exam) => {
+        const list = (papersByExam.get(exam.id) ?? []).slice().sort((a, b) => (a.exam_date + a.start_time).localeCompare(b.exam_date + b.start_time));
+        return (
+          <Card key={exam.id}>
+            <CardHeader className="pb-3">
+              <div className="flex flex-wrap items-start justify-between gap-2">
+                <div>
+                  <CardTitle className="text-lg flex items-center gap-2">
+                    {exam.title}
+                    <Badge variant="outline" className={statusStyle[exam.status || 'Scheduled']}>{exam.status}</Badge>
+                    {exam.timetable_published && <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200">Timetable visible to students</Badge>}
+                  </CardTitle>
+                  <CardDescription>{exam.term} · {exam.academic_year} · {exam.start_date} to {exam.end_date}{exam.course ? ` · ${exam.course}` : ''}{exam.semester ? ` · Sem ${exam.semester}` : ''}</CardDescription>
                 </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      )}
+                {canManage && (
+                  <Button size="sm" variant={exam.timetable_published ? 'outline' : 'default'} onClick={() => setTimetablePublished(exam, !exam.timetable_published)}>
+                    {exam.timetable_published ? 'Hide timetable' : 'Publish timetable'}
+                  </Button>
+                )}
+              </div>
+            </CardHeader>
+            <CardContent>
+              <Table>
+                <TableHeader><TableRow><TableHead>Date</TableHead><TableHead>Time</TableHead><TableHead>Class</TableHead><TableHead>Subject</TableHead><TableHead>Room</TableHead><TableHead className="text-right">Marks (pass)</TableHead><TableHead /></TableRow></TableHeader>
+                <TableBody>
+                  {list.length === 0 ? (
+                    <TableRow><TableCell colSpan={7} className="text-center py-6 text-sm text-muted-foreground">No papers yet.</TableCell></TableRow>
+                  ) : list.map((p) => (
+                    <TableRow key={p.id}>
+                      <TableCell className="text-sm whitespace-nowrap">{p.exam_date}</TableCell>
+                      <TableCell className="text-sm whitespace-nowrap">{p.start_time} – {p.end_time}</TableCell>
+                      <TableCell className="text-sm">{p.class_name}</TableCell>
+                      <TableCell className="text-sm font-medium">{p.subject}{p.subject_code ? <span className="text-[11px] text-muted-foreground font-mono"> {p.subject_code}</span> : null}</TableCell>
+                      <TableCell className="text-sm">{p.room}</TableCell>
+                      <TableCell className="text-right text-sm font-mono">{p.max_marks} ({p.passing_marks})</TableCell>
+                      <TableCell className="text-right">{canManage && <Button size="sm" variant="ghost" className="h-7 text-destructive" onClick={() => removePaper(p.id)} aria-label="Remove paper"><Trash2 className="h-3.5 w-3.5" /></Button>}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+        );
+      })}
+
+      {/* new examination */}
+      <Dialog open={examOpen} onOpenChange={(o) => { if (!busy) setExamOpen(o); }}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader><DialogTitle>New examination</DialogTitle><DialogDescription>For example “Semester 1 – End semester” for 2026-27.</DialogDescription></DialogHeader>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5 col-span-2"><Label className="text-xs font-semibold">Name *</Label><Input value={ex.name} onChange={(e) => setEx({ ...ex, name: e.target.value })} maxLength={150} /></div>
+            <div className="space-y-1.5"><Label className="text-xs font-semibold">Term *</Label><Input value={ex.term} onChange={(e) => setEx({ ...ex, term: e.target.value })} placeholder="e.g. Term 1" /></div>
+            <div className="space-y-1.5"><Label className="text-xs font-semibold">Academic year *</Label><Input value={ex.academic_year} onChange={(e) => setEx({ ...ex, academic_year: e.target.value })} placeholder="2026-27" /></div>
+            <div className="space-y-1.5"><Label className="text-xs font-semibold">Starts *</Label><Input type="date" value={ex.start_date} onChange={(e) => setEx({ ...ex, start_date: e.target.value })} /></div>
+            <div className="space-y-1.5"><Label className="text-xs font-semibold">Ends *</Label><Input type="date" value={ex.end_date} onChange={(e) => setEx({ ...ex, end_date: e.target.value })} /></div>
+            <div className="space-y-1.5"><Label className="text-xs font-semibold">Course (optional)</Label><Input value={ex.course} onChange={(e) => setEx({ ...ex, course: e.target.value })} /></div>
+            <div className="space-y-1.5"><Label className="text-xs font-semibold">Semester (optional)</Label><Input value={ex.semester} onChange={(e) => setEx({ ...ex, semester: e.target.value })} /></div>
+            <div className="space-y-1.5 col-span-2"><Label className="text-xs font-semibold">Category (optional)</Label><Input value={ex.exam_category} onChange={(e) => setEx({ ...ex, exam_category: e.target.value })} placeholder="Internal, Semester, Practical, Supplementary…" /></div>
+          </div>
+          <DialogFooter><Button variant="outline" onClick={() => setExamOpen(false)} disabled={busy}>Cancel</Button><Button onClick={createExam} disabled={busy || !ex.name.trim() || !ex.term.trim() || !ex.academic_year.trim() || !ex.start_date || !ex.end_date}>{busy ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : null}Create</Button></DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* add paper */}
+      <Dialog open={paperOpen} onOpenChange={(o) => { if (!busy) setPaperOpen(o); }}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader><DialogTitle>Add paper</DialogTitle><DialogDescription>The same room or class cannot have two overlapping papers on one day.</DialogDescription></DialogHeader>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5 col-span-2">
+              <Label className="text-xs font-semibold">Examination *</Label>
+              <Select value={pp.exam_id} onValueChange={(v) => setPp({ ...pp, exam_id: v })}>
+                <SelectTrigger><SelectValue placeholder="Choose" /></SelectTrigger>
+                <SelectContent>{exams.map((e) => <SelectItem key={e.id} value={e.id}>{e.title} · {e.academic_year}</SelectItem>)}</SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5 col-span-2">
+              <Label className="text-xs font-semibold">Class / programme *</Label>
+              <Select value={pp.class_name} onValueChange={(v) => setPp({ ...pp, class_name: v })}>
+                <SelectTrigger><SelectValue placeholder="Choose" /></SelectTrigger>
+                <SelectContent>{OFFICIAL_COURSES.map((c) => <SelectItem key={c.id} value={c.name}>{c.name}</SelectItem>)}</SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5"><Label className="text-xs font-semibold">Subject *</Label><Input value={pp.subject} onChange={(e) => setPp({ ...pp, subject: e.target.value })} maxLength={120} /></div>
+            <div className="space-y-1.5"><Label className="text-xs font-semibold">Subject code</Label><Input value={pp.subject_code} onChange={(e) => setPp({ ...pp, subject_code: e.target.value })} maxLength={20} className="font-mono" /></div>
+            <div className="space-y-1.5"><Label className="text-xs font-semibold">Date *</Label><Input type="date" value={pp.exam_date} onChange={(e) => setPp({ ...pp, exam_date: e.target.value })} /></div>
+            <div className="space-y-1.5"><Label className="text-xs font-semibold">Room</Label><Input value={pp.room} onChange={(e) => setPp({ ...pp, room: e.target.value })} placeholder="e.g. Hall A" /></div>
+            <div className="space-y-1.5"><Label className="text-xs font-semibold">Starts *</Label><Input type="time" value={pp.start_time} onChange={(e) => setPp({ ...pp, start_time: e.target.value })} /></div>
+            <div className="space-y-1.5"><Label className="text-xs font-semibold">Ends *</Label><Input type="time" value={pp.end_time} onChange={(e) => setPp({ ...pp, end_time: e.target.value })} /></div>
+            <div className="space-y-1.5"><Label className="text-xs font-semibold">Maximum marks</Label><Input type="number" min="1" value={pp.max_marks} onChange={(e) => setPp({ ...pp, max_marks: e.target.value })} className="font-mono" /></div>
+            <div className="space-y-1.5"><Label className="text-xs font-semibold">Passing marks</Label><Input type="number" min="0" value={pp.passing_marks} onChange={(e) => setPp({ ...pp, passing_marks: e.target.value })} className="font-mono" /></div>
+          </div>
+          <DialogFooter><Button variant="outline" onClick={() => setPaperOpen(false)} disabled={busy}>Cancel</Button><Button onClick={createPaper} disabled={busy}>{busy ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : null}Schedule paper</Button></DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

@@ -32,11 +32,11 @@ const ExamManagement = () => {
             </TabsTrigger>
             <TabsTrigger value="workflows" className="flex items-center gap-2">
               <Settings className="h-4 w-4" />
-              <span className="hidden sm:inline">Workflows</span>
+              <span className="hidden sm:inline">Progress</span>
             </TabsTrigger>
             <TabsTrigger value="grading" className="flex items-center gap-2">
               <CheckSquare className="h-4 w-4" />
-              <span className="hidden sm:inline">Grading</span>
+              <span className="hidden sm:inline">Marks entry</span>
             </TabsTrigger>
             <TabsTrigger value="results" className="flex items-center gap-2">
               <GraduationCap className="h-4 w-4" />

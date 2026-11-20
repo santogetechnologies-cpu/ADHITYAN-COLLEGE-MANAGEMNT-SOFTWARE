@@ -32,7 +32,7 @@ export function useExamAnalytics() {
 export function useCreateExamSchedule() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (schedule: Omit<ExamScheduleItem, 'id'>) => examService.createSchedule(schedule),
+    mutationFn: (schedule: Omit<ExamScheduleItem, 'id'> & { exam_id: string }) => examService.createSchedule(schedule),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['exam-schedules'] });
       qc.invalidateQueries({ queryKey: ['exams'] });
@@ -53,7 +53,7 @@ export function useDeleteExamSchedule() {
 export function useSaveExamResults() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (results: Array<{ exam_id: string; student_id: string; subject: string; marks_obtained: number; total_marks: number }>) =>
+    mutationFn: (results: Array<{ exam_id: string; student_id: string; subject: string; marks_obtained: number; total_marks?: number; absent?: boolean }>) =>
       examService.saveResults(results),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['exam-results'] });
@@ -65,11 +65,12 @@ export function useSaveExamResults() {
 export function usePublishExam() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ examId, isPublished }: { examId: string; isPublished: boolean }) =>
-      examService.publishExam(examId, isPublished),
+    mutationFn: ({ examId, isPublished, reason }: { examId: string; isPublished: boolean; reason?: string }) =>
+      examService.publishExam(examId, isPublished, reason),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['exams'] });
       qc.invalidateQueries({ queryKey: ['exam-results'] });
+      qc.invalidateQueries({ queryKey: ['exam-analytics'] });
     },
   });
 }

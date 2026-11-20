@@ -19,10 +19,19 @@ export const ResultPublishing = () => {
   const publishMutation = usePublishExam();
 
   const handleTogglePublish = (examId: string, currentStatus: boolean) => {
+    let reason: string | undefined;
+    if (currentStatus) {
+      // withdrawing published results needs a recorded reason
+      const answer = window.prompt('Why are these results being withdrawn? (required, saved in the audit log)');
+      if (!answer || answer.trim().length < 3) return;
+      reason = answer.trim();
+    } else if (!window.confirm('Publish these results? Students and parents will be able to see their marks immediately.')) {
+      return;
+    }
     publishMutation.mutate(
-      { examId, isPublished: !currentStatus },
+      { examId, isPublished: !currentStatus, reason },
       createMutationToast({
-        successTitle: !currentStatus ? 'Examination Published' : 'Examination Unpublished',
+        successTitle: !currentStatus ? 'Results published' : 'Results withdrawn',
         successDescription: () =>
           !currentStatus
             ? 'Results are now visible to students and parents.'

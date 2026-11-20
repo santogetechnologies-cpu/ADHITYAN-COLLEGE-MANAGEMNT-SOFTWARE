@@ -1,17 +1,17 @@
 # Buttons without a click handler (static scan)
 
-Found with the TypeScript compiler API: `<Button>`/`<button>` elements with no `onClick`, no `type="submit"`, not `asChild`, not inside a form or a trigger-style wrapper.
-**125 buttons in 28 files.** This is a *backlog to triage*, not a list of confirmed bugs:
-- Some are **false positives**: a button passed as `children` to a dialog component (e.g. `<BookIssueDialog><Button>…`) gets its click from the wrapper. Those must be checked by hand.
-- Several confirmed so far are worse than dead: they show a success toast without saving (library *Renew*) — fixed in migration 043.
-- Rule going forward (master prompt §4 rule 3): a button must either do something real or be removed/disabled with a reason. `node /tmp`-style scans are not in the repo yet; re-run the scan after each module is fixed.
+Found with the TypeScript compiler API (`node scripts/find-dead-buttons.cjs`): `<Button>`/`<button>` with no `onClick`, no `type="submit"`, not `asChild`, not inside a form or trigger-style wrapper.
+**81 likely-dead buttons in 22 files** (+11 that are direct children of a custom component, which usually supplies the click and is probably fine).
+
+Rule (master prompt §4 rule 3): a button must do something real, or be removed/disabled with a reason.
+
+**Already resolved:** library Issue/Return/Renew (migration 043); the exam module (`ExamScheduling`, `ExamWorkflows`, `GradingInterface` rebuilt; `ExamDetailsDialog` and `HallTicketDialog`, which were ~25 decorative buttons, removed).
 
 | File | Line | Label |
 |---|---|---|
 | `src/components/RoleSelection.tsx` | 363 | Access Portal |
 | `src/components/RoleSelection.tsx` | 408 | Access Portal |
 | `src/components/RoleSelection.tsx` | 453 | Access |
-| `src/components/admin/AdminExecutiveNavbar.tsx` | 294 | <Grid className="h-3.5 w-3.5 text-blue-600 dark:text-blue-4 |
 | `src/components/alumni/AddAlumniDialog.tsx` | 317 | Choose File |
 | `src/components/alumni/DonationTrackingDialog.tsx` | 671 | <Download className="h-4 w-4 mr-2" /> Download Tax Certific |
 | `src/components/alumni/DonationTrackingDialog.tsx` | 759 | <FileText className="h-4 w-4 mr-2" /> Generate Thank You Le |
@@ -28,41 +28,6 @@ Found with the TypeScript compiler API: `<Button>`/`<button>` elements with no `
 | `src/components/certificate/TemplateCustomizationDialog.tsx` | 353 | Browse Files |
 | `src/components/certificate/TemplateCustomizationDialog.tsx` | 366 | Browse Files |
 | `src/components/certificate/TemplateCustomizationDialog.tsx` | 481 | <Download className="h-4 w-4 mr-2" /> Export Template |
-| `src/components/exam/ExamDetailsDialog.tsx` | 248 | Save Changes |
-| `src/components/exam/ExamDetailsDialog.tsx` | 267 | Add Students |
-| `src/components/exam/ExamDetailsDialog.tsx` | 270 | <Download className="h-4 w-4 mr-2" /> Export List |
-| `src/components/exam/ExamDetailsDialog.tsx` | 307 | Edit |
-| `src/components/exam/ExamDetailsDialog.tsx` | 310 | <Download className="h-4 w-4" /> |
-| `src/components/exam/ExamDetailsDialog.tsx` | 427 | Save Settings |
-| `src/components/exam/ExamDetailsDialog.tsx` | 439 | <Users className="h-4 w-4 mr-2" /> Generate Hall Tickets |
-| `src/components/exam/ExamDetailsDialog.tsx` | 443 | <Send className="h-4 w-4 mr-2" /> Send Notifications |
-| `src/components/exam/ExamDetailsDialog.tsx` | 447 | <FileText className="h-4 w-4 mr-2" /> Seat Arrangement |
-| `src/components/exam/ExamDetailsDialog.tsx` | 451 | <Download className="h-4 w-4 mr-2" /> Attendance Sheet |
-| `src/components/exam/ExamDetailsDialog.tsx` | 463 | <Clock className="h-4 w-4 mr-2" /> Start Exam |
-| `src/components/exam/ExamDetailsDialog.tsx` | 467 | <Eye className="h-4 w-4 mr-2" /> Monitor Progress |
-| `src/components/exam/ExamDetailsDialog.tsx` | 471 | <Users className="h-4 w-4 mr-2" /> Mark Attendance |
-| `src/components/exam/ExamDetailsDialog.tsx` | 475 | <Clock className="h-4 w-4 mr-2" /> End Exam |
-| `src/components/exam/ExamDetailsDialog.tsx` | 487 | <FileText className="h-4 w-4 mr-2" /> Collect Answer Sheets |
-| `src/components/exam/ExamDetailsDialog.tsx` | 491 | <Download className="h-4 w-4 mr-2" /> Export Results |
-| `src/components/exam/ExamDetailsDialog.tsx` | 495 | <Send className="h-4 w-4 mr-2" /> Publish Results |
-| `src/components/exam/ExamDetailsDialog.tsx` | 507 | <FileText className="h-4 w-4 mr-2" /> Exam Report |
-| `src/components/exam/ExamDetailsDialog.tsx` | 511 | <Users className="h-4 w-4 mr-2" /> Student Performance |
-| `src/components/exam/ExamDetailsDialog.tsx` | 515 | <Download className="h-4 w-4 mr-2" /> Analytics Dashboard |
-| `src/components/exam/ExamScheduling.tsx` | 329 | <Eye className="h-4 w-4" /> |
-| `src/components/exam/ExamScheduling.tsx` | 335 | <Edit className="h-4 w-4" /> |
-| `src/components/exam/ExamScheduling.tsx` | 341 | Hall Tickets |
-| `src/components/exam/ExamWorkflows.tsx` | 209 | <Users className="h-4 w-4 mr-2" /> View Participants |
-| `src/components/exam/ExamWorkflows.tsx` | 213 | <Monitor className="h-4 w-4 mr-2" /> Monitor Live |
-| `src/components/exam/ExamWorkflows.tsx` | 218 | End Exam |
-| `src/components/exam/ExamWorkflows.tsx` | 297 | <Users className="h-4 w-4 mr-2" /> Attendance |
-| `src/components/exam/ExamWorkflows.tsx` | 301 | <FileText className="h-4 w-4 mr-2" /> Answer Sheets |
-| `src/components/exam/ExamWorkflows.tsx` | 306 | Mark Complete |
-| `src/components/exam/GradingInterface.tsx` | 215 | View Results |
-| `src/components/exam/HallTicketDialog.tsx` | 64 | <FileText className="h-4 w-4 mr-2" /> Generate Missing Tick |
-| `src/components/exam/HallTicketDialog.tsx` | 68 | <Download className="h-4 w-4 mr-2" /> Download All Tickets |
-| `src/components/exam/HallTicketDialog.tsx` | 80 | <Users className="h-4 w-4 mr-2" /> Regenerate All |
-| `src/components/exam/HallTicketDialog.tsx` | 84 | <FileText className="h-4 w-4 mr-2" /> Print Queue |
-| `src/components/exam/HallTicketDialog.tsx` | 93 | Process All Actions |
 | `src/components/finance/MiscExpensesModule.tsx` | 332 | <Filter className="h-4 w-4" /> More Filters |
 | `src/components/finance/MiscExpensesModule.tsx` | 336 | <Download className="h-4 w-4" /> Export |
 | `src/components/finance/MiscExpensesModule.tsx` | 375 | {expense.receipt} |
@@ -83,19 +48,12 @@ Found with the TypeScript compiler API: `<Button>`/`<button>` elements with no `
 | `src/components/naac/NAACHeader.tsx` | 55 | <Settings className="w-5 h-5" /> |
 | `src/components/student/StudentExams.tsx` | 556 | <Clock className="w-3.5 h-3.5 mr-1 text-slate-400" /> Hall |
 | `src/components/student/StudentExams.tsx` | 578 | <Lock className="w-3 h-3 mr-1 text-slate-400" /> Results Aw |
-| `src/pages/AlumniManagement.tsx` | 89 | <Plus className="w-4 h-4 mr-2" /> Add Alumni |
 | `src/pages/AlumniManagement.tsx` | 167 | <Filter className="w-4 h-4 mr-2" /> Filter |
 | `src/pages/AlumniManagement.tsx` | 171 | <Download className="w-4 h-4 mr-2" /> Export |
-| `src/pages/AlumniManagement.tsx` | 243 | <Plus className="w-4 h-4 mr-2" /> Create Event |
 | `src/pages/AlumniManagement.tsx` | 248 | View Calendar |
 | `src/pages/AlumniManagement.tsx` | 272 | Manage |
-| `src/pages/AlumniManagement.tsx` | 341 | Download |
 | `src/pages/AlumniManagement.tsx` | 352 | Download |
 | `src/pages/AlumniManagement.tsx` | 362 | Pending |
-| `src/pages/AlumniManagement.tsx` | 422 | <Plus className="w-4 h-4 mr-2" /> Create Pairing |
-| `src/pages/AlumniManagement.tsx` | 429 | Mentor Applications |
-| `src/pages/AlumniManagement.tsx` | 432 | Program Analytics |
-| `src/pages/AlumniManagement.tsx` | 457 | View Details |
 | `src/pages/AlumniManagement.tsx` | 468 | View Details |
 | `src/pages/AlumniManagement.tsx` | 478 | View Report |
 | `src/pages/CertificateGeneration.tsx` | 294 | Edit |
@@ -110,7 +68,6 @@ Found with the TypeScript compiler API: `<Button>`/`<button>` elements with no `
 | `src/pages/CertificateGeneration.tsx` | 365 | <Download className="w-4 h-4 mr-2" /> Export |
 | `src/pages/CertificateGeneration.tsx` | 451 | Verify |
 | `src/pages/DisciplinaryManagement.tsx` | 262 | <Edit className="h-4 w-4 mr-1" /> Edit |
-| `src/pages/MedicalManagement.tsx` | 139 | View details |
 | `src/pages/MedicalManagement.tsx` | 168 | <Filter className="w-4 h-4 mr-2" /> Filter |
 | `src/pages/MedicalManagement.tsx` | 172 | <Download className="w-4 h-4 mr-2" /> Export |
 | `src/pages/MedicalManagement.tsx` | 249 | Today |

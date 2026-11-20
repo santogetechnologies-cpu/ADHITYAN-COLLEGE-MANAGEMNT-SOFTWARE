@@ -39,3 +39,15 @@ See `01-Executive-Audit.md` for the full table with status. Quick index:
 | `permissionEnforcementService` tested `mod.status === 'disabled'`, but modules have `enabled` and no `status`: disabling a module never blocked any page | Fixed (`mod.enabled === false`) |
 | The route→module map used ids that do not exist (`alumni`, `medical`, `sports`, `compliance`, `communication`, `departments`), so those pages could never be switched off | Fixed: added Alumni / Medical / Sports modules; `/certificate-generation`→`certificates`, `/admin/departments`→`academics`, message-parents→`broadcasts` |
 | Config was only refreshed at start-up in other users' tabs | Fixed: refresh on focus and every minute |
+
+## Examinations (found in the module scan)
+| Bug | Status |
+|-----|--------|
+| **Unpublished marks readable by the student and the parent**: old permissive policies on `exam_results` bypassed the `is_published` rule | Fixed (045) |
+| Any teacher could edit any student's result; unpublished exams/timetables visible to all signed-in users | Fixed (045) |
+| `examService` was written for another schema: read `exams.title`/`total_marks` (not columns), inserted schedules without the required `exam_id`, saved marks without `student_name`/`class_name`, upserted on a unique constraint that did not exist, "published" by writing `status='published'` (rejected by the CHECK constraint) — publishing and marks saving could never succeed | Fixed (rewritten against the real tables; server functions) |
+| Scheduling screen never created an exam; showed invented student counts, durations and statuses | Rebuilt |
+| "Workflows" tab invented online exams from the row index, counted every student as a participant, offered Monitor Live / End Exam for an engine that does not exist | Replaced by a real progress board |
+| "Grading" screen grouped by a non-existent `exam_schedule_id` (all counts 0), guessed MCQ vs subjective from names, could not enter marks for a student without a result | Replaced by Marks entry (roster, validation, grades, locks after publish) |
+| Result pass mark hard-coded at 35 in analytics; grades computed in the browser | Fixed: pass mark from the paper (or the institution's pass %), grades on the server |
+| Hall tickets: bulk generation with attendance / fee eligibility, `HallTicketGeneration` typings | Open |

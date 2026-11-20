@@ -134,3 +134,13 @@ Legend: ✅ done & verified as stated · 🟡 written, not runnable here · ⬜ 
 | Control Center configuration (roles, modules, features, dashboards, pages, navigation, permissions, forms, workflows, global settings, theme): shared in the database with draft → publish → rollback and real version numbers | ✅ SQL (17 smoke checks), 🟡 UI | migration 044; `superAdminService`, `workflowEngineService` rewritten; permission service refreshes every minute |
 | `visualCustomizationService` (student complaints form fields) still per-browser; `multiCollegeService` (deprecated multi-college) still uses localStorage | ⬜ | |
 | Remaining dashboards (HR, hostel, placement, transport, store, exam, certificates, alumni, medical, sports, NAAC) | ⬜ | not yet traced end to end |
+
+## Module — Examinations (migration 045)
+| Item | Status | Evidence |
+|------|--------|----------|
+| Access rules: unpublished marks/exams/timetable hidden from students and parents; teachers limited to their classes and unpublished marks; corrections after publication by COE/principal/admin only | ✅ SQL | 26 smoke checks (162 total), including the leak itself |
+| Marks entry: all-or-nothing validation, server-side grade and pass/fail, absent, upsert, audit of changed marks | ✅ SQL, 🟡 UI | |
+| Publish / withdraw (reason required), analytics from real data | ✅ SQL, 🟡 UI | |
+| Create examination + papers with clash check; publish timetable; progress board | 🟡 | build + type-check |
+| Hall tickets: eligibility from attendance/fees, bulk generation, student download | ⬜ next | `HallTicketGeneration` still the old single-ticket path |
+| Exam registration, seating/invigilation, revaluation, supplementary exams, grade sheets/transcripts, GPA/CGPA, configurable grading scales | ⬜ | master prompt §22–24 |

@@ -1,4 +1,4 @@
--- Smoke test for migrations 028-044. Synthetic data only; everything is rolled back.
+-- Smoke test for migrations 028-045. Synthetic data only; everything is rolled back.
 -- Run against a SCRATCH/STAGING database that has 001-015 + 028-037 applied (never production):
 --   psql "$STAGING_DB_URL" -v ON_ERROR_STOP=1 -f supabase/tests/smoke_028_037.sql
 -- Any failed assertion raises an exception and the script exits non-zero.
@@ -282,6 +282,81 @@ SELECT pg_temp.chk('student cannot save a draft', pg_temp.fails($q$SELECT public
 SELECT pg_temp.chk('student cannot roll back', pg_temp.fails($q$SELECT public.app_settings_rollback('smoke_cfg',1,'x')$q$));
 SELECT pg_temp.chk('student cannot write the table directly', pg_temp.fails($q$UPDATE public.app_settings SET value='{}'::jsonb$q$));
 SELECT pg_temp.chk('student cannot read drafts or release history', (SELECT count(*)=0 FROM public.app_setting_drafts) AND (SELECT count(*)=0 FROM public.app_setting_versions));
+RESET ROLE;
+
+-- ===================== 045 exam core =====================
+INSERT INTO auth.users(id,email) VALUES ('c0000000-0000-0000-0000-000000000009','smoke.teacher@example.test'),('c0000000-0000-0000-0000-00000000000a','smoke.coe@example.test'),
+  ('c0000000-0000-0000-0000-00000000000b','smoke.sa@example.test'),('c0000000-0000-0000-0000-00000000000c','smoke.sb@example.test'),('c0000000-0000-0000-0000-00000000000d','smoke.parent@example.test');
+INSERT INTO public.profiles(id,email,name,role,class_name) VALUES
+ ('c0000000-0000-0000-0000-000000000009','smoke.teacher@example.test','Smoke Teacher','teacher',NULL),
+ ('c0000000-0000-0000-0000-00000000000a','smoke.coe@example.test','Smoke COE','coe',NULL),
+ ('c0000000-0000-0000-0000-00000000000b','smoke.sa@example.test','Exam Student A','student','ClassT'),
+ ('c0000000-0000-0000-0000-00000000000c','smoke.sb@example.test','Exam Student B','student','ClassOther'),
+ ('c0000000-0000-0000-0000-00000000000d','smoke.parent@example.test','Smoke Parent','parent',NULL);
+INSERT INTO public.timetables(class_name,day_of_week,start_time,end_time,subject,teacher_name,teacher_id,room) VALUES ('ClassT','Monday','09:00','10:00','Maths','Smoke Teacher','c0000000-0000-0000-0000-000000000009','R1');
+INSERT INTO public.exams(id,name,term,academic_year,start_date,end_date,status,is_published,results_published) VALUES ('c9000000-0000-0000-0000-000000000001','Smoke Exam','Term 1','2026-27','2026-11-01','2026-11-10','Completed',FALSE,FALSE);
+INSERT INTO public.exam_schedules(exam_id,subject,class_name,exam_date,start_time,end_time,room,max_marks,passing_marks) VALUES ('c9000000-0000-0000-0000-000000000001','Maths','ClassT','2026-11-02','09:00','12:00','H1',50,20);
+
+SET LOCAL ROLE authenticated;
+SELECT set_config('request.jwt.claim.sub','c0000000-0000-0000-0000-000000000009',true);   -- teacher assigned to ClassT only
+SELECT pg_temp.chk('one row for another class makes the whole save fail, nothing written', (SELECT r->>'code'='VALIDATION_ERROR' AND jsonb_array_length(r->'errors')=1 FROM (SELECT public.exam_save_marks('c9000000-0000-0000-0000-000000000001',
+   '[{"student_id":"c0000000-0000-0000-0000-00000000000b","subject":"Maths","marks":35},{"student_id":"c0000000-0000-0000-0000-00000000000c","subject":"Maths","marks":40}]'::jsonb) r) x));
+SELECT pg_temp.chk('...and nothing was saved for the valid row either', (SELECT count(*)=0 FROM public.exam_results WHERE exam_id='c9000000-0000-0000-0000-000000000001'));
+SELECT pg_temp.chk('marks above the schedule maximum (50) are refused', (public.exam_save_marks('c9000000-0000-0000-0000-000000000001','[{"student_id":"c0000000-0000-0000-0000-00000000000b","subject":"Maths","marks":51}]'::jsonb)->>'code')='VALIDATION_ERROR');
+SELECT pg_temp.chk('assigned teacher saves marks', (public.exam_save_marks('c9000000-0000-0000-0000-000000000001','[{"student_id":"c0000000-0000-0000-0000-00000000000b","subject":"Maths","marks":35}]'::jsonb)->>'saved')='1');
+SELECT pg_temp.chk('same student/subject again updates, does not duplicate', (public.exam_save_marks('c9000000-0000-0000-0000-000000000001','[{"student_id":"c0000000-0000-0000-0000-00000000000b","subject":"Maths","marks":30}]'::jsonb)->>'changed_existing')='1'
+   AND (SELECT count(*)=1 FROM public.exam_results WHERE exam_id='c9000000-0000-0000-0000-000000000001'));
+RESET ROLE;
+SELECT pg_temp.chk('grade + status computed on the server (30/50 = 60% -> B, pass mark 20)', (SELECT grade='B' AND result_status='Pass' AND student_name='Exam Student A' AND class_name='ClassT' AND max_marks=50 AND NOT is_published FROM public.exam_results WHERE exam_id='c9000000-0000-0000-0000-000000000001'));
+SET LOCAL ROLE authenticated;
+SELECT set_config('request.jwt.claim.sub','c0000000-0000-0000-0000-000000000009',true);
+SELECT pg_temp.chk('a failing mark is saved', (public.exam_save_marks('c9000000-0000-0000-0000-000000000001','[{"student_id":"c0000000-0000-0000-0000-00000000000b","subject":"Maths","marks":10}]'::jsonb)->>'success')='true');
+RESET ROLE;
+SELECT pg_temp.chk('...and graded F / Fail (10 < pass mark 20)', (SELECT grade='F' AND result_status='Fail' AND marks_obtained=10 FROM public.exam_results WHERE student_id='c0000000-0000-0000-0000-00000000000b' AND exam_id='c9000000-0000-0000-0000-000000000001'));
+SET LOCAL ROLE authenticated;
+SELECT set_config('request.jwt.claim.sub','c0000000-0000-0000-0000-000000000009',true);
+SELECT pg_temp.chk('teacher cannot publish', (public.exam_publish_results('c9000000-0000-0000-0000-000000000001',true)->>'code')='FORBIDDEN');
+SELECT pg_temp.chk('teacher cannot edit another class result directly (RLS)', pg_temp.fails($q$INSERT INTO public.exam_results(exam_id,student_id,student_name,class_name,subject,marks_obtained,max_marks) VALUES ('c9000000-0000-0000-0000-000000000001','c0000000-0000-0000-0000-00000000000c','x','ClassOther','Maths',50,50)$q$));
+-- THE LEAK: an unpublished mark must be invisible to the student and to the parent
+SELECT set_config('request.jwt.claim.sub','c0000000-0000-0000-0000-00000000000b',true);
+SELECT pg_temp.chk('student cannot see UNPUBLISHED marks', (SELECT count(*)=0 FROM public.exam_results));
+SELECT pg_temp.chk('student cannot see an unpublished exam', (SELECT count(*)=0 FROM public.exams WHERE id='c9000000-0000-0000-0000-000000000001'));
+SELECT pg_temp.chk('student cannot see the unpublished timetable', (SELECT count(*)=0 FROM public.exam_schedules));
+RESET ROLE;
+UPDATE public.exams SET timetable_published = TRUE WHERE id = 'c9000000-0000-0000-0000-000000000001';
+SET LOCAL ROLE authenticated;
+SELECT set_config('request.jwt.claim.sub','c0000000-0000-0000-0000-00000000000b',true);
+SELECT pg_temp.chk('publishing the timetable shows the student the exam AND its papers (not the marks)', (SELECT count(*)=1 FROM public.exams WHERE id='c9000000-0000-0000-0000-000000000001')
+   AND (SELECT count(*)=1 FROM public.exam_schedules) AND (SELECT count(*)=0 FROM public.exam_results));
+RESET ROLE;
+UPDATE public.exams SET timetable_published = FALSE WHERE id = 'c9000000-0000-0000-0000-000000000001';
+SET LOCAL ROLE authenticated;
+SELECT set_config('request.jwt.claim.sub','c0000000-0000-0000-0000-00000000000b',true);
+SELECT pg_temp.chk('student cannot write marks', (public.exam_save_marks('c9000000-0000-0000-0000-000000000001','[{"student_id":"c0000000-0000-0000-0000-00000000000b","subject":"Maths","marks":50}]'::jsonb)->>'code')='FORBIDDEN');
+SELECT set_config('request.jwt.claim.sub','c0000000-0000-0000-0000-00000000000a',true);   -- coe
+SELECT pg_temp.chk('COE publishes', (public.exam_publish_results('c9000000-0000-0000-0000-000000000001',true)->>'success')='true');
+RESET ROLE;
+SELECT pg_temp.chk('publish sets result + exam flags and status', (SELECT bool_and(is_published) AND bool_and(published_at IS NOT NULL) FROM public.exam_results WHERE exam_id='c9000000-0000-0000-0000-000000000001')
+   AND (SELECT results_published AND is_published AND status='Results Published' FROM public.exams WHERE id='c9000000-0000-0000-0000-000000000001'));
+SET LOCAL ROLE authenticated;
+SELECT set_config('request.jwt.claim.sub','c0000000-0000-0000-0000-00000000000b',true);
+SELECT pg_temp.chk('student sees own result once published', (SELECT count(*)=1 FROM public.exam_results));
+SELECT set_config('request.jwt.claim.sub','c0000000-0000-0000-0000-00000000000c',true);
+SELECT pg_temp.chk('another student still sees nothing', (SELECT count(*)=0 FROM public.exam_results));
+SELECT set_config('request.jwt.claim.sub','c0000000-0000-0000-0000-000000000009',true);
+SELECT pg_temp.chk('teacher cannot change published marks', (SELECT r->>'code'='VALIDATION_ERROR' FROM (SELECT public.exam_save_marks('c9000000-0000-0000-0000-000000000001','[{"student_id":"c0000000-0000-0000-0000-00000000000b","subject":"Maths","marks":45}]'::jsonb) r) x));
+SELECT set_config('request.jwt.claim.sub','c0000000-0000-0000-0000-00000000000a',true);
+SELECT pg_temp.chk('COE can correct published marks (audited, still published)', (public.exam_save_marks('c9000000-0000-0000-0000-000000000001','[{"student_id":"c0000000-0000-0000-0000-00000000000b","subject":"Maths","marks":45}]'::jsonb)->>'changed_existing')='1');
+SELECT pg_temp.chk('analytics from real data', (SELECT (a->>'appeared')::int=1 AND (a->>'passed')::int=1 AND (a->>'pass_percentage')::int=100 AND (a->>'average_percentage')::int=90 FROM (SELECT public.exam_analytics('c9000000-0000-0000-0000-000000000001') a) x));
+SELECT pg_temp.chk('withdrawing needs a reason', (public.exam_publish_results('c9000000-0000-0000-0000-000000000001',false,' ')->>'code')='REASON_REQUIRED');
+SELECT pg_temp.chk('COE withdraws with a reason', (public.exam_publish_results('c9000000-0000-0000-0000-000000000001',false,'Marking error found')->>'success')='true');
+SELECT set_config('request.jwt.claim.sub','c0000000-0000-0000-0000-00000000000b',true);
+SELECT pg_temp.chk('withdrawn results disappear for the student again', (SELECT count(*)=0 FROM public.exam_results));
+RESET ROLE;
+INSERT INTO public.exams(id,name,term,academic_year,start_date,end_date,status) VALUES ('c9000000-0000-0000-0000-000000000002','NoMarks','T','2026-27','2026-12-01','2026-12-02','Scheduled');
+SET LOCAL ROLE authenticated;
+SELECT set_config('request.jwt.claim.sub','c0000000-0000-0000-0000-00000000000a',true);
+SELECT pg_temp.chk('publish refuses an exam with no marks', (public.exam_publish_results('c9000000-0000-0000-0000-000000000002',true)->>'code')='NO_RESULTS');
 RESET ROLE;
 
 SET LOCAL ROLE anon;

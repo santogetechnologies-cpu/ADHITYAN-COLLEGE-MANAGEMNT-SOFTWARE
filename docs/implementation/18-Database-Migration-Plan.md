@@ -32,6 +32,7 @@ back-fills of NULLs and a de-duplication of `super_admin_releases` rows with the
 | 042_admission_configuration.sql | configurable admissions: routes (entrance / merit / direct / lateral…), quotas, seat matrix, form fields, required documents; `admission_validate_fields`; `admission_set_status` enforces route + required documents; merit ranking and apply take a quota and default seats from the matrix | 041 |
 | 043_library_renew.sql | `renew_library_book` (the Renew button only showed a toast); **RLS fix: librarian could not see issued books or manage the catalog** (policies named admin/principal/teacher only) | 042 |
 | 044_shared_app_settings.sql | shared, versioned settings: `app_settings` (live, readable by all signed-in users), append-only `app_setting_versions` (release log), `app_setting_drafts`; admin-only `app_settings_draft_merge/save`, `app_settings_publish`, `app_settings_rollback`. **Fixes:** Control Center config lived in each browser's localStorage and was read back from admin-only `audit_logs` (other roles got defaults, so disabled modules stayed open to them) | 043 |
+| 045_exam_core.sql | **SECURITY: legacy permissive policies let students/parents read UNPUBLISHED marks and let any teacher edit any result — dropped**; teachers enter marks only for their classes while unpublished; one result per exam+student+subject; `exam_save_marks` (all-or-nothing, server grading), `exam_publish_results` (publish / withdraw with reason), `exam_analytics`; students see an exam once its timetable/hall tickets/results are published | 044 |
 | 036_reconcile_legacy_columns.sql | `timetables.session_type`, `exam_schedules.day_of_week`, `student_attendance.*`, reception columns | 029 |
 
 **Behaviour changes to expect after 032:** buckets `documents`, `attachments`, `student_documents`, `staff_documents`
@@ -45,7 +46,7 @@ Not carried over on purpose: multi-college tables (`colleges`, `college_*`, `pla
 ```bash
 psql "$STAGING_DB_URL" -v ON_ERROR_STOP=1 -f supabase/tests/smoke_028_037.sql   # synthetic data, rolls back
 ```
-All lines must read PASS (136 checks). Edge-function checks: `scripts/test-edge-gate.sh` (type-check + authorization/validation cases; needs no database). Then in the SQL editor: `select count(*) from public.profiles where role is null;` (must be 0).
+All lines must read PASS (162 checks). Edge-function checks: `scripts/test-edge-gate.sh` (type-check + authorization/validation cases; needs no database). Then in the SQL editor: `select count(*) from public.profiles where role is null;` (must be 0).
 
 ### Rollback
 Each file is one transaction, so a failure leaves nothing half-applied. To undo a *successful* run use the backup/PITR from
