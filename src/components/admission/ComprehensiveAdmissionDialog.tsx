@@ -46,7 +46,7 @@ import { useToast } from '@/hooks/use-toast';
 import { db } from '@/services/supabase/database';
 import { supabase } from '@/lib/supabase';
 import { storageService } from '@/services/supabase/storage';
-import { DynamicFormFields } from '@/components/customizer/DynamicFormFields';
+import { ConfiguredFields, type FormFieldDef } from '@/components/admission/ConfiguredFields';
 import { EditableText } from '@/components/customizer/EditableText';
 
 interface ComprehensiveAdmissionDialogProps {
@@ -109,6 +109,12 @@ export function ComprehensiveAdmissionDialog({
 
   // Dynamic Custom Form Fields
   const [customFields, setCustomFields] = useState<Record<string, any>>({});
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  // configuration from Admission setup (shared by all staff, validated by the server)
+  const [cfgFields, setCfgFields] = useState<FormFieldDef[]>([]);
+  const [cfgRoutes, setCfgRoutes] = useState<{ code: string; name: string }[]>([]);
+  const [cfgQuotas, setCfgQuotas] = useState<{ code: string; name: string }[]>([]);
+  const [cfgDocs, setCfgDocs] = useState<{ doc_type: string; course_name: string | null; required: boolean }[]>([]);
 
   // Student ID Uniqueness Validation State
   const [studentIdCheck, setStudentIdCheck] = useState<{
@@ -137,6 +143,8 @@ export function ComprehensiveAdmissionDialog({
     qualifyingScore: '',
     scienceScore: '',
     meritCategory: 'General Merit',
+    admissionType: '',
+    quota: '',
     eligibilityVerified: true,
   });
 
@@ -150,6 +158,13 @@ export function ComprehensiveAdmissionDialog({
   });
 
   // 5. Individual Document Uploads State
+  const courseNameNow = academicData.courseName;
+  const fieldsFor = (section: FormFieldDef['section']) =>
+    cfgFields.filter((f) => f.section === section && (!f.course_name || f.course_name === courseNameNow));
+  const setCustom = (key: string, value: string) => {
+    setCustomFields((prev) => ({ ...prev, [key]: value }));
+    setFieldErrors((prev) => { if (!prev[key]) return prev; const n = { ...prev }; delete n[key]; return n; });
+  };
   const [documents, setDocuments] = useState<UploadedDocument[]>([
     { id: 'photo', type: 'Student Passport Photo', required: true, file_name: '', file_url: '', status: 'Pending' },
     { id: 'marksheet_10th', type: '10th Standard Marksheet / Age Proof', required: true, file_name: '', file_url: '', status: 'Pending' },
@@ -161,6 +176,31 @@ export function ComprehensiveAdmissionDialog({
   ]);
 
   // Pre-fill from initialData (e.g. Receptionist enquiry conversion)
+  useEffect(() => {
+    const relevant = cfgDocs.filter((d) => !d.course_name || d.course_name === academicData.courseName);
+    if (relevant.length === 0) return;               // nothing configured: keep the standard checklist
+    setDocuments((prev) => relevant.map((d, i) => prev.find((x) => x.type.toLowerCase() === d.doc_type.toLowerCase())
+      ?? { id: `cfg_${i}`, type: d.doc_type, required: d.required, file_name: '', file_url: '', status: 'Pending' }));
+  }, [cfgDocs, academicData.courseName]);
+
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    (async () => {
+      const q = (t: string, extra?: (b: any) => any) => { const b: any = supabase.from(t as any).select('*'); return (extra ? extra(b) : b).order('sort_order'); };
+      const [f, r, qu, d] = await Promise.all([
+        q('admission_form_fields', (b) => b.eq('active', true)), q('admission_routes', (b) => b.eq('active', true)),
+        q('admission_quotas', (b) => b.eq('active', true)), q('admission_required_documents', (b) => b.eq('active', true)),
+      ]);
+      if (cancelled) return;
+      setCfgFields(((f as any).data || []) as FormFieldDef[]);
+      setCfgRoutes(((r as any).data || []) as any[]);
+      setCfgQuotas(((qu as any).data || []) as any[]);
+      setCfgDocs(((d as any).data || []) as any[]);
+    })();
+    return () => { cancelled = true; };
+  }, [open]);
+
   useEffect(() => {
     if (open && initialData) {
       if (initialData.studentName || initialData.studentEmail || initialData.studentPhone) {
@@ -359,6 +399,26 @@ export function ComprehensiveAdmissionDialog({
       return;
     }
 
+    // route / quota are required once they are configured; configured required fields must be answered
+    if ((cfgRoutes.length > 0 && !academicData.admissionType) || (cfgQuotas.length > 0 && !academicData.quota)) {
+      toast({ title: 'Choose the admission route and quota', description: 'Both are required. They decide how this candidate is processed.', variant: 'destructive' });
+      setActiveTab('academic');
+      return;
+    }
+    const missing: Record<string, string> = {};
+    let firstSection: FormFieldDef['section'] | null = null;
+    for (const f of cfgFields.filter((x) => !x.course_name || x.course_name === academicData.courseName)) {
+      const v = customFields[f.field_key];
+      const empty = v === undefined || v === null || String(v).trim() === '' || (f.field_type === 'checkbox' && String(v) !== 'true');
+      if (f.required && empty) { missing[f.field_key] = `${f.label} is required.`; firstSection = firstSection ?? f.section; }
+    }
+    if (firstSection) {
+      setFieldErrors(missing);
+      toast({ title: 'Complete the required questions', description: Object.values(missing)[0], variant: 'destructive' });
+      setActiveTab(firstSection === 'parent' ? 'parent' : firstSection === 'academic' ? 'academic' : 'student');
+      return;
+    }
+
     const depositCheck = Number(feeData.depositAmount) || 0;
     if (depositCheck < 0 || (feeData.depositAmount.trim() !== '' && !Number.isFinite(Number(feeData.depositAmount)))) {
       toast({ title: 'Check the deposit', description: 'Enter a valid deposit amount or leave it blank.', variant: 'destructive' });
@@ -412,6 +472,8 @@ export function ComprehensiveAdmissionDialog({
         qualifying_marks: academicData.qualifyingScore.trim() === '' ? undefined : Number(academicData.qualifyingScore),
         science_score: academicData.scienceScore.trim() === '' ? undefined : Number(academicData.scienceScore),
         merit_category: academicData.meritCategory,
+        admission_type: academicData.admissionType || undefined,
+        quota: academicData.quota || undefined,
         eligibility_verified: academicData.eligibilityVerified,
 
         // Uploaded Documents
@@ -476,6 +538,11 @@ export function ComprehensiveAdmissionDialog({
       onOpenChange(false);
       if (onSuccess) onSuccess();
     } catch (err: any) {
+      if (Array.isArray(err?.fields) && err.fields.length > 0) {
+        const map: Record<string, string> = {};
+        err.fields.forEach((e: any) => { map[e.field] = e.message; });
+        setFieldErrors(map);
+      }
       console.error('Admission submission error:', err);
       toast({
         title: "Submission Error",
@@ -674,13 +741,9 @@ export function ComprehensiveAdmissionDialog({
                   </div>
                 </div>
 
-                {/* Dynamic Form Customizer Fields for Student Registration */}
+                {/* Fields configured in Admission setup (shared by all staff, validated by the server) */}
                 <div className="pt-2 border-t border-slate-100 dark:border-slate-800">
-                  <DynamicFormFields
-                    formId="student_registration"
-                    values={customFields}
-                    onChange={(key, val) => setCustomFields(prev => ({ ...prev, [key]: val }))}
-                  />
+                  <ConfiguredFields fields={[...fieldsFor('student'), ...fieldsFor('other')]} values={customFields} errors={fieldErrors} onChange={setCustom} />
                 </div>
 
                 <div className="flex justify-end pt-2">
@@ -764,6 +827,8 @@ export function ComprehensiveAdmissionDialog({
                   </div>
                 </div>
 
+                <ConfiguredFields fields={fieldsFor('parent')} values={customFields} errors={fieldErrors} onChange={setCustom} />
+
                 <div className="flex justify-between pt-2">
                   <Button type="button" variant="outline" onClick={() => setActiveTab('student')} className="text-xs">
                     ← Back to Student
@@ -823,7 +888,7 @@ export function ComprehensiveAdmissionDialog({
                   </div>
 
                   <div className="space-y-1.5">
-                    <Label className="text-xs font-semibold">Quota / Category</Label>
+                    <Label className="text-xs font-semibold">Merit category</Label>
                     <Select
                       value={academicData.meritCategory}
                       onValueChange={(val) => setAcademicData({ ...academicData, meritCategory: val })}
@@ -840,6 +905,31 @@ export function ComprehensiveAdmissionDialog({
                     </Select>
                   </div>
                 </div>
+
+                {(cfgRoutes.length > 0 || cfgQuotas.length > 0) && (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    {cfgRoutes.length > 0 && (
+                      <div className="space-y-1.5">
+                        <Label className="text-xs font-semibold">Admission route *</Label>
+                        <Select value={academicData.admissionType || undefined} onValueChange={(val) => setAcademicData({ ...academicData, admissionType: val })}>
+                          <SelectTrigger className="text-xs"><SelectValue placeholder="How is this candidate admitted?" /></SelectTrigger>
+                          <SelectContent>{cfgRoutes.map((r) => <SelectItem key={r.code} value={r.code}>{r.name}</SelectItem>)}</SelectContent>
+                        </Select>
+                      </div>
+                    )}
+                    {cfgQuotas.length > 0 && (
+                      <div className="space-y-1.5">
+                        <Label className="text-xs font-semibold">Seat quota *</Label>
+                        <Select value={academicData.quota || undefined} onValueChange={(val) => setAcademicData({ ...academicData, quota: val })}>
+                          <SelectTrigger className="text-xs"><SelectValue placeholder="Which quota?" /></SelectTrigger>
+                          <SelectContent>{cfgQuotas.map((q) => <SelectItem key={q.code} value={q.code}>{q.name}</SelectItem>)}</SelectContent>
+                        </Select>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                <ConfiguredFields fields={fieldsFor('academic')} values={customFields} errors={fieldErrors} onChange={setCustom} />
 
                 <div className="border-t pt-3 space-y-3">
                   <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">

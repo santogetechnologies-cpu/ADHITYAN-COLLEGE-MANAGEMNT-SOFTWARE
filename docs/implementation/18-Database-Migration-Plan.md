@@ -29,6 +29,7 @@ back-fills of NULLs and a de-duplication of `super_admin_releases` rows with the
 | 039_admission_tests_and_merit.sql | entrance tests per applicant (`admission_schedule_tests`, `admission_record_test_result`), server-side merit ranking (`admission_publish_merit`: qualifying × w% + entrance × (100−w)%, seats, tie-break by submission date then id) and `admission_apply_merit` (Approved/Waitlisted through `admission_set_status`) | 038 |
 | 040_fee_engine.sql | configurable fee engine: `fee_heads`, `fee_plans` + frozen-when-published `fee_plan_items` (one_time / per_semester / per_year), `fee_runs`, `fee_adjustments`; `fee_generate` (preview/execute, idempotent per student+item+term), `fee_adjust`, `fee_cancel_run`, `fee_plan_clone`; fees attach to the student record (login optional); quota/admission type on applications+students; `record_fee_payment` reworked for it | 039 |
 | 041_student_fee_code.sql | `student_fees.student_code` filled by trigger (the finance table showed a fake `AIP-VERIFIED` id) | 040 |
+| 042_admission_configuration.sql | configurable admissions: routes (entrance / merit / direct / lateral…), quotas, seat matrix, form fields, required documents; `admission_validate_fields`; `admission_set_status` enforces route + required documents; merit ranking and apply take a quota and default seats from the matrix | 041 |
 | 036_reconcile_legacy_columns.sql | `timetables.session_type`, `exam_schedules.day_of_week`, `student_attendance.*`, reception columns | 029 |
 
 **Behaviour changes to expect after 032:** buckets `documents`, `attachments`, `student_documents`, `staff_documents`
@@ -42,7 +43,7 @@ Not carried over on purpose: multi-college tables (`colleges`, `college_*`, `pla
 ```bash
 psql "$STAGING_DB_URL" -v ON_ERROR_STOP=1 -f supabase/tests/smoke_028_037.sql   # synthetic data, rolls back
 ```
-All lines must read PASS (93 checks). Edge-function checks: `scripts/test-edge-gate.sh` (type-check + authorization/validation cases; needs no database). Then in the SQL editor: `select count(*) from public.profiles where role is null;` (must be 0).
+All lines must read PASS (112 checks). Edge-function checks: `scripts/test-edge-gate.sh` (type-check + authorization/validation cases; needs no database). Then in the SQL editor: `select count(*) from public.profiles where role is null;` (must be 0).
 
 ### Rollback
 Each file is one transaction, so a failure leaves nothing half-applied. To undo a *successful* run use the backup/PITR from

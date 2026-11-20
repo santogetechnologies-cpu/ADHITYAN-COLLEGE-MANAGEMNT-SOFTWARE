@@ -399,6 +399,23 @@ export async function handleAdminUserOperation(caller: Caller, body: any, userTo
         if (!course) return { status: 400, body: { error: 'The course applied for is required.', code: 'VALIDATION_ERROR' } };
         const docs = (Array.isArray(a.documents) ? a.documents : []).filter((d: any) => d && (d.file_url || d.file_name));
 
+        // route / quota must be configured and active; custom fields are validated against the configured form
+        const routeCode = txt(a.admission_type, 30);
+        const quotaCode = txt(a.quota, 30);
+        if (routeCode) {
+          const { data: r } = await supabaseAdmin.from('admission_routes').select('code').eq('code', routeCode).eq('active', true).maybeSingle();
+          if (!r) return { status: 400, body: { error: 'The admission route is not configured or is inactive.', code: 'VALIDATION_ERROR' } };
+        }
+        if (quotaCode) {
+          const { data: q } = await supabaseAdmin.from('admission_quotas').select('code').eq('code', quotaCode).eq('active', true).maybeSingle();
+          if (!q) return { status: 400, body: { error: 'The admission quota is not configured or is inactive.', code: 'VALIDATION_ERROR' } };
+        }
+        const { data: fieldCheck, error: fieldErr } = await supabaseAdmin.rpc('admission_validate_fields', { p_course: course, p_values: a.custom_fields ?? {} });
+        if (fieldErr) return { status: 500, body: { error: 'The form could not be validated.', code: 'VALIDATION_FAILED' } };
+        if (!fieldCheck?.valid) {
+          return { status: 400, body: { error: fieldCheck.errors.map((e: any) => e.message).join(' '), code: 'FIELD_VALIDATION', fields: fieldCheck.errors } };
+        }
+
         const { data: created, error: insErr } = await supabaseAdmin.from('admission_applications').insert({
           application_number: studentId, applicant_name: name, email, phone: String(a.phone || '').trim(),
           class_name: course, parent_name: txt(a.parent_name || a.guardian_name, 200) || 'Guardian',
@@ -412,7 +429,8 @@ export async function handleAdminUserOperation(caller: Caller, body: any, userTo
           qualifying_board: txt(a.qualifying_board, 100), passing_year: txt(a.passing_year, 10),
           qualifying_marks: num(a.qualifying_marks), science_score: num(a.science_score),
           merit_category: txt(a.merit_category, 100), eligibility_verified: !!a.eligibility_verified,
-          documents: docs, extra: { custom_fields: a.custom_fields ?? null, fee_payment: a.fee_payment ?? null },
+          admission_type: routeCode, quota: quotaCode,
+          documents: docs, extra: { custom_fields: fieldCheck.cleaned ?? {}, fee_payment: a.fee_payment ?? null },
         }).select().single();
         if (insErr || !created) {
           return { status: insErr?.code === '23505' ? 409 : 400, body: { error: insErr?.code === '23505' ? 'This student ID is already used by another application.' : 'The application could not be saved.', code: insErr?.code === '23505' ? 'DUPLICATE_STUDENT_ID' : 'APPLICATION_FAILED' } };
@@ -480,13 +498,15 @@ export async function handleAdminUserOperation(caller: Caller, body: any, userTo
       }
 
       case 'publish_merit_list': {
-        const { course, academic_year, seats, weight_qualifying } = body;
-        if (!course || !Number.isInteger(Number(seats)) || !Number.isInteger(Number(weight_qualifying))) {
-          return { status: 400, body: { error: 'course, seats and weight_qualifying (whole numbers) are required.', code: 'VALIDATION_ERROR' } };
+        const { course, academic_year, seats, weight_qualifying, quota } = body;
+        const seatsGiven = seats !== undefined && seats !== null && seats !== '';
+        if (!course || (seatsGiven && !Number.isInteger(Number(seats))) || !Number.isInteger(Number(weight_qualifying))) {
+          return { status: 400, body: { error: 'course and weight_qualifying (whole numbers) are required; seats must be a whole number when given.', code: 'VALIDATION_ERROR' } };
         }
         const { data, error } = await supabaseAdmin.rpc('admission_publish_merit', {
           p_course: String(course), p_academic_year: academic_year ? String(academic_year) : null,
-          p_seats: Number(seats), p_weight_qualifying: Number(weight_qualifying), p_actor: callerUser.id,
+          p_seats: seatsGiven ? Number(seats) : null, p_weight_qualifying: Number(weight_qualifying),
+          p_quota: quota ? String(quota) : null, p_actor: callerUser.id,
         });
         if (error) return { status: 500, body: { error: 'The merit list could not be generated.', code: 'MERIT_FAILED' } };
         if (!data?.success) return { status: 400, body: { error: data?.error ?? 'Merit list rejected.', code: data?.code } };
@@ -494,10 +514,11 @@ export async function handleAdminUserOperation(caller: Caller, body: any, userTo
       }
 
       case 'apply_merit_decisions': {
-        const { course, academic_year } = body;
+        const { course, academic_year, quota } = body;
         if (!course) return { status: 400, body: { error: 'course is required.', code: 'VALIDATION_ERROR' } };
         const { data, error } = await supabaseAdmin.rpc('admission_apply_merit', {
-          p_course: String(course), p_academic_year: academic_year ? String(academic_year) : null, p_actor: callerUser.id,
+          p_course: String(course), p_academic_year: academic_year ? String(academic_year) : null,
+          p_quota: quota ? String(quota) : null, p_actor: callerUser.id,
         });
         if (error) return { status: 500, body: { error: 'The decisions could not be applied.', code: 'APPLY_FAILED' } };
         return { status: 200, body: data };

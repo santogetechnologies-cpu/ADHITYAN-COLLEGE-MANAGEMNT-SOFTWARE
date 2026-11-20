@@ -64,7 +64,7 @@ async function callAdminApi(action: string, payload: Record<string, unknown> = {
   }
   const json = await response.json().catch(() => ({} as any));
   if (!response.ok || json.success === false) {
-    throw Object.assign(new Error(json.error || `Request failed (${response.status}).`), { code: json.code, allowed: json.allowed });
+    throw Object.assign(new Error(json.error || `Request failed (${response.status}).`), { code: json.code, allowed: json.allowed, fields: json.fields });
   }
   return json;
 }
@@ -6188,14 +6188,15 @@ export const db = {
     return data || [];
   },
 
-  async publishMeritList(params: { course: string; academicYear?: string; seats: number; weightQualifying: number }): Promise<any> {
+  async publishMeritList(params: { course: string; academicYear?: string; seats?: number; weightQualifying: number; quota?: string }): Promise<any> {
     return await callAdminApi('publish_merit_list', {
-      course: params.course, academic_year: params.academicYear || null, seats: params.seats, weight_qualifying: params.weightQualifying,
+      course: params.course, academic_year: params.academicYear || null, seats: params.seats ?? null,
+      weight_qualifying: params.weightQualifying, quota: params.quota || null,
     });
   },
 
-  async applyMeritDecisions(params: { course: string; academicYear?: string }): Promise<{ updated: number; skipped: any[] }> {
-    return await callAdminApi('apply_merit_decisions', { course: params.course, academic_year: params.academicYear || null });
+  async applyMeritDecisions(params: { course: string; academicYear?: string; quota?: string }): Promise<{ updated: number; skipped: any[] }> {
+    return await callAdminApi('apply_merit_decisions', { course: params.course, academic_year: params.academicYear || null, quota: params.quota || null });
   },
 
   // ===========================================================================

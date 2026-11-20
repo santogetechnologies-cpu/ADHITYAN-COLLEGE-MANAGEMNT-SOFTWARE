@@ -110,3 +110,15 @@ Legend: ✅ done & verified as stated · 🟡 written, not runnable here · ⬜ 
 | Finance table: fake id `AIP-VERIFIED` removed; shows fee type + term; waived/cancelled statuses | 🟡 | migration 041 |
 | Late-fee rules, installment schedules, scholarship auto-application, refunds | ⬜ | |
 | Old `fee_structures` table and `FeeStructureManager` still exist (fixed columns); to be migrated into plans and retired | ⬜ | |
+
+## Module 2b — configurable admissions (migration 042)
+| Item | Status | Evidence |
+|------|--------|----------|
+| Admission routes: merit+entrance, marks-only, direct, lateral (+ your own); route decides entrance/merit requirement | ✅ SQL | smoke: direct approved without test; entrance route blocked until a completed test; merit route approved only via merit list |
+| Quotas + seat matrix; merit ranked per quota, seats default from the matrix | ✅ SQL | smoke |
+| Required documents per course (must be Verified before approval, names listed in the error) | ✅ SQL | smoke |
+| Form fields defined in the database (shared by all staff), typed validation on the server (required, select options, number/date, unknown keys dropped); replaces the per-browser `localStorage` customizer on the admission form | ✅ SQL, 🟡 UI | smoke (4 checks) |
+| Admission Setup screen (routes, quotas, seats, form fields, required documents) — admin/principal | 🟡 | build + type-check |
+| Admission form: route + quota selectors, configured fields per section, configured document checklist, server field errors shown on the field | 🟡 | |
+| Merit tab: quota selector, seats from matrix | 🟡 | |
+| Not yet: per-course custom document upload labels in verification tab, reservation roster rules (e.g. % reservation), seat-overflow guard when approving by hand | ⬜ | |

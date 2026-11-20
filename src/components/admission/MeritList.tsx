@@ -10,6 +10,9 @@ import { AlertTriangle, Loader2, Trophy } from 'lucide-react';
 import { db } from '@/services/supabase/database';
 import { useToast } from '@/hooks/use-toast';
 import { STATUS_STYLE, type AdmissionStatus } from '@/lib/admissionWorkflow';
+import { supabase } from '@/lib/supabase';
+
+const ANY_QUOTA = '__all__';
 
 /** Applications that take part in ranking (mirrors admission_publish_merit in migration 039). */
 const RANKABLE = ['Under Review', 'Approved', 'Waitlisted', 'Offered'];
@@ -23,7 +26,9 @@ export const MeritList = () => {
 
   const [course, setCourse] = useState('');
   const [year, setYear] = useState('all');
-  const [seats, setSeats] = useState('30');
+  const [seats, setSeats] = useState('');
+  const [quota, setQuota] = useState(ANY_QUOTA);
+  const [quotas, setQuotas] = useState<{ code: string; name: string }[]>([]);
   const [weightQ, setWeightQ] = useState('50');
   const [generating, setGenerating] = useState(false);
   const [applying, setApplying] = useState(false);
@@ -32,9 +37,13 @@ export const MeritList = () => {
 
   const load = useCallback(async () => {
     try {
-      const [apps, rows] = await Promise.all([db.getAdmissionApplications(), db.getAdmissionMeritLists()]);
+      const [apps, rows, q] = await Promise.all([
+        db.getAdmissionApplications(), db.getAdmissionMeritLists(),
+        supabase.from('admission_quotas' as any).select('code, name').eq('active', true).order('sort_order'),
+      ]);
       setApplications(apps as any[]);
       setMerit(rows);
+      setQuotas(((q as any).data || []) as any[]);
       setLoadError(null);
     } catch (err: any) {
       setLoadError(err?.message || 'Could not load the merit list.');
@@ -58,28 +67,31 @@ export const MeritList = () => {
     [applications, course]
   );
   const appById = useMemo(() => new Map(applications.map((a) => [a.id, a])), [applications]);
-  const candidates = applications.filter((a) => a.class_name === course && RANKABLE.includes(a.status) && (year === 'all' || a.academic_year === year));
-  const rows = merit.filter((m) => m.course_name === course && (year === 'all' || m.academic_year === year));
+  const candidates = applications.filter((a) => a.class_name === course && RANKABLE.includes(a.status) && (year === 'all' || a.academic_year === year) && (quota === ANY_QUOTA || a.quota === quota));
+  const rows = merit.filter((m) => m.course_name === course && (year === 'all' || m.academic_year === year) && (quota === ANY_QUOTA || m.quota === quota));
   const selected = rows.filter((r) => r.status === 'Selected').length;
 
+  const seatsBlank = seats.trim() === '';
   const seatsNum = Number(seats);
   const wq = Number(weightQ);
-  const inputsOk = Number.isInteger(seatsNum) && seatsNum >= 1 && Number.isInteger(wq) && wq >= 0 && wq <= 100;
+  // blank seats = take them from the seat matrix (needs a quota and an academic year)
+  const seatsOk = seatsBlank ? (quota !== ANY_QUOTA && year !== 'all') : Number.isInteger(seatsNum) && seatsNum >= 1;
+  const inputsOk = seatsOk && Number.isInteger(wq) && wq >= 0 && wq <= 100;
 
   const generate = async () => {
     if (!inputsOk) {
-      toast({ title: 'Check the inputs', description: 'Seats must be a whole number of at least 1 and the weight a whole number from 0 to 100.', variant: 'destructive' });
+      toast({ title: 'Check the inputs', description: seatsBlank ? 'Leave seats blank only when a quota and an academic year are chosen (seats then come from the seat matrix). Otherwise enter the number of seats.' : 'Seats must be a whole number of at least 1 and the weight a whole number from 0 to 100.', variant: 'destructive' });
       return;
     }
     if (rows.length > 0 && !window.confirm(`This replaces the current merit list for ${course}. Continue?`)) return;
     setGenerating(true);
     try {
-      const r = await db.publishMeritList({ course, academicYear: year === 'all' ? undefined : year, seats: seatsNum, weightQualifying: wq });
+      const r = await db.publishMeritList({ course, academicYear: year === 'all' ? undefined : year, seats: seatsBlank ? undefined : seatsNum, weightQualifying: wq, quota: quota === ANY_QUOTA ? undefined : quota });
       setExcluded(r.excluded ?? []);
       setSkipped([]);
       toast({
         title: 'Merit list generated',
-        description: `${r.ranked} ranked: ${r.selected} selected, ${r.waitlisted} waitlisted${r.excluded?.length ? `, ${r.excluded.length} could not be ranked` : ''}.`,
+        description: `${r.seats} seat${r.seats === 1 ? '' : 's'}; ${r.ranked} ranked: ${r.selected} selected, ${r.waitlisted} waitlisted${r.excluded?.length ? `, ${r.excluded.length} could not be ranked` : ''}.`,
       });
       await load();
     } catch (err: any) {
@@ -93,7 +105,7 @@ export const MeritList = () => {
     if (!window.confirm('Selected applicants will be marked Approved and the rest Waitlisted. Continue?')) return;
     setApplying(true);
     try {
-      const r = await db.applyMeritDecisions({ course, academicYear: year === 'all' ? undefined : year });
+      const r = await db.applyMeritDecisions({ course, academicYear: year === 'all' ? undefined : year, quota: quota === ANY_QUOTA ? undefined : quota });
       setSkipped(r.skipped ?? []);
       toast({
         title: 'Decisions applied',
@@ -136,7 +148,7 @@ export const MeritList = () => {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-5 gap-3 items-end">
+              <div className="grid grid-cols-1 md:grid-cols-6 gap-3 items-end">
                 <div className="space-y-1.5 md:col-span-2">
                   <Label className="text-xs font-semibold">Course</Label>
                   <Select value={course} onValueChange={(v) => { setCourse(v); setYear('all'); setExcluded([]); setSkipped([]); }}>
@@ -155,8 +167,18 @@ export const MeritList = () => {
                   </Select>
                 </div>
                 <div className="space-y-1.5">
+                  <Label className="text-xs font-semibold">Quota</Label>
+                  <Select value={quota} onValueChange={(v) => { setQuota(v); setExcluded([]); setSkipped([]); }}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={ANY_QUOTA}>All quotas</SelectItem>
+                      {quotas.map((q) => <SelectItem key={q.code} value={q.code}>{q.name}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
                   <Label className="text-xs font-semibold">Seats</Label>
-                  <Input type="number" min="1" step="1" value={seats} onChange={(e) => setSeats(e.target.value)} className="font-mono" />
+                  <Input type="number" min="1" step="1" value={seats} onChange={(e) => setSeats(e.target.value)} className="font-mono" placeholder="from seat matrix" />
                 </div>
                 <div className="space-y-1.5">
                   <Label className="text-xs font-semibold">Qualifying weight %</Label>

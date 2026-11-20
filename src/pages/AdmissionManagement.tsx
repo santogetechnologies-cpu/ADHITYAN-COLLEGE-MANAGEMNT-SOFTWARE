@@ -7,9 +7,13 @@ import { DocumentVerification } from '@/components/admission/DocumentVerificatio
 import { EntranceTest } from '@/components/admission/EntranceTest';
 import { MeritList } from '@/components/admission/MeritList';
 import { AdmissionFees } from '@/components/admission/AdmissionFees';
-import { FileText, CheckCircle, PenTool, Trophy, CreditCard } from 'lucide-react';
+import { AdmissionSetup } from '@/components/admission/AdmissionSetup';
+import { useAuth } from '@/context/AuthContext';
+import { FileText, CheckCircle, PenTool, Trophy, CreditCard, Settings2 } from 'lucide-react';
 
 const AdmissionManagement = () => {
+  const { user } = useAuth();
+  const canConfigure = user?.role === 'admin' || user?.role === 'principal';
   return (
     <div className="min-h-screen bg-background">
       <Navigation showBackButton={true} backUrl="/dashboard" backLabel="Back to Dashboard" />
@@ -20,7 +24,7 @@ const AdmissionManagement = () => {
         </div>
 
         <Tabs defaultValue="applications" className="w-full">
-          <TabsList className="grid w-full grid-cols-5">
+          <TabsList className={`grid w-full ${canConfigure ? 'grid-cols-6' : 'grid-cols-5'}`}>
             <TabsTrigger value="applications" className="flex items-center gap-2">
               <FileText className="h-4 w-4" />
               <span className="hidden sm:inline">Applications</span>
@@ -41,6 +45,12 @@ const AdmissionManagement = () => {
               <CreditCard className="h-4 w-4" />
               <span className="hidden sm:inline">Fees</span>
             </TabsTrigger>
+            {canConfigure && (
+              <TabsTrigger value="setup" className="flex items-center gap-2">
+                <Settings2 className="h-4 w-4" />
+                <span className="hidden sm:inline">Setup</span>
+              </TabsTrigger>
+            )}
           </TabsList>
 
           <TabsContent value="applications" className="mt-6">
@@ -62,6 +72,12 @@ const AdmissionManagement = () => {
           <TabsContent value="fees" className="mt-6">
             <AdmissionFees />
           </TabsContent>
+
+          {canConfigure && (
+            <TabsContent value="setup" className="mt-6">
+              <AdmissionSetup />
+            </TabsContent>
+          )}
         </Tabs>
       </main>
     </div>

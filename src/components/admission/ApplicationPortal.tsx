@@ -63,6 +63,8 @@ export const ApplicationPortal = () => {
         documents: d.documents,
         studentId: d.status === 'Enrolled' ? d.student_id : undefined,
         plannedStudentId: d.student_id,
+        route: d.admission_type,
+        quota: d.quota,
       })));
       setLoadError(null);
     } catch (err: any) {
@@ -350,7 +352,15 @@ export const ApplicationPortal = () => {
                         {app.phone && <p className="text-[10px] text-muted-foreground">{app.phone}</p>}
                       </div>
                     </TableCell>
-                    <TableCell className="text-xs font-medium">{app.class}</TableCell>
+                    <TableCell className="text-xs font-medium">
+                      {app.class}
+                      {(app.route || app.quota) && (
+                        <div className="flex flex-wrap gap-1 mt-1">
+                          {app.route && <Badge variant="outline" className="text-[9px] px-1.5 py-0">{app.route}</Badge>}
+                          {app.quota && <Badge variant="outline" className="text-[9px] px-1.5 py-0">{app.quota}</Badge>}
+                        </div>
+                      )}
+                    </TableCell>
                     <TableCell>
                       <div className="text-xs">
                         <p className="font-medium">{app.parentName || '—'}</p>

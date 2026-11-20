@@ -55,5 +55,6 @@ async function expect(name, caller, body, status, code) {
   await expect('principal cannot cancel a fee run', c('principal'), { action: 'fee_cancel_run', run_id: 'x', reason: 'r' }, 403);
   await expect('fee_generate needs a plan or a head', c('finance_manager'), { action: 'fee_generate', generate: { scope_type: 'all' } }, 400, 'VALIDATION_ERROR');
   await expect('fee_generate rejects a malformed plan id', c('finance_manager'), { action: 'fee_generate', generate: { plan_id: 'nope', scope_type: 'all' } }, 400, 'VALIDATION_ERROR');
+  await expect('merit: seats optional but must be a whole number when given', c('receptionist'), { action: 'publish_merit_list', course: 'X', seats: 2.5, weight_qualifying: 50 }, 400, 'VALIDATION_ERROR');
   console.log(fail ? `\n${fail} FAILED` : '\nALL GATE TESTS PASSED'); process.exit(fail ? 1 : 0);
 })();

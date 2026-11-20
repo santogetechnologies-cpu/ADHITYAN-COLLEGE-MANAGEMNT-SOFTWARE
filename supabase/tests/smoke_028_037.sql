@@ -1,4 +1,4 @@
--- Smoke test for migrations 028-040. Synthetic data only; everything is rolled back.
+-- Smoke test for migrations 028-042. Synthetic data only; everything is rolled back.
 -- Run against a SCRATCH/STAGING database that has 001-015 + 028-037 applied (never production):
 --   psql "$STAGING_DB_URL" -v ON_ERROR_STOP=1 -f supabase/tests/smoke_028_037.sql
 -- Any failed assertion raises an exception and the script exits non-zero.
@@ -115,16 +115,16 @@ SELECT pg_temp.chk('merit: ranks A,B,D with 2 seats; C,E excluded', (SELECT
     AND r->'rows'->0->>'name' = 'Cand A' AND (r->'rows'->0->>'score')::numeric = 85
     AND r->'rows'->1->>'name' = 'Cand B' AND (r->'rows'->1->>'score')::numeric = 82.5
     AND r->'rows'->2->>'name' = 'Cand D' AND r->'rows'->2->>'status' = 'Waitlist'
-  FROM (SELECT public.admission_publish_merit('Merit Course','2026-27',2,50,'c0000000-0000-0000-0000-000000000005') r) x));
-SELECT pg_temp.chk('republishing replaces, does not duplicate', (public.admission_publish_merit('Merit Course','2026-27',2,50,'c0000000-0000-0000-0000-000000000005')->>'ranked')='3'
+  FROM (SELECT public.admission_publish_merit('Merit Course','2026-27',2,50,NULL,'c0000000-0000-0000-0000-000000000005') r) x));
+SELECT pg_temp.chk('republishing replaces, does not duplicate', (public.admission_publish_merit('Merit Course','2026-27',2,50,NULL,'c0000000-0000-0000-0000-000000000005')->>'ranked')='3'
    AND (SELECT count(*) FROM public.admission_merit_lists WHERE course_name='Merit Course')=3);
-SELECT pg_temp.chk('weights outside 0-100 refused', (public.admission_publish_merit('Merit Course','2026-27',2,150,'c0000000-0000-0000-0000-000000000005')->>'code')='VALIDATION_ERROR');
-SELECT pg_temp.chk('100% qualifying weight ignores entrance (C now ranks first)', (public.admission_publish_merit('Merit Course','2026-27',2,100,'c0000000-0000-0000-0000-000000000005')->'rows'->0->>'name')='Cand C');
-SELECT pg_temp.chk('back to 50/50', (public.admission_publish_merit('Merit Course','2026-27',2,50,'c0000000-0000-0000-0000-000000000005')->>'selected')='2');
-SELECT pg_temp.chk('apply merit: A,B approved, D waitlisted', (SELECT (r->>'updated')::int = 3 FROM (SELECT public.admission_apply_merit('Merit Course','2026-27','c0000000-0000-0000-0000-000000000005') r) x));
+SELECT pg_temp.chk('weights outside 0-100 refused', (public.admission_publish_merit('Merit Course','2026-27',2,150,NULL,'c0000000-0000-0000-0000-000000000005')->>'code')='VALIDATION_ERROR');
+SELECT pg_temp.chk('100% qualifying weight ignores entrance (C now ranks first)', (public.admission_publish_merit('Merit Course','2026-27',2,100,NULL,'c0000000-0000-0000-0000-000000000005')->'rows'->0->>'name')='Cand C');
+SELECT pg_temp.chk('back to 50/50', (public.admission_publish_merit('Merit Course','2026-27',2,50,NULL,'c0000000-0000-0000-0000-000000000005')->>'selected')='2');
+SELECT pg_temp.chk('apply merit: A,B approved, D waitlisted', (SELECT (r->>'updated')::int = 3 FROM (SELECT public.admission_apply_merit('Merit Course','2026-27',NULL,'c0000000-0000-0000-0000-000000000005') r) x));
 SELECT pg_temp.chk('statuses after apply', (SELECT string_agg(application_number||':'||status, ',' ORDER BY application_number) FROM public.admission_applications WHERE class_name='Merit Course' AND application_number IN ('MRT-A','MRT-B','MRT-D'))='MRT-A:Approved,MRT-B:Approved,MRT-D:Waitlisted');
-SELECT pg_temp.chk('apply merit again changes nothing', (public.admission_apply_merit('Merit Course','2026-27','c0000000-0000-0000-0000-000000000005')->>'updated')='0');
-SELECT pg_temp.chk('merit/test functions not callable by authenticated', has_function_privilege('authenticated','public.admission_publish_merit(text,text,integer,integer,uuid)','EXECUTE')=false
+SELECT pg_temp.chk('apply merit again changes nothing', (public.admission_apply_merit('Merit Course','2026-27',NULL,'c0000000-0000-0000-0000-000000000005')->>'updated')='0');
+SELECT pg_temp.chk('merit/test functions not callable by authenticated', has_function_privilege('authenticated','public.admission_publish_merit(text,text,integer,integer,text,uuid)','EXECUTE')=false
    AND has_function_privilege('authenticated','public.admission_schedule_tests(uuid[],date,uuid)','EXECUTE')=false);
 
 -- ===================== 040 fee engine =====================
@@ -195,6 +195,53 @@ SELECT pg_temp.chk('student with login sees own fees only', (SELECT count(*)>0 F
 SELECT pg_temp.chk('student cannot read fee plans', (SELECT count(*)=0 FROM public.fee_plans));
 SELECT pg_temp.chk('fee functions not callable by authenticated', has_function_privilege('authenticated','public.fee_generate(boolean,uuid,uuid,numeric,text,text,text,text,integer,text,date,boolean,boolean,uuid)','EXECUTE')=false
    AND has_function_privilege('authenticated','public.fee_adjust(uuid,text,numeric,text,uuid)','EXECUTE')=false);
+RESET ROLE;
+
+-- ===================== 042 admission routes, quotas, form fields, required documents =====================
+INSERT INTO public.admission_applications(id,application_number,applicant_name,email,phone,class_name,parent_name,parent_phone,status,academic_year,qualifying_marks,admission_type,quota) VALUES
+ ('c6000000-0000-0000-0000-000000000001','RTE-ENT','Route Entrance','e@x.t','1','Route Course','P','1','Under Review','2026-27',80,'MERIT_ENTRANCE','GENERAL'),
+ ('c6000000-0000-0000-0000-000000000002','RTE-MRK','Route Marks','m@x.t','1','Route Course','P','1','Under Review','2026-27',70,'MERIT_MARKS','GENERAL'),
+ ('c6000000-0000-0000-0000-000000000003','RTE-DIR','Route Direct','d@x.t','1','Route Course','P','1','Under Review','2026-27',NULL,'DIRECT','MANAGEMENT'),
+ ('c6000000-0000-0000-0000-000000000004','RTE-NON','No Route','n@x.t','1','Route Course','P','1','Under Review','2026-27',NULL,NULL,NULL);
+SELECT pg_temp.chk('direct route: approved without test or merit', (public.admission_set_status('c6000000-0000-0000-0000-000000000003','Approved',NULL,'c0000000-0000-0000-0000-000000000005')->>'success')='true');
+SELECT pg_temp.chk('no route set: old behaviour (approve works)', (public.admission_set_status('c6000000-0000-0000-0000-000000000004','Approved',NULL,'c0000000-0000-0000-0000-000000000005')->>'success')='true');
+SELECT pg_temp.chk('entrance route cannot be approved without a completed test', (public.admission_set_status('c6000000-0000-0000-0000-000000000001','Approved',NULL,'c0000000-0000-0000-0000-000000000005')->>'code')='ENTRANCE_REQUIRED');
+SELECT pg_temp.chk('merit route cannot be approved by hand', (public.admission_set_status('c6000000-0000-0000-0000-000000000002','Approved',NULL,'c0000000-0000-0000-0000-000000000005')->>'code')='MERIT_REQUIRED');
+-- marks-only merit (weight 100): no entrance needed; DIRECT and no-route applications are not ranked into merit routes
+SELECT pg_temp.chk('marks-only weight ranks GENERAL-quota applicants on marks alone; DIRECT and other quotas are not ranked', (SELECT (r->>'ranked')::int=2 AND r->'rows'->0->>'name'='Route Entrance' AND r->'rows'->1->>'name'='Route Marks' FROM (SELECT public.admission_publish_merit('Route Course','2026-27',5,100,'GENERAL','c0000000-0000-0000-0000-000000000005') r) x));
+SELECT pg_temp.chk('all quotas: same two ranked; applicant with no marks is excluded', (SELECT (r->>'ranked')::int=2 AND jsonb_array_length(r->'excluded')=1 FROM (SELECT public.admission_publish_merit('Route Course','2026-27',5,100,NULL,'c0000000-0000-0000-0000-000000000005') r) x));
+SELECT pg_temp.chk('apply merit: marks route approved, entrance route still blocked for lack of a test', (SELECT (r->>'updated')::int=1 AND r->'skipped'->0->>'reason' LIKE '%entrance test%' FROM (SELECT public.admission_apply_merit('Route Course','2026-27',NULL,'c0000000-0000-0000-0000-000000000005') r) x));
+SELECT pg_temp.chk('merit-route applicant is now Approved', (SELECT status='Approved' FROM public.admission_applications WHERE id='c6000000-0000-0000-0000-000000000002'));
+SELECT pg_temp.chk('merit flag does not leak to later approvals', COALESCE(current_setting('app.merit_apply', true),'') <> 'on');
+-- quota seats from the matrix
+INSERT INTO public.admission_seats(course_name,academic_year,quota_code,seats) VALUES ('Route Course','2026-27','GENERAL',1);
+SELECT pg_temp.chk('seats default from the seat matrix for a quota', (SELECT (r->>'seats')::int=1 FROM (SELECT public.admission_publish_merit('Route Course','2026-27',NULL,100,'GENERAL','c0000000-0000-0000-0000-000000000005') r) x));
+SELECT pg_temp.chk('no seats and no matrix row is refused', (public.admission_publish_merit('Route Course','2026-27',NULL,100,'NRI','c0000000-0000-0000-0000-000000000005')->>'code')='SEATS_REQUIRED');
+-- required documents
+INSERT INTO public.admission_required_documents(course_name,doc_type) VALUES ('Doc Course','12th Marksheet'),(NULL,'Photo ID');
+INSERT INTO public.admission_applications(id,application_number,applicant_name,email,phone,class_name,parent_name,parent_phone,status) VALUES
+ ('c7000000-0000-0000-0000-000000000001','DOC-001','Doc Applicant','dc@x.t','1','Doc Course','P','1','Under Review');
+SELECT pg_temp.chk('missing required documents block approval and are named', (SELECT r->>'code'='DOCUMENTS_INCOMPLETE' AND r->>'error' LIKE '%12th Marksheet%' AND r->>'error' LIKE '%Photo ID%'
+   FROM (SELECT public.admission_set_status('c7000000-0000-0000-0000-000000000001','Approved',NULL,'c0000000-0000-0000-0000-000000000005') r) x));
+INSERT INTO public.admission_document_verifications(application_id,student_name,document_type,status) VALUES
+ ('c7000000-0000-0000-0000-000000000001','Doc Applicant','12th Marksheet','Verified'),('c7000000-0000-0000-0000-000000000001','Doc Applicant','photo id','Verified');
+SELECT pg_temp.chk('verified documents (case-insensitive) allow approval', (public.admission_set_status('c7000000-0000-0000-0000-000000000001','Approved',NULL,'c0000000-0000-0000-0000-000000000005')->>'success')='true');
+-- custom form fields
+INSERT INTO public.admission_form_fields(field_key,label,field_type,required,options,course_name) VALUES
+ ('blood_donor','Blood donor','checkbox',false,NULL,NULL),
+ ('hostel_pref','Hostel preference','select',true,ARRAY['Yes','No'],'Doc Course'),
+ ('sports_level','Highest sports level','number',false,NULL,'Doc Course'),
+ ('hidden_field','Hidden','text',true,NULL,'Other Course');
+SELECT pg_temp.chk('required select missing is reported', (SELECT NOT (r->>'valid')::boolean AND r->'errors'->0->>'field'='hostel_pref' FROM (SELECT public.admission_validate_fields('Doc Course','{}'::jsonb) r) x));
+SELECT pg_temp.chk('field of another course is not required', (SELECT (r->>'valid')::boolean FROM (SELECT public.admission_validate_fields('Doc Course','{"hostel_pref":"Yes"}'::jsonb) r) x));
+SELECT pg_temp.chk('invalid option and non-number rejected', (SELECT jsonb_array_length(r->'errors')=2 FROM (SELECT public.admission_validate_fields('Doc Course','{"hostel_pref":"Maybe","sports_level":"abc"}'::jsonb) r) x));
+SELECT pg_temp.chk('values are cleaned: typed, unknown keys dropped', (SELECT r->'cleaned'='{"hostel_pref":"Yes","sports_level":4,"blood_donor":true}'::jsonb
+   FROM (SELECT public.admission_validate_fields('Doc Course','{"hostel_pref":"Yes","sports_level":"4","blood_donor":"true","evil":"x"}'::jsonb) r) x));
+SELECT pg_temp.chk('admission config functions not callable by authenticated', has_function_privilege('authenticated','public.admission_validate_fields(text,jsonb)','EXECUTE')=false
+   AND has_function_privilege('authenticated','public.admission_apply_merit(text,text,text,uuid)','EXECUTE')=false);
+SET LOCAL ROLE authenticated;
+SELECT set_config('request.jwt.claim.sub','c0000000-0000-0000-0000-000000000001',true);
+SELECT pg_temp.chk('student cannot read admission configuration', (SELECT count(*)=0 FROM public.admission_routes) AND (SELECT count(*)=0 FROM public.admission_form_fields));
 RESET ROLE;
 
 SET LOCAL ROLE anon;
