@@ -1713,15 +1713,7 @@ export const db = {
 
       const { data: admins } = await client.from('profiles').select('id').in('role', ['admin', 'principal', 'transport_driver', 'driver']);
       if (admins && admins.length > 0) {
-        const notifications = admins.map(a => ({
-          user_id: a.id,
-          title: `TRANSPORT EMERGENCY: Bus ${params.vehicleNumber}`,
-          message: `Bus ${params.vehicleNumber} on Route ${params.routeName} reported an emergency: ${params.message}`,
-          type: 'error' as const,
-          priority: 'high' as const,
-          is_read: false
-        }));
-        await client.from('notifications').insert(notifications);
+        await db.notifyMany(admins.map((a: any) => a.id), `TRANSPORT EMERGENCY: Bus ${params.vehicleNumber}`, `Bus ${params.vehicleNumber} on Route ${params.routeName} reported an emergency: ${params.message}`, 'error', 'high');
       }
       return true;
     } catch (err) {
@@ -1789,29 +1781,11 @@ export const db = {
   },
 
   async updateStoreOrderStatus(orderId: string, status: 'Pending' | 'Processing' | 'Delivered' | 'Cancelled' | string): Promise<boolean> {
-    try {
-      const admin = await getAdminClient();
-      const client = admin || supabase;
-      const { error } = await client.from('store_orders').update({ status }).eq('id', orderId);
-      if (error) throw error;
-      return true;
-    } catch (err) {
-      console.error('updateStoreOrderStatus error:', err);
-      return false;
-    }
-  },
-
-  async createStoreOrder(order: Omit<T.StoreOrder, 'id' | 'created_at'>): Promise<T.StoreOrder | null> {
-    try {
-      const admin = await getAdminClient();
-      const client = admin || supabase;
-      const { data, error } = await client.from('store_orders').insert(order).select().single();
-      if (error) throw error;
-      return data;
-    } catch (err) {
-      console.error('createStoreOrder error:', err);
-      return null;
-    }
+    const sb: any = supabase;
+    const { data, error } = await sb.rpc('store_order_set_status', { p_order: orderId, p_status: status });
+    if (error) throw new Error(error.message);
+    if (!data?.success) throw new Error(data?.error || 'The order could not be updated.');
+    return true;
   },
 
   async getInventoryItems(): Promise<T.InventoryItem[]> {
@@ -2732,26 +2706,47 @@ export const db = {
     return this.getNotifications(userId);
   },
 
+  /** Send one notification to many users (chunks of 500) through the server. Returns how many were delivered. */
+  async notifyMany(userIds: string[], title: string, message: string, type: 'info' | 'warning' | 'error' | 'success' = 'info', priority: 'low' | 'medium' | 'high' = 'medium'): Promise<number> {
+    const sb: any = supabase;
+    let sent = 0;
+    const ids = Array.from(new Set(userIds.filter(Boolean)));
+    for (let i = 0; i < ids.length; i += 500) {
+      const { data, error } = await sb.rpc('notify_users', { p_user_ids: ids.slice(i, i + 500), p_title: title, p_message: message, p_type: type, p_priority: priority });
+      if (error || !data?.success) { console.warn('notifyMany warning:', error?.message || data?.error); continue; }
+      sent += data.sent ?? 0;
+    }
+    return sent;
+  },
+
+  /**
+   * Notifications for yourself are written directly; notifications for other people go through the server
+   * (`notify_users` / `notify_roles`), because RLS only lets you write your own rows.
+   * `user_id` may be a UUID or a role name such as 'admin'. Returns null (and logs) if nothing was delivered.
+   */
   async createNotification(notification: Omit<T.NotificationItem, 'id' | 'created_at'>): Promise<T.NotificationItem | null> {
+    const sb: any = supabase;
+    const target = String(notification.user_id ?? '');
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(target);
+    const pr = ['low', 'medium', 'high'].includes(notification.priority as string) ? notification.priority : 'medium';
+    const ty = ['info', 'warning', 'error', 'success'].includes(notification.type as string) ? notification.type : 'info';
     try {
-      let { data, error } = await supabase.from('notifications').insert(notification).select().single();
-      if (error) {
-        const admin = await getAdminClient();
-        if (admin) {
-          const res = await admin.from('notifications').insert(notification).select().single();
-          if (!res.error && res.data) {
-            data = res.data;
-            error = null;
-          }
-        }
+      const { data: { session } } = await supabase.auth.getSession();
+      if (isUuid && session?.user?.id === target) {
+        const { data, error } = await sb.from('notifications').insert({ ...notification, priority: pr, type: ty }).select().single();
+        if (error) throw error;
+        return data;
       }
-      if (error) {
-        if ((error as any).code !== 'PGRST205') console.warn('createNotification warning:', error);
-        return null;
-      }
-      return data;
-    } catch (err) {
-      console.warn('createNotification error:', err);
+      const res = isUuid
+        ? await sb.rpc('notify_users', { p_user_ids: [target], p_title: notification.title, p_message: notification.message, p_type: ty, p_priority: pr })
+        : target === 'all'
+          ? { data: { success: false, error: 'Broadcasting to everyone is not supported; address a role or a user.' }, error: null }
+          : await sb.rpc('notify_roles', { p_roles: [target], p_title: notification.title, p_message: notification.message, p_type: ty, p_priority: pr });
+      if (res.error) throw res.error;
+      if (!res.data?.success) throw new Error(res.data?.error || 'Notification not sent');
+      return { ...(notification as any), id: '', created_at: new Date().toISOString() } as T.NotificationItem;
+    } catch (err: any) {
+      console.warn('createNotification warning:', err?.message || err);
       return null;
     }
   },
@@ -3869,83 +3864,25 @@ export const db = {
   // ---------------------------------------------------------------------------
   // ATOMIC STORE ORDER
   // ---------------------------------------------------------------------------
+  /** Orders are priced and stocked by the server (`checkout_store_order`); the browser's total is only a cross-check. */
   async placeStoreOrderAtomic(params: {
     userId: string;
     userName: string;
     items: Array<{ id: string | number; name: string; price: number; quantity: number }>;
     totalAmount: number;
   }): Promise<{ success: boolean; order?: any; error?: string }> {
-    try {
-      // 1. Try PostgreSQL RPC
-      const { data, error } = await supabase.rpc('place_store_order', {
-        p_user_id: params.userId,
-        p_user_name: params.userName,
-        p_items: params.items,
-        p_total_amount: params.totalAmount,
-      });
-
-      if (!error && data) {
-        return { success: true, order: data };
-      }
-
-      const admin = await getAdminClient();
-      const client = admin || supabase;
-
-      // 2. Fallback if RPC function not found in schema cache: Client-side transactional stock validation
-      for (const item of params.items) {
-        const { data: prod, error: pErr } = await client
-          .from('store_products')
-          .select('stock, name')
-          .eq('id', item.id)
-          .single();
-
-        if (pErr || !prod) {
-          return { success: false, error: `Product "${item.name}" not found in catalog.` };
-        }
-        if (prod.stock < item.quantity) {
-          return {
-            success: false,
-            error: `Insufficient stock for "${prod.name}": ${item.quantity} requested, but only ${prod.stock} available.`,
-          };
-        }
-      }
-
-      // Deduct stock for each item
-      for (const item of params.items) {
-        const { data: prod } = await client.from('store_products').select('stock').eq('id', item.id).single();
-        if (prod) {
-          await client
-            .from('store_products')
-            .update({ stock: Math.max(0, prod.stock - item.quantity) })
-            .eq('id', item.id);
-        }
-      }
-
-      // Create order
-      const { data: newOrder, error: oErr } = await client
-        .from('store_orders')
-        .insert({
-          user_id: params.userId,
-          user_name: params.userName,
-          items: params.items,
-          total_amount: params.totalAmount,
-          status: 'Pending',
-        })
-        .select()
-        .single();
-
-      if (oErr) {
-        // Fallback via backend action
-        const res = await callAdminBackendAction('place_store_order', { order: params });
-        if (res?.order) return { success: true, order: res.order };
-
-        return { success: false, error: oErr.message };
-      }
-
-      return { success: true, order: newOrder };
-    } catch (err: any) {
-      return { success: false, error: err.message || 'Failed to place store order.' };
+    const sb: any = supabase;
+    const { data, error } = await sb.rpc('checkout_store_order', {
+      p_student_id: params.userId,
+      p_items: params.items.map(i => ({ product_id: i.id, quantity: i.quantity })),
+      p_total_amount: params.totalAmount,
+    });
+    if (error) {
+      const m = String(error.message || '');
+      return { success: false, error: m.includes('PRICE_MISMATCH') ? 'Prices changed while you were shopping. Please review your cart and try again.' : m };
     }
+    if (!data?.success) return { success: false, error: data?.error || 'Order was not placed.' };
+    return { success: true, order: data };
   },
 
   // ---------------------------------------------------------------------------

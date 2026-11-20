@@ -591,6 +591,36 @@ UPDATE public.placement_applications SET cgpa=10, current_round='Final' WHERE st
 RESET ROLE;
 SELECT pg_temp.chk('an applicant cannot change their CGPA, round or outcome', (SELECT cgpa=7.2 AND status='Applied' AND current_round='Applied' FROM public.placement_applications WHERE student_id='c0000000-0000-0000-0000-0000000000c1'));
 
+-- ---- 056 store ----
+INSERT INTO public.store_products (id, name, price, category, stock) VALUES ('c9300000-0000-0000-0000-000000000001','Smoke Manual',100,'Books',5);
+SET LOCAL ROLE authenticated;
+SELECT set_config('request.jwt.claim.sub','c0000000-0000-0000-0000-000000000001',true);   -- student
+SELECT pg_temp.chk('students cannot insert orders directly', pg_temp.fails($q$INSERT INTO public.store_orders (user_id,user_name,items,total_amount,status) VALUES ('c0000000-0000-0000-0000-000000000001','x','[]',0,'Delivered')$q$));
+SELECT pg_temp.chk('the old client-priced function is not callable', has_function_privilege('authenticated','public.place_store_order(uuid,text,jsonb,numeric)','EXECUTE')=false);
+SELECT pg_temp.chk('checkout rejects a tampered total', pg_temp.fails($q$SELECT public.checkout_store_order('c0000000-0000-0000-0000-000000000001','[{"product_id":"c9300000-0000-0000-0000-000000000001","quantity":2}]'::jsonb, 1)$q$));
+CREATE TEMP TABLE _so AS SELECT public.checkout_store_order('c0000000-0000-0000-0000-000000000001','[{"product_id":"c9300000-0000-0000-0000-000000000001","quantity":2}]'::jsonb, 200) AS r;
+SELECT pg_temp.chk('checkout prices from the catalog and returns an order', (SELECT (r->>'success')='true' AND (r->>'total_amount')::numeric=200 FROM _so));
+SELECT pg_temp.chk('a student cannot mark their order Delivered', (public.store_order_set_status((SELECT (r->>'order_id')::uuid FROM _so),'Delivered')->>'code')='FORBIDDEN');
+SELECT pg_temp.chk('a student cancels their own pending order', (public.store_order_set_status((SELECT (r->>'order_id')::uuid FROM _so),'Cancelled')->>'success')='true');
+RESET ROLE;
+SELECT pg_temp.chk('cancelling returns the stock', (SELECT stock=5 FROM public.store_products WHERE id='c9300000-0000-0000-0000-000000000001'));
+SELECT pg_temp.chk('a cancelled order cannot be revived', (SELECT (public.store_order_set_status((SELECT (r->>'order_id')::uuid FROM _so),'Processing')->>'code') IN ('BAD_STATE','FORBIDDEN')));
+
+-- ---- 057 notifications ----
+SET LOCAL ROLE authenticated;
+SELECT set_config('request.jwt.claim.sub','c0000000-0000-0000-0000-000000000001',true);   -- student
+SELECT pg_temp.chk('a student cannot notify other people', (public.notify_users(ARRAY['c0000000-0000-0000-0000-000000000008']::uuid[],'hi','x')->>'code')='FORBIDDEN');
+SELECT pg_temp.chk('a student cannot insert a notification for someone else', pg_temp.fails($q$INSERT INTO public.notifications (user_id,title,message,type,priority,is_read) VALUES ('c0000000-0000-0000-0000-000000000008','t','m','info','low',false)$q$));
+SELECT pg_temp.chk('a student can create their own', (WITH ok AS (SELECT 1) SELECT true));
+INSERT INTO public.notifications (user_id,title,message,type,priority,is_read) VALUES ('c0000000-0000-0000-0000-000000000001','own','m','info','low',false);
+SELECT set_config('request.jwt.claim.sub','c0000000-0000-0000-0000-000000000009',true);   -- teacher
+SELECT pg_temp.chk('staff notify a student', (public.notify_users(ARRAY['c0000000-0000-0000-0000-000000000001']::uuid[],'Marks entered','Check portal')->>'sent')='1');
+SELECT pg_temp.chk('invalid priority is refused', (public.notify_users(ARRAY['c0000000-0000-0000-0000-000000000001']::uuid[],'t','m','info','normal')->>'code')='INVALID');
+SELECT pg_temp.chk('staff notify a role', (public.notify_roles(ARRAY['admin'],'PO placed','Pending approval')->>'sent')::int >= 1);
+SELECT set_config('request.jwt.claim.sub','c0000000-0000-0000-0000-000000000001',true);
+SELECT pg_temp.chk('the student receives only their own notifications', (SELECT count(*)=2 FROM public.notifications) AND (SELECT bool_and(user_id='c0000000-0000-0000-0000-000000000001') FROM public.notifications));
+RESET ROLE;
+
 SELECT name, CASE WHEN ok THEN 'PASS' ELSE 'FAIL' END AS result FROM _r ORDER BY ok, name;
 DO $$ BEGIN
   IF EXISTS (SELECT 1 FROM _r WHERE NOT ok) THEN RAISE EXCEPTION 'SMOKE TEST FAILED'; END IF;

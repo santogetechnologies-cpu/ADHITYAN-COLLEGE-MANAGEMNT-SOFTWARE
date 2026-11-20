@@ -219,3 +219,11 @@ Legend: ✅ done & verified as stated · 🟡 written, not runnable here · ⬜ 
 | Officer dashboard: real KPIs (highest/average package from selected students, applications, recruiters; invented ₹7.8/4.8 LPA, 185, 94%, 84 removed), drive creation validates and no longer invents package/CGPA/venue/rounds or closes on failure, application deadline field, applicants list with status updates, close/reopen | 🟡 UI | build |
 | New student "Placements" view (apply with eligibility checks, withdraw) — there was no student side at all | 🟡 UI | build, nav check |
 | CGPA from computed grade points; backlog count; offer-letter upload | ⬜ | needs GPA engine |
+
+## Store (056) and Notifications (057)
+| Item | Status | Evidence |
+|------|--------|----------|
+| Server-priced orders, state machine with restock, no direct order writes | ✅ SQL | 8 smoke checks |
+| Cross-role notifications delivered through `notify_users/notify_roles`; `db.createNotification` routes by recipient; `db.notifyMany` for bulk; receptionist and transport-emergency bulk inserts moved to it; invalid priority 'normal' and user ids 'admin'/'all' handled | ✅ SQL (7 checks, 258 total), 🟡 app | build |
+| Browser-side fallback that decremented stock and wrote orders directly removed; manager order updates now persist | 🟡 UI | build |
+| Inventory issue/return/purchase orders are still multi-step browser writes (storekeeper-only) — move to atomic functions; online payment for store orders | ⬜ | |

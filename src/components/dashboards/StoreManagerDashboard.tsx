@@ -235,7 +235,7 @@ export default function StoreManagerDashboard() {
           title: 'Store Purchase Order Placed',
           message: `PO logged for ${newPO.quantity}x ${newPO.item_name} from ${newPO.supplier} (${newPO.category} dept). Pending finance verification.`,
           type: 'info',
-          priority: 'normal',
+          priority: 'medium',
           is_read: false
         }).catch(console.warn);
         setPurchaseOrderDialogOpen(false);

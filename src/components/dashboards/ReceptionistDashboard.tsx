@@ -280,14 +280,7 @@ export default function ReceptionistDashboard() {
       if (created) {
         // Send notification to the host user if host user ID is bound
         if (newAppointment.with_user_id) {
-          await supabase.from('notifications').insert({
-            user_id: newAppointment.with_user_id,
-            title: 'New Appointment Scheduled',
-            message: `Official appointment scheduled with ${newAppointment.person} at ${newAppointment.time} (${newAppointment.type}).`,
-            type: 'info',
-            priority: 'medium',
-            is_read: false
-          });
+          await db.notifyMany([newAppointment.with_user_id], 'New Appointment Scheduled', `Official appointment scheduled with ${newAppointment.person} at ${newAppointment.time} (${newAppointment.type}).`, 'info', 'medium');
         }
 
         toast({ 
@@ -321,14 +314,7 @@ export default function ReceptionistDashboard() {
       const ok = await db.updateReceptionAppointmentStatus(appointment.id, nextStatus);
       if (ok) {
         if (appointment.with_user_id) {
-          await supabase.from('notifications').insert({
-            user_id: appointment.with_user_id,
-            title: `Appointment Update: ${nextStatus.replace('_', ' ').toUpperCase()}`,
-            message: `Visitor ${appointment.person} status updated to ${nextStatus.replace('_', ' ')}.`,
-            type: 'info',
-            priority: 'high',
-            is_read: false
-          });
+          await db.notifyMany([appointment.with_user_id], `Appointment Update: ${nextStatus.replace('_', ' ').toUpperCase()}`, `Visitor ${appointment.person} status updated to ${nextStatus.replace('_', ' ')}.`, 'info', 'high');
         }
 
         toast({ 
@@ -372,16 +358,8 @@ export default function ReceptionistDashboard() {
           .in('role', ['admin', 'principal']);
 
         if (adminPrincipalUsers && adminPrincipalUsers.length > 0) {
-          const notificationsToInsert = adminPrincipalUsers.map(u => ({
-            user_id: u.id,
-            title: `New Front-Desk Enquiry: ${code}`,
-            message: `${newEnquiry.type} enquiry logged from ${newEnquiry.parent_name} (📞 ${newEnquiry.contact}) for ${newEnquiry.grade}. Priority: ${newEnquiry.priority.toUpperCase()}.`,
-            type: 'info' as const,
-            priority: newEnquiry.priority as any,
-            is_read: false
-          }));
-
-          await supabase.from('notifications').insert(notificationsToInsert);
+          const pr = (['low', 'medium', 'high'].includes(newEnquiry.priority) ? newEnquiry.priority : 'medium') as 'low' | 'medium' | 'high';
+          await db.notifyMany(adminPrincipalUsers.map(u => u.id), `New Front-Desk Enquiry: ${code}`, `${newEnquiry.type} enquiry logged from ${newEnquiry.parent_name} (📞 ${newEnquiry.contact}) for ${newEnquiry.grade}. Priority: ${newEnquiry.priority.toUpperCase()}.`, 'info', pr);
         }
 
         toast({ 
@@ -482,15 +460,8 @@ export default function ReceptionistDashboard() {
         const chunkSize = 100;
         for (let i = 0; i < recipientList.length; i += chunkSize) {
           const chunk = recipientList.slice(i, i + chunkSize);
-          const notifs = chunk.map(uid => ({
-            user_id: uid,
-            title: newNotice.title,
-            message: newNotice.description || `Notice posted on front office board (${newNotice.category}).`,
-            type: 'info' as const,
-            priority: newNotice.priority as any,
-            is_read: false
-          }));
-          await supabase.from('notifications').insert(notifs);
+          const npr = (['low', 'medium', 'high'].includes(newNotice.priority) ? newNotice.priority : 'medium') as 'low' | 'medium' | 'high';
+          await db.notifyMany(chunk, newNotice.title, newNotice.description || `Notice posted on front office board (${newNotice.category}).`, 'info', npr);
         }
       }
 
