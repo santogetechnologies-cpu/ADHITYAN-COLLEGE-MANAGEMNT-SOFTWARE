@@ -1869,112 +1869,40 @@ export const db = {
     }
   },
 
-  async issueItemDistribution(params: {
-    itemId?: string;
-    itemName: string;
-    quantity: number;
-    studentName: string;
-    category?: string;
-    barcode?: string;
-    department?: string;
-  }): Promise<{ success: boolean; error?: string }> {
-    try {
-      const admin = await getAdminClient();
-      const client = admin || supabase;
-      let itemRecord: any = null;
-      if (params.itemId) {
-        const { data, error } = await client.from('inventory_items').select('*').eq('id', params.itemId).maybeSingle();
-        if (!error && data) itemRecord = data;
-      }
-      if (!itemRecord) {
-        const { data, error } = await client.from('inventory_items').select('*').ilike('name', `%${params.itemName}%`).limit(1).maybeSingle();
-        if (!error && data) itemRecord = data;
-      }
-
-      if (itemRecord) {
-        if (itemRecord.current_stock < params.quantity) {
-          return { success: false, error: `Insufficient stock! Only ${itemRecord.current_stock} available.` };
-        }
-        const newStock = Math.max(0, itemRecord.current_stock - params.quantity);
-        await client.from('inventory_items').update({ current_stock: newStock }).eq('id', itemRecord.id);
-      }
-
-      const { error: txErr } = await client.from('inventory_transactions').insert({
-        type: 'Issue',
-        item_name: params.itemName,
-        quantity: params.quantity,
-        department: params.studentName || params.department || 'Student Distribution',
-        status: 'completed'
-      });
-      if (txErr) throw txErr;
-
-      return { success: true };
-    } catch (err: any) {
-      return { success: false, error: err.message || 'Failed to issue item.' };
-    }
+  // Stock movements run on the server (exact item match, row locks, no negative stock, returns limited to what was issued).
+  async issueItemDistribution(params: { itemId?: string; itemName: string; quantity: number; studentName: string; category?: string; barcode?: string; department?: string }): Promise<{ success: boolean; error?: string }> {
+    const sb: any = supabase;
+    const { data, error } = await sb.rpc('inventory_issue', { p_item_name: params.itemName, p_qty: params.quantity, p_recipient: params.studentName, p_department: params.department ?? null });
+    if (error) return { success: false, error: error.message };
+    return data?.success ? { success: true } : { success: false, error: data?.error || 'Failed to issue item.' };
   },
 
-  async returnItemDistribution(params: {
-    itemId?: string;
-    itemName: string;
-    quantity: number;
-    studentName: string;
-  }): Promise<{ success: boolean; error?: string }> {
-    try {
-      const admin = await getAdminClient();
-      const client = admin || supabase;
-      let itemRecord: any = null;
-      if (params.itemId) {
-        const { data, error } = await client.from('inventory_items').select('*').eq('id', params.itemId).maybeSingle();
-        if (!error && data) itemRecord = data;
-      }
-      if (!itemRecord) {
-        const { data, error } = await client.from('inventory_items').select('*').ilike('name', `%${params.itemName}%`).limit(1).maybeSingle();
-        if (!error && data) itemRecord = data;
-      }
-
-      if (itemRecord) {
-        const newStock = itemRecord.current_stock + params.quantity;
-        await client.from('inventory_items').update({ current_stock: newStock }).eq('id', itemRecord.id);
-      }
-
-      const { error: txErr } = await client.from('inventory_transactions').insert({
-        type: 'Adjustment',
-        item_name: params.itemName,
-        quantity: params.quantity,
-        supplier: params.studentName || 'Returned by Student',
-        status: 'completed'
-      });
-      if (txErr) throw txErr;
-
-      return { success: true };
-    } catch (err: any) {
-      return { success: false, error: err.message || 'Failed to return item.' };
-    }
+  async returnItemDistribution(params: { itemId?: string; itemName: string; quantity: number; studentName: string; reason?: string }): Promise<{ success: boolean; error?: string }> {
+    const sb: any = supabase;
+    const { data, error } = await sb.rpc('inventory_return', { p_item_name: params.itemName, p_qty: params.quantity, p_recipient: params.studentName, p_reason: params.reason ?? null });
+    if (error) return { success: false, error: error.message };
+    return data?.success ? { success: true } : { success: false, error: data?.error || 'Failed to return item.' };
   },
 
-  async createPurchaseOrder(params: {
-    itemName: string;
-    quantity: number;
-    supplier: string;
-    department?: string;
-  }): Promise<{ success: boolean; error?: string }> {
-    try {
-      const admin = await getAdminClient();
-      const client = admin || supabase;
-      const { error } = await client.from('inventory_transactions').insert({
-        type: 'Order',
-        item_name: params.itemName,
-        quantity: params.quantity,
-        supplier: params.supplier,
-        department: params.department || 'Procurement',
-        status: 'pending'
-      });
-      if (error) throw error;
-      return { success: true };
-    } catch (err: any) {
-      return { success: false, error: err.message || 'Failed to create purchase order.' };
-    }
+  async createPurchaseOrder(params: { itemName: string; quantity: number; supplier: string; department?: string }): Promise<{ success: boolean; error?: string }> {
+    const sb: any = supabase;
+    const { data, error } = await sb.rpc('inventory_order', { p_item_name: params.itemName, p_qty: params.quantity, p_supplier: params.supplier, p_department: params.department ?? null });
+    if (error) return { success: false, error: error.message };
+    return data?.success ? { success: true } : { success: false, error: data?.error || 'Failed to create purchase order.' };
+  },
+
+  async receivePurchaseOrder(orderId: string, quantity: number): Promise<{ success: boolean; error?: string; complete?: boolean }> {
+    const sb: any = supabase;
+    const { data, error } = await sb.rpc('inventory_receive', { p_order: orderId, p_qty: quantity });
+    if (error) return { success: false, error: error.message };
+    return data?.success ? { success: true, complete: data.complete } : { success: false, error: data?.error || 'Could not receive the goods.' };
+  },
+
+  async cancelPurchaseOrder(orderId: string, reason: string): Promise<{ success: boolean; error?: string }> {
+    const sb: any = supabase;
+    const { data, error } = await sb.rpc('inventory_cancel_order', { p_order: orderId, p_reason: reason });
+    if (error) return { success: false, error: error.message };
+    return data?.success ? { success: true } : { success: false, error: data?.error || 'Could not cancel the order.' };
   },
 
   // ---------------------------------------------------------------------------

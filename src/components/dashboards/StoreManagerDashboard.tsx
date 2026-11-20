@@ -296,7 +296,8 @@ export default function StoreManagerDashboard() {
       const res = await db.returnItemDistribution({
         itemName: returnForm.item_name,
         quantity: Number(returnForm.quantity),
-        studentName: returnForm.student_name
+        studentName: returnForm.student_name,
+        reason: returnForm.reason
       });
       if (res.success) {
         toast({ 
@@ -661,8 +662,24 @@ export default function StoreManagerDashboard() {
                       </div>
                       <div className="flex items-center gap-2">
                         <Badge variant={po.status === 'completed' ? 'default' : 'secondary'} className="capitalize text-xs">
-                          {po.status}
+                          {po.status}{po.status === 'processing' ? ` (${(po as any).received_qty}/${po.quantity})` : ''}
                         </Badge>
+                        {['pending', 'processing'].includes(po.status) && (<>
+                          <Button size="sm" variant="outline" onClick={async () => {
+                            const left = po.quantity - ((po as any).received_qty || 0);
+                            const v = window.prompt(`How many units arrived? (up to ${left})`, String(left));
+                            if (!v) return;
+                            const r = await db.receivePurchaseOrder(po.id, Number(v));
+                            toast(r.success ? { title: r.complete ? 'Order complete' : 'Partial delivery recorded', description: 'Stock updated.' } : { title: 'Not received', description: r.error, variant: 'destructive' });
+                            if (r.success) loadStoreData();
+                          }}>Receive</Button>
+                          <Button size="sm" variant="ghost" onClick={async () => {
+                            const why = window.prompt('Reason for cancelling this order:');
+                            if (!why) return;
+                            const r = await db.cancelPurchaseOrder(po.id, why);
+                            toast(r.success ? { title: 'Order cancelled' } : { title: 'Not cancelled', description: r.error, variant: 'destructive' });
+                            if (r.success) loadStoreData();
+                          }}>Cancel</Button></>)}
                       </div>
                     </div>
                   ))

@@ -226,7 +226,8 @@ Legend: ✅ done & verified as stated · 🟡 written, not runnable here · ⬜ 
 | Server-priced orders, state machine with restock, no direct order writes | ✅ SQL | 8 smoke checks |
 | Cross-role notifications delivered through `notify_users/notify_roles`; `db.createNotification` routes by recipient; `db.notifyMany` for bulk; receptionist and transport-emergency bulk inserts moved to it; invalid priority 'normal' and user ids 'admin'/'all' handled | ✅ SQL (7 checks, 258 total), 🟡 app | build |
 | Browser-side fallback that decremented stock and wrote orders directly removed; manager order updates now persist | 🟡 UI | build |
-| Inventory issue/return/purchase orders are still multi-step browser writes (storekeeper-only) — move to atomic functions; online payment for store orders | ⬜ | |
+| Online payment for store orders | ⬜ | |
+| Inventory issue/return/purchase orders: atomic server functions (069), receive/cancel buttons on purchase orders | ✅ SQL (14 checks, 372 total), 🟡 UI | |
 
 ## Teacher / Parent / Student dashboards, assignments (058) and sign-in flags (059)
 | Item | Status | Evidence |

@@ -880,6 +880,30 @@ SELECT set_config('request.jwt.claim.sub','c0000000-0000-0000-0000-000000000008'
 SELECT pg_temp.chk('a decided request cannot be decided again', (public.exam_revaluation_decide((SELECT id FROM public.exam_revaluation_requests LIMIT 1),'Reject',NULL,'again')->>'code')='ALREADY_DECIDED');
 RESET ROLE;
 
+-- ---- 069 inventory ----
+INSERT INTO auth.users(id,email) VALUES ('c0000000-0000-0000-0000-0000000000d1','inv.keeper@example.test');
+INSERT INTO public.profiles(id,email,name,role) VALUES ('c0000000-0000-0000-0000-0000000000d1','inv.keeper@example.test','Inv Keeper','storekeeper');
+INSERT INTO public.inventory_items (id, name, category, current_stock, minimum_stock, unit) VALUES ('c9b00000-0000-0000-0000-000000000001','Smoke Lab Coat','Uniform',10,5,'pcs');
+SET LOCAL ROLE authenticated;
+SELECT set_config('request.jwt.claim.sub','c0000000-0000-0000-0000-000000000001',true);
+SELECT pg_temp.chk('a student cannot move inventory', (public.inventory_issue('Smoke Lab Coat',1,'x y')->>'code')='FORBIDDEN');
+SELECT set_config('request.jwt.claim.sub','c0000000-0000-0000-0000-0000000000d1',true);
+SELECT pg_temp.chk('an unknown item is refused (no phantom issue)', (public.inventory_issue('Lab Co',1,'Asha Rao')->>'code')='ITEM_NOT_FOUND');
+SELECT pg_temp.chk('more than the stock is refused', (public.inventory_issue('Smoke Lab Coat',11,'Asha Rao')->>'code')='INSUFFICIENT_STOCK');
+SELECT pg_temp.chk('issue reduces stock and sets urgency', (public.inventory_issue('smoke lab coat',4,'Asha Rao','Nursing')->>'stock_left')='6');
+SELECT pg_temp.chk('someone who holds none cannot return', (public.inventory_return('Smoke Lab Coat',1,'Ravi Kumar')->>'code')='EXCEEDS_ISSUED');
+SELECT pg_temp.chk('a return cannot exceed what was issued', (public.inventory_return('Smoke Lab Coat',5,'Asha Rao')->>'code')='EXCEEDS_ISSUED');
+SELECT pg_temp.chk('a valid return restocks', (public.inventory_return('Smoke Lab Coat',3,'Asha Rao','End of term')->>'stock_now')='9');
+SELECT pg_temp.chk('only the remaining 1 can still be returned', (public.inventory_return('Smoke Lab Coat',2,'Asha Rao')->>'code')='EXCEEDS_ISSUED');
+CREATE TEMP TABLE _io AS SELECT public.inventory_order('Smoke Lab Coat',10,'Campus Supplies') AS r;
+SELECT pg_temp.chk('a purchase order is raised', (SELECT (r->>'success')='true' FROM _io));
+SELECT pg_temp.chk('a partial delivery is accepted', (public.inventory_receive((SELECT (r->>'order_id')::uuid FROM _io),4)->>'complete')='false');
+SELECT pg_temp.chk('more than still expected is refused', (public.inventory_receive((SELECT (r->>'order_id')::uuid FROM _io),7)->>'code')='EXCEEDS_ORDER');
+SELECT pg_temp.chk('the rest completes the order', (public.inventory_receive((SELECT (r->>'order_id')::uuid FROM _io),6)->>'complete')='true');
+SELECT pg_temp.chk('a completed order cannot be cancelled', (public.inventory_cancel_order((SELECT (r->>'order_id')::uuid FROM _io),'changed mind')->>'code')='BAD_STATE');
+RESET ROLE;
+SELECT pg_temp.chk('stock = 10 - 4 + 3 + 10 = 19 and urgency low', (SELECT current_stock=19 AND urgency='low' FROM public.inventory_items WHERE id='c9b00000-0000-0000-0000-000000000001'));
+
 SELECT name, CASE WHEN ok THEN 'PASS' ELSE 'FAIL' END AS result FROM _r ORDER BY ok, name;
 DO $$ BEGIN
   IF EXISTS (SELECT 1 FROM _r WHERE NOT ok) THEN RAISE EXCEPTION 'SMOKE TEST FAILED'; END IF;
