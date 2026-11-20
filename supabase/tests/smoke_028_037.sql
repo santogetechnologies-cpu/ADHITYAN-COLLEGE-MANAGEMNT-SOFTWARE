@@ -466,6 +466,18 @@ SELECT set_config('request.jwt.claim.sub','c0000000-0000-0000-0000-000000000008'
 SELECT pg_temp.chk('admin reads health records', (SELECT count(*)>=1 FROM public.health_records));
 RESET ROLE;
 
+-- ---- 050 naac ----
+SET LOCAL ROLE authenticated;
+SELECT set_config('request.jwt.claim.sub','c0000000-0000-0000-0000-000000000008',true);   -- admin
+INSERT INTO public.naac_metrics (criterion_number, metric_code, title, status) VALUES (3,'3.1.1','Smoke metric A','Completed'),(3,'3.1.2','Smoke metric B','Pending');
+SELECT pg_temp.chk('progress derived from metrics (1 of 2 = 50%)', (SELECT completion_percentage=50 AND total_metrics=2 AND completed_metrics=1 FROM public.naac_criterion_progress WHERE criterion_number=3));
+UPDATE public.naac_metrics SET status='Completed' WHERE metric_code='3.1.2';
+SELECT pg_temp.chk('progress follows status changes (100%)', (SELECT completion_percentage=100 FROM public.naac_criterion_progress WHERE criterion_number=3));
+SELECT set_config('request.jwt.claim.sub','c0000000-0000-0000-0000-000000000001',true);   -- student
+SELECT pg_temp.chk('student cannot read NAAC metrics or progress', (SELECT count(*) FROM public.naac_metrics)=0 AND (SELECT count(*) FROM public.naac_criterion_progress)=0);
+SELECT pg_temp.chk('no direct writes to progress', has_table_privilege('authenticated','public.naac_criterion_progress','UPDATE')=false);
+RESET ROLE;
+
 SELECT name, CASE WHEN ok THEN 'PASS' ELSE 'FAIL' END AS result FROM _r ORDER BY ok, name;
 DO $$ BEGIN
   IF EXISTS (SELECT 1 FROM _r WHERE NOT ok) THEN RAISE EXCEPTION 'SMOKE TEST FAILED'; END IF;

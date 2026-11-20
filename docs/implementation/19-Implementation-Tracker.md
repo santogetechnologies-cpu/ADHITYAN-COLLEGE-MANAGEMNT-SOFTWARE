@@ -163,3 +163,10 @@ Legend: ✅ done & verified as stated · 🟡 written, not runnable here · ⬜ 
 |------|--------|----------|
 | Health data private to owner/admin/principal; infirmary log staff-only; contacts and alerts stored in the database | ✅ SQL | 4 smoke checks (198 total) |
 | Medical screen rebuilt (record create/edit/export/filter, infirmary log with status/search/range, contacts, alerts); invented counts, flu outbreak and phone numbers removed; two orphan fake dialogs deleted | 🟡 UI | build; dead buttons -15 |
+
+## Module — NAAC (migration 050)
+| Item | Status | Evidence |
+|------|--------|----------|
+| Staff-only access, computed progress, private evidence bucket | ✅ SQL | 4 smoke checks (202 total) |
+| Criterion pages on real metrics (add/status/data entry/delete) and real file upload with view/download/delete; Repository uses the same; Reports generate real printable SSR/AQAR/compliance and criterion-wise CSV; fake recent-activity, invented metric list, fake "last generated", fake notification badge, toast-only Settings cards removed | 🟡 UI | build; dead buttons 41 → 25 |
+| Storage policies for the `documents` bucket (admissions/certificates) are still public-read — move admission documents to a private bucket | ⬜ | noted in audit |

@@ -4,7 +4,6 @@ import { useAuth } from '@/context/AuthContext';
 import { useNAAC } from '@/context/NAACContext';
 import { Link } from 'react-router-dom';
 import { 
-  Bell, 
   Settings, 
   User, 
   LogOut,
@@ -43,17 +42,8 @@ export function NAACHeader() {
 
         {/* Right section */}
         <div className="flex items-center space-x-3">
-          {/* Notifications */}
-          <Button variant="ghost" size="icon" className="relative">
-            <Bell className="w-5 h-5" />
-            <span className="absolute -top-1 -right-1 w-3 h-3 bg-destructive rounded-full text-xs flex items-center justify-center text-destructive-foreground">
-              2
-            </span>
-          </Button>
-
-          {/* Settings */}
-          <Button variant="ghost" size="icon">
-            <Settings className="w-5 h-5" />
+          <Button variant="ghost" size="icon" asChild title="NAAC settings">
+            <Link to="/admin/naac/settings"><Settings className="w-5 h-5" /></Link>
           </Button>
 
           {/* User Profile */}

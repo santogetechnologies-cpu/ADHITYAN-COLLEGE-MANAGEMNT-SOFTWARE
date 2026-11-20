@@ -57,3 +57,6 @@ See `01-Executive-Audit.md` for the full table with status. Quick index:
 | Certificates: browser invented the number (`CRT-2024-####`), typed the student name, auto-approved, and displayed a certificate even when the database insert failed; realtime listened to a non-existent table | Fixed (048, screen rebuilt) |
 | Teachers could read every student's allergies and medical conditions (policy allowed role `teacher`) | Fixed (049) |
 | Medical screen: invented totals (2847 records, 23 visits, 7 alerts), fake flu outbreak, fake emergency numbers, "100% updated"; infirmary table read non-existent columns (`complaint`, `doctor_name`); New Record / Log Visit only showed toasts | Fixed (rebuilt) |
+| NAAC evidence readable by students and parents; teachers could delete it; uploads saved only the file name (the file was never stored) so View/Download could not work | Fixed (050) |
+| NAAC criterion pages showed three invented metrics, invented "recent activity", hand-typed completion %; Reports "Generate" waited 3 seconds and logged to the console; Settings "Save" buttons only showed a success toast | Fixed (rebuilt) |
+| `documents` storage bucket is public-read (admission/certificate documents reachable by URL) | Open — move to a private bucket with signed links |

@@ -7,6 +7,10 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
+import { EvidenceActions } from '@/components/naac/EvidenceActions';
+import { naacService } from '@/services/naacService';
+import { useAuth } from '@/context/AuthContext';
+import { useToast } from '@/hooks/use-toast';
 import { useNAAC } from '@/context/NAACContext';
 import { 
   Upload, 
@@ -42,7 +46,9 @@ const metricCodes = [
 ];
 
 export default function Repository() {
-  const { naacData, addDocument, removeDocument } = useNAAC();
+  const { naacData, reload } = useNAAC();
+  const { user } = useAuth();
+  const { toast } = useToast();
   const [showUploadForm, setShowUploadForm] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterCriterion, setFilterCriterion] = useState('all');
@@ -57,32 +63,25 @@ export default function Repository() {
     tags: ''
   });
 
-  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
-    if (file && uploadForm.title && uploadForm.metricCode && uploadForm.evidenceType) {
-      addDocument({
-        title: uploadForm.title,
-        filename: file.name,
-        criterionNumber: uploadForm.criterionNumber,
-        metricCode: uploadForm.metricCode,
-        evidenceType: uploadForm.evidenceType,
-        fileType: file.type.includes('pdf') ? 'PDF' : 
-                  file.type.includes('image') ? 'Image' :
-                  file.type.includes('word') ? 'Word' :
-                  file.type.includes('excel') ? 'Excel' : 'Document',
-        fileSize: `${(file.size / 1024 / 1024).toFixed(1)} MB`,
-        tags: uploadForm.tags.split(',').map(tag => tag.trim()).filter(tag => tag)
+    event.target.value = '';
+    if (!file) return;
+    if (!uploadForm.title.trim() || !uploadForm.metricCode.trim() || !uploadForm.evidenceType) {
+      toast({ title: 'Fill in title, metric code and evidence type first', variant: 'destructive' });
+      return;
+    }
+    try {
+      await naacService.addEvidence(file, {
+        title: uploadForm.title.trim(), criterion: uploadForm.criterionNumber, metricCode: uploadForm.metricCode.trim(),
+        evidenceType: uploadForm.evidenceType, tags: uploadForm.tags.split(',').map(t => t.trim()).filter(Boolean), userId: user?.id
       });
-      
-      setUploadForm({
-        title: '',
-        description: '',
-        criterionNumber: 1,
-        metricCode: '',
-        evidenceType: '',
-        tags: ''
-      });
+      toast({ title: 'Document uploaded' });
+      setUploadForm({ title: '', description: '', criterionNumber: 1, metricCode: '', evidenceType: '', tags: '' });
       setShowUploadForm(false);
+      await reload();
+    } catch (e: any) {
+      toast({ title: 'Upload failed', description: e.message, variant: 'destructive' });
     }
   };
 
@@ -369,21 +368,7 @@ export default function Repository() {
                     </div>
                   </TableCell>
                   <TableCell>
-                    <div className="flex space-x-2">
-                      <Button variant="ghost" size="sm">
-                        <Eye className="w-4 h-4" />
-                      </Button>
-                      <Button variant="ghost" size="sm">
-                        <Download className="w-4 h-4" />
-                      </Button>
-                      <Button 
-                        variant="ghost" 
-                        size="sm"
-                        onClick={() => removeDocument(doc.id)}
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </Button>
-                    </div>
+                    <EvidenceActions doc={doc} />
                   </TableCell>
                 </TableRow>
               ))}
