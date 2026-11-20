@@ -29,6 +29,7 @@ import {
   ShieldCheck
 } from 'lucide-react';
 import { db } from '@/services/supabase/database';
+import { examService } from '@/services/examService';
 import { useAuth } from '@/context/AuthContext';
 import { Exam, ExamResult, Profile } from '@/types/database.types';
 import { useToast } from '@/hooks/use-toast';
@@ -112,7 +113,6 @@ export function TeacherExamsTab({ initialClassName }: TeacherExamsTabProps = {})
       setExams(allExams);
       if (allExams.length > 0 && !selectedExamId) {
         setSelectedExamId(allExams[0].id);
-        setMaxMarks(allExams[0].max_marks || 100);
       }
     } catch (err) {
       console.warn('TeacherExamsTab loadExams notice:', err);
@@ -141,9 +141,10 @@ export function TeacherExamsTab({ initialClassName }: TeacherExamsTabProps = {})
         db.getExamResults(),
       ]);
 
-      const activeExam = exams.find(e => e.id === selectedExamId);
-      const currentMax = activeExam?.max_marks || 100;
-      setMaxMarks(currentMax);
+      // Maximum marks come from the paper's schedule (exam + class + subject); the server re-checks every mark against it.
+      const papers = selectedExamId ? await db.getExamSchedules({ examId: selectedExamId, className: selectedClass }) : [];
+      const paper = papers.find(p => p.subject === selectedSubject);
+      setMaxMarks(paper?.max_marks ?? 0);
 
       const rows: StudentMarkRow[] = students.map((s, idx) => {
         const existing = allResults.find(r => 
@@ -155,7 +156,7 @@ export function TeacherExamsTab({ initialClassName }: TeacherExamsTabProps = {})
         return {
           studentId: s.id,
           studentName: s.name,
-          rollNumber: s.roll_number || s.student_id || `STU-${String(idx + 1001).padStart(4, '0')}`,
+          rollNumber: s.roll_number || s.student_id || '',
           marksObtained: existing ? existing.marks_obtained : '',
           remarks: existing?.remarks || '',
           resultId: existing?.id,
@@ -193,145 +194,36 @@ export function TeacherExamsTab({ initialClassName }: TeacherExamsTabProps = {})
     return 'F';
   };
 
-  // 4. Save & Publish Marks
+  // 4. Save marks (server validates against the paper; the Controller of Examinations publishes)
   const handleSaveMarks = async () => {
     if (!selectedExamId || !selectedSubject || !selectedClass) {
-      toast({
-        title: "Missing Details",
-        description: "Please ensure an assigned class, subject, and exam are selected.",
-        variant: "destructive",
-      });
+      toast({ title: "Missing details", description: "Select an assigned class, subject and examination.", variant: "destructive" });
       return;
     }
-
+    if (!maxMarks) {
+      toast({ title: "No paper scheduled", description: "This subject has no paper in the timetable for this class yet, so marks cannot be entered.", variant: "destructive" });
+      return;
+    }
     const filledRows = examRows.filter(r => r.marksObtained !== '');
     if (filledRows.length === 0) {
-      toast({
-        title: "No Marks Entered",
-        description: "Please enter marks for at least one student before saving.",
-        variant: "destructive",
-      });
+      toast({ title: "No marks entered", description: "Enter marks for at least one student before saving.", variant: "destructive" });
       return;
     }
 
     setSaving(true);
     try {
-      let savedCount = 0;
-      for (const row of filledRows) {
-        const marksObtained = Number(row.marksObtained);
-        const grade = calculateGrade(marksObtained, maxMarks);
-
-        await db.recordExamResult({
-          ...(row.resultId ? { id: row.resultId } : {}),
-          exam_id: selectedExamId,
-          student_id: row.studentId,
-          student_name: row.studentName,
-          subject: selectedSubject,
-          marks_obtained: marksObtained,
-          max_marks: maxMarks,
-          grade,
-          remarks: row.remarks || `${selectedSubject} - ${grade}`,
-          published: true,
-        });
-
-        // Notify student about published marks
-        db.createNotification({
-          user_id: row.studentId,
-          title: `Assessment Marks Published: ${selectedSubject}`,
-          message: `Your score for ${selectedSubject} has been published: ${marksObtained}/${maxMarks} (Grade: ${grade}). Check Performance Analytics.`,
-          type: 'info',
-          priority: 'medium',
-          is_read: false
-        }).catch(console.warn);
-
-        savedCount++;
-      }
-
-      toast({
-        title: "Marks Published Successfully",
-        description: `Recorded and published results for ${savedCount} students in ${selectedClass} (${selectedSubject}). Student, Parent, and Admin dashboards updated.`,
-      });
-
+      const { saved } = await examService.saveResults(filledRows.map(r => ({
+        exam_id: selectedExamId, student_id: r.studentId, subject: selectedSubject,
+        marks_obtained: Number(r.marksObtained), total_marks: maxMarks
+      })));
+      toast({ title: "Marks saved", description: `${saved} mark(s) saved for ${selectedClass} (${selectedSubject}). Students and parents see them after the Controller of Examinations publishes the results.` });
       await loadMarksRoster();
     } catch (err: any) {
-      toast({
-        title: "Failed to Publish Marks",
-        description: err.message || "Could not save exam results. Please check database permissions.",
-        variant: "destructive",
-      });
+      toast({ title: "Marks not saved", description: err?.message || "Nothing was saved.", variant: "destructive" });
     } finally {
       setSaving(false);
     }
   };
-
-  // 5. Create Assessment
-  const handleCreateNewExam = async () => {
-    if (!newExamName.trim()) {
-      toast({ title: "Title Required", description: "Please enter an exam title.", variant: "destructive" });
-      return;
-    }
-
-    setCreatingExam(true);
-    try {
-      const today = new Date().toISOString().split('T')[0];
-      const created = await db.createExam({
-        name: newExamName,
-        exam_type: newExamType,
-        class_name: selectedClass,
-        subject: selectedSubject,
-        start_date: today,
-        end_date: today,
-        max_marks: newExamMaxMarks,
-        passing_marks: Math.round(newExamMaxMarks * 0.5),
-        status: 'published',
-      });
-
-      if (created) {
-        toast({
-          title: "Exam Created",
-          description: `${created.name} (${selectedSubject}) created successfully for ${selectedClass}.`,
-        });
-        setNewExamOpen(false);
-        setNewExamName('');
-        await loadExams();
-        setSelectedExamId(created.id);
-      }
-    } catch (err: any) {
-      toast({
-        title: "Exam Creation Failed",
-        description: err.message || "Could not register new exam.",
-        variant: "destructive",
-      });
-    } finally {
-      setCreatingExam(false);
-    }
-  };
-
-  if (loadingAssignments) {
-    return (
-      <div className="flex items-center justify-center py-16 bg-white rounded-2xl border border-slate-200">
-        <Loader2 className="w-8 h-8 animate-spin text-[#1D61E7]" />
-        <span className="ml-3 text-sm text-slate-600 font-medium">Verifying Faculty Assigned Classes...</span>
-      </div>
-    );
-  }
-
-  if (assignedClasses.length === 0) {
-    return (
-      <Card className="shadow-sm border-amber-200 bg-amber-50/40">
-        <CardContent className="p-8 text-center space-y-3">
-          <div className="w-12 h-12 rounded-full bg-amber-100 text-amber-800 flex items-center justify-center mx-auto">
-            <AlertCircle className="w-6 h-6" />
-          </div>
-          <h3 className="text-lg font-bold text-slate-900">No Assigned Classes for Examination</h3>
-          <p className="text-sm text-slate-600 max-w-md mx-auto">
-            You do not currently have any classes assigned by the Administration.
-            Marks entry and exam evaluation are restricted to classes officially assigned to you.
-          </p>
-        </CardContent>
-      </Card>
-    );
-  }
 
   return (
     <div className="space-y-6">
@@ -349,19 +241,11 @@ export function TeacherExamsTab({ initialClassName }: TeacherExamsTabProps = {})
                   <ShieldCheck className="w-3 h-3 mr-1" /> Assigned Classes & Subjects Only
                 </Badge>
               </div>
-              <p className="text-xs text-slate-500">Record and publish verified marks. Published results reflect immediately on Student, Parent, and Admin portals.</p>
+              <p className="text-xs text-slate-500">Enter marks for your classes. The Controller of Examinations publishes results to students and parents.</p>
             </div>
           </div>
 
           <div className="flex items-center space-x-2">
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => setNewExamOpen(true)}
-              className="h-8 text-xs font-bold"
-            >
-              <Plus className="w-3.5 h-3.5 mr-1" /> Create Assessment
-            </Button>
             <Button
               size="sm"
               onClick={handleSaveMarks}
@@ -369,7 +253,7 @@ export function TeacherExamsTab({ initialClassName }: TeacherExamsTabProps = {})
               className="h-8 text-xs font-bold bg-[#1D61E7] hover:bg-blue-700 text-white rounded-xl shadow-xs"
             >
               {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin mr-1" /> : <Save className="w-3.5 h-3.5 mr-1" />}
-              Publish Marks
+              Save marks
             </Button>
           </div>
         </div>
@@ -410,8 +294,6 @@ export function TeacherExamsTab({ initialClassName }: TeacherExamsTabProps = {})
               value={selectedExamId} 
               onValueChange={(val) => {
                 setSelectedExamId(val);
-                const matched = exams.find(e => e.id === val);
-                if (matched?.max_marks) setMaxMarks(matched.max_marks);
               }}
             >
               <SelectTrigger className="h-8 text-xs mt-1">
@@ -419,7 +301,7 @@ export function TeacherExamsTab({ initialClassName }: TeacherExamsTabProps = {})
               </SelectTrigger>
               <SelectContent>
                 {exams.map(e => (
-                  <SelectItem key={e.id} value={e.id}>{e.name} (Max: {e.max_marks || 100})</SelectItem>
+                  <SelectItem key={e.id} value={e.id}>{e.name}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -537,65 +419,6 @@ export function TeacherExamsTab({ initialClassName }: TeacherExamsTabProps = {})
       )}
 
       {/* Create Assessment Dialog */}
-      <Dialog open={newExamOpen} onOpenChange={setNewExamOpen}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Create Course Assessment</DialogTitle>
-            <DialogDescription>
-              Register an assessment for <strong>{selectedSubject}</strong> ({selectedClass}).
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-4 py-2 text-xs">
-            <div className="space-y-1.5">
-              <Label className="text-xs">Assessment Name</Label>
-              <Input
-                placeholder="e.g. Unit Test 1, Mid-Term Evaluation, Clinical Case Exam"
-                value={newExamName}
-                onChange={e => setNewExamName(e.target.value)}
-                className="h-9 text-xs"
-              />
-            </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label className="text-xs">Assessment Type</Label>
-                <Select value={newExamType} onValueChange={setNewExamType}>
-                  <SelectTrigger className="h-9 text-xs"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Unit Assessment">Unit Assessment</SelectItem>
-                    <SelectItem value="Internal Evaluation">Internal Evaluation</SelectItem>
-                    <SelectItem value="Clinical Practical">Clinical Practical</SelectItem>
-                    <SelectItem value="Semester Exam">Semester Exam</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-1.5">
-                <Label className="text-xs">Maximum Marks</Label>
-                <Input
-                  type="number"
-                  min={10}
-                  max={200}
-                  value={newExamMaxMarks}
-                  onChange={e => setNewExamMaxMarks(Number(e.target.value))}
-                  className="h-9 text-xs"
-                />
-              </div>
-            </div>
-          </div>
-
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setNewExamOpen(false)} disabled={creatingExam}>
-              Cancel
-            </Button>
-            <Button onClick={handleCreateNewExam} disabled={creatingExam} className="bg-[#1D61E7] hover:bg-blue-700 text-white">
-              {creatingExam ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
-              Create Assessment
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }

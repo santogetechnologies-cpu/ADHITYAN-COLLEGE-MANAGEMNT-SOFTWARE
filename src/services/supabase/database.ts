@@ -2442,13 +2442,13 @@ export const db = {
   },
 
   async getExamResults(studentId?: string): Promise<T.ExamResult[]> {
+    // Pass/fail and grade are decided by the server when marks are saved (exam_save_marks); nothing is invented here.
     const formatResult = (r: any) => ({
       ...r,
       marks: r.marks_obtained,
-      total: r.max_marks || 100,
-      percentage: r.percentage ?? (r.max_marks ? Math.round((r.marks_obtained / r.max_marks) * 100) : r.marks_obtained),
-      status: r.status || (r.marks_obtained >= 50 ? 'pass' : 'fail'),
-      grade: r.grade || (r.marks_obtained >= 80 ? 'Distinction' : r.marks_obtained >= 60 ? 'First Class' : 'Pass')
+      total: r.max_marks,
+      percentage: r.max_marks ? Math.round((Number(r.marks_obtained) / Number(r.max_marks)) * 100) : null,
+      status: r.result_status ? String(r.result_status).toLowerCase() : null,
     });
 
     try {

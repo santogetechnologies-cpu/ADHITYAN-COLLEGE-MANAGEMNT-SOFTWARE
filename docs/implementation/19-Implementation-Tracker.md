@@ -189,3 +189,10 @@ Legend: ✅ done & verified as stated · 🟡 written, not runnable here · ⬜ 
 | Warden dashboard: loads (it called a non-existent `db.getProfiles()` so it never showed data), Approve/Reject/Exit/Arrival, honest errors, parent phone required, no invented bed counts or phone number, notifications only to the real student (was broadcast to everyone) | 🟡 UI | build |
 | Same non-existent call fixed in Librarian dashboard and HR leave manager; `db.getTeachers()` (parent contact view) and `db.createStaffServiceRecord()` (HR add staff) pointed at real methods; `profile.full_name` (column is `name`) fixed in 6 places | 🟡 | TS errors 761 → 746 |
 | Remaining dashboards: Transport, HR (payroll), Placement, Store, Receptionist, Teacher, Parent, Student | ⬜ | |
+
+## Exam consumers (teacher marks, parent results, principal exams)
+| Item | Status | Evidence |
+|------|--------|----------|
+| Teacher marks entry now uses the server-validated `exam_save_marks` (it wrote results directly, graded in the browser, force-published them and notified students, bypassing the COE) | 🟡 | build |
+| `db.getExamResults` no longer invents pass (>=50) or grade labels; parent results and principal exam module use the server's `result_status`/grade, real exam names; invented fallbacks ('Clinical Course', 'Student Candidate') removed | 🟡 | build; TS errors 746 → 684 |
+| Crash bugs found by the type-check fixed: `logout` undefined in LoginForm (role-mismatch path), `students` undefined in Admin dashboard (department chart, events), missing `Select` imports in Admissions management view, wrong service method names in user-account control (status toggle / password reset), `isUuidStr` out of scope in the dev admin backend | ✅ | tsc, build, edge gate tests |
