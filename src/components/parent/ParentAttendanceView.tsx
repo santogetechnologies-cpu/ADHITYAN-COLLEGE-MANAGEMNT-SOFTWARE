@@ -131,14 +131,14 @@ export function ParentAttendanceView({ studentId, studentName }: ParentAttendanc
                     <tr key={r.id || idx} className="hover:bg-accent/40 transition-colors">
                       <td className="py-3 px-4 font-mono font-medium">{r.date}</td>
                       <td className="py-3 px-4 font-semibold text-foreground">{r.subject || 'All Classes'}</td>
-                      <td className="py-3 px-4 capitalize">{r.session || 'Full Day'}</td>
+                      <td className="py-3 px-4 capitalize">—</td>
                       <td className="py-3 px-4">
                         <Badge 
                           variant="outline" 
                           className={
-                            r.status === 'Present'
+                            r.status === 'present'
                               ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                              : r.status === 'Late'
+                              : r.status === 'late'
                               ? 'bg-amber-50 text-amber-700 border-amber-200'
                               : 'bg-rose-50 text-rose-700 border-rose-200'
                           }

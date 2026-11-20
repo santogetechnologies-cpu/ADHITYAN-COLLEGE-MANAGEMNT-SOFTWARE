@@ -296,7 +296,7 @@ export function ParentDashboard() {
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-2xl bg-blue-50/70 border border-blue-100 dark:bg-blue-950/20 dark:border-blue-900/50">
             <div className="flex items-center gap-3">
               <img
-                src={activeChild?.avatar_url || activeChild?.avatar || "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&h=150&fit=crop&crop=face"}
+                src={activeChild?.avatar_url || "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&h=150&fit=crop&crop=face"}
                 alt={activeChild?.name}
                 className="w-12 h-12 rounded-xl object-cover border-2 border-white shadow-xs"
               />

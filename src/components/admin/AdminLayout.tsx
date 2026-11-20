@@ -5,7 +5,7 @@ import { AdminContextBreadcrumbs } from './navigation/AdminContextBreadcrumbs';
 
 export function AdminLayout() {
   return (
-    <ManagementRoute allowedRoles={['admin', 'principal', 'financier', 'accountant', 'storekeeper', 'driver', 'naac_coordinator', 'receptionist', 'store_manager', 'finance_manager', 'transport_driver']}>
+    <ManagementRoute>
       <div className="min-h-screen flex flex-col bg-slate-50/50 dark:bg-background text-foreground overflow-x-hidden w-full">
         <AdminExecutiveNavbar />
         <AdminContextBreadcrumbs />

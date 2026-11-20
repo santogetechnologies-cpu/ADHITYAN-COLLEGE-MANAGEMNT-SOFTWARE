@@ -91,7 +91,7 @@ export function StudentDashboard() {
   const studentRoll = useMemo(() => user?.roll_number || 'ID Pending', [user?.roll_number]);
   const studentDepartment = useMemo(() => user?.department || 'Paramedical Sciences', [user?.department]);
   const studentClass = useMemo(() => user?.class_name || 'Current Term', [user?.class_name]);
-  const avatarUrl = useMemo(() => user?.avatar_url || user?.avatar || '', [user?.avatar_url, user?.avatar]);
+  const avatarUrl = useMemo(() => user?.avatar || '', [user?.avatar]);
 
   // Periodic IST Time Refresh (every 60 seconds)
   useEffect(() => {
@@ -129,7 +129,7 @@ export function StudentDashboard() {
       if (results && results.length > 0) {
         const totalPct = results.reduce((acc, r) => {
           const max = Number(r.max_marks);
-          if (!max) return acc;
+          if (!max) return;
           const obtained = Number(r.marks_obtained) || 0;
           return acc + (obtained / max) * 100;
         }, 0);
@@ -139,7 +139,7 @@ export function StudentDashboard() {
         const subjectMap: Record<string, number> = {};
         results.forEach(r => {
           const max = Number(r.max_marks);
-          if (!max) return acc;
+          if (!max) return;
           const obtained = Number(r.marks_obtained) || 0;
           subjectMap[r.subject] = Math.round((obtained / max) * 100);
         });

@@ -958,265 +958,52 @@ export const db = {
   // ---------------------------------------------------------------------------
   // CONCERNS & GRIEVANCES
   // ---------------------------------------------------------------------------
+  // Concerns live in public.concerns only (the old fallback that stored them as JSON inside the admission document table is gone).
   async getConcerns(): Promise<T.Concern[]> {
-    const results: T.Concern[] = [];
-    const seenIds = new Set<string>();
-
-    try {
-      const { data, error } = await supabase.from('concerns').select('*').order('created_at', { ascending: false });
-      if (!error && data) {
-        for (const d of data) {
-          seenIds.add(d.id);
-          results.push({
-            id: d.id,
-            user_id: d.user_id,
-            student_id: d.student_id,
-            student_name: d.student_name || 'Student',
-            class_name: d.class_name || 'Semester 1',
-            category: d.category || d.concern_type || 'General',
-            concern_type: d.concern_type || d.category || 'General',
-            subject: d.subject,
-            description: d.description,
-            priority: d.priority || 'medium',
-            status: d.status || 'Pending',
-            is_anonymous: !!d.is_anonymous,
-            resolution_notes: d.resolution_notes || '',
-            created_at: d.created_at,
-          });
-        }
-      }
-    } catch (err) {}
-
-    try {
-      const { data: metaDocs } = await supabase
-        .from('admission_document_verifications')
-        .select('*')
-        .eq('document_type', 'STUDENT_CONCERN')
-        .order('created_at', { ascending: false });
-
-      if (metaDocs) {
-        for (const doc of metaDocs) {
-          try {
-            const c: T.Concern = JSON.parse(doc.document_url);
-            if (!seenIds.has(c.id)) {
-              seenIds.add(c.id);
-              results.push(c);
-            }
-          } catch (e) {}
-        }
-      }
-    } catch (err) {}
-
-    return results;
+    const { data, error } = await supabase.from('concerns').select('*').order('created_at', { ascending: false });
+    if (error) throw new Error(`Could not load concerns: ${error.message}`);
+    return (data || []).map((d: any) => ({ ...d, category: d.concern_type, student_name: d.user_name })) as T.Concern[];
   },
 
   async getStudentConcerns(userId: string, childIds: string[] = []): Promise<T.Concern[]> {
-    const results: T.Concern[] = [];
-    const seenIds = new Set<string>();
-
-    try {
-      let orClause = `student_id.eq.${userId},user_id.eq.${userId}`;
-      if (childIds && childIds.length > 0) {
-        const childFilters = childIds.map(cid => `student_id.eq.${cid}`).join(',');
-        orClause += `,${childFilters}`;
-      }
-      const { data, error } = await supabase
-        .from('concerns')
-        .select('*')
-        .or(orClause)
-        .order('created_at', { ascending: false });
-      if (!error && data) {
-        for (const d of data) {
-          seenIds.add(d.id);
-          results.push({
-            id: d.id,
-            user_id: d.user_id,
-            student_id: d.student_id,
-            student_name: d.student_name || 'Student',
-            class_name: d.class_name || 'Semester 1',
-            category: d.category || d.concern_type || 'General',
-            concern_type: d.concern_type || d.category || 'General',
-            subject: d.subject,
-            description: d.description,
-            priority: d.priority || 'medium',
-            status: d.status || 'Pending',
-            is_anonymous: !!d.is_anonymous,
-            resolution_notes: d.resolution_notes || '',
-            created_at: d.created_at,
-          });
-        }
-      }
-    } catch (err) {}
-
-    try {
-      const { data: metaDocs } = await supabase
-        .from('admission_document_verifications')
-        .select('*')
-        .eq('document_type', 'STUDENT_CONCERN')
-        .order('created_at', { ascending: false });
-
-      if (metaDocs) {
-        const relevantUserIds = new Set([userId, ...childIds]);
-        for (const doc of metaDocs) {
-          try {
-            const c: T.Concern = JSON.parse(doc.document_url);
-            if (relevantUserIds.has(c.user_id) || relevantUserIds.has(c.student_id) || relevantUserIds.has(doc.verified_by)) {
-              if (!seenIds.has(c.id)) {
-                seenIds.add(c.id);
-                results.push(c);
-              }
-            }
-          } catch (e) {}
-        }
-      }
-    } catch (err) {}
-
-    if (results.length === 0) {
-      const admin = await getAdminClient();
-      if (admin) {
-        try {
-          const { data: metaDocs } = await admin
-            .from('admission_document_verifications')
-            .select('*')
-            .eq('document_type', 'STUDENT_CONCERN')
-            .order('created_at', { ascending: false });
-
-          if (metaDocs) {
-            const relevantUserIds = new Set([userId, ...childIds]);
-            for (const doc of metaDocs) {
-              try {
-                const c: T.Concern = JSON.parse(doc.document_url);
-                if (relevantUserIds.has(c.user_id) || relevantUserIds.has(c.student_id) || relevantUserIds.has(doc.verified_by)) {
-                  if (!seenIds.has(c.id)) {
-                    seenIds.add(c.id);
-                    results.push(c);
-                  }
-                }
-              } catch (e) {}
-            }
-          }
-        } catch (err) {}
-      }
-    }
-
-    return results;
+    const ids = [userId, ...childIds].filter(Boolean);
+    const { data, error } = await supabase.from('concerns').select('*')
+      .or(ids.map((i) => `student_id.eq.${i},user_id.eq.${i}`).join(',')).order('created_at', { ascending: false });
+    if (error) throw new Error(`Could not load your concerns: ${error.message}`);
+    return (data || []).map((d: any) => ({ ...d, category: d.concern_type, student_name: d.user_name })) as T.Concern[];
   },
 
   async createConcern(concern: any): Promise<T.Concern | null> {
-    try {
-      // 1. Try privileged adminBackend action
-      const res = await callAdminBackendAction('create_concern', { concern });
-      if (res?.concern) return res.concern;
-
-      // 2. Direct client insert into concerns table
-      const generatedId = crypto.randomUUID();
-      const now = new Date().toISOString();
-      const concernRecord: T.Concern = {
-        id: generatedId,
-        user_id: concern.user_id || concern.student_id,
-        student_id: concern.student_id || concern.user_id,
-        student_name: concern.student_name || 'Student',
-        class_name: concern.class_name || 'Semester 1',
-        category: concern.category || concern.concern_type || 'General',
-        concern_type: concern.concern_type || concern.category || 'General',
-        subject: concern.subject || 'Concern / Grievance',
-        description: concern.description || '',
-        priority: concern.priority || 'medium',
-        status: concern.status || 'Pending',
-        is_anonymous: !!concern.is_anonymous,
-        resolution_notes: concern.resolution_notes || '',
-        created_at: now,
-      };
-
-      try {
-        const { data, error } = await supabase.from('concerns').insert({
-          user_id: concernRecord.user_id,
-          student_id: concernRecord.student_id,
-          subject: concernRecord.subject,
-          description: concernRecord.description,
-          priority: concernRecord.priority,
-          status: concernRecord.status,
-          concern_type: concernRecord.concern_type,
-        }).select().single();
-        if (!error && data) {
-          return { ...concernRecord, id: data.id };
-        }
-      } catch (e) {}
-
-      // 3. Fallback to admission_document_verifications
-      const { data: metaData, error: metaErr } = await supabase
-        .from('admission_document_verifications')
-        .insert({
-          student_name: concernRecord.student_name,
-          document_type: 'STUDENT_CONCERN',
-          document_url: JSON.stringify(concernRecord),
-          status: concernRecord.status,
-          verified_by: concernRecord.user_id,
-        })
-        .select()
-        .single();
-
-      if (!metaErr) {
-        return concernRecord;
-      }
-      return concernRecord;
-    } catch (err) {
-      console.error('createConcern error:', err);
-      return null;
-    }
+    const row = {
+      user_id: concern.user_id || concern.student_id || null,
+      student_id: concern.student_id || null,
+      user_name: concern.is_anonymous ? null : (concern.student_name || concern.user_name || null),
+      concern_type: concern.concern_type || concern.category || 'General',
+      priority: concern.priority || 'medium',
+      subject: String(concern.subject || '').trim(),
+      description: String(concern.description || '').trim(),
+      is_anonymous: !!concern.is_anonymous,
+      status: 'Pending',
+      attachments: concern.attachments || [],
+    };
+    if (!row.subject || !row.description) throw new Error('A subject and a description are required.');
+    const { data, error } = await (supabase as any).from('concerns').insert(row).select().single();
+    if (error) throw new Error(`Concern not submitted: ${error.message}`);
+    return { ...data, category: data.concern_type, student_name: data.user_name } as T.Concern;
   },
 
   async updateConcernStatus(id: string, status: T.Concern['status'], resolutionNotes?: string): Promise<boolean> {
-    try {
-      try {
-        await supabase
-          .from('concerns')
-          .update({ status, resolution_notes: resolutionNotes })
-          .eq('id', id);
-      } catch (e) {}
-
-      try {
-        const { data: docs } = await supabase
-          .from('admission_document_verifications')
-          .select('*')
-          .eq('application_id', id);
-        if (docs && docs.length > 0) {
-          for (const d of docs) {
-            try {
-              const parsed = JSON.parse(d.document_url);
-              parsed.status = status;
-              if (resolutionNotes) parsed.resolution_notes = resolutionNotes;
-              await supabase
-                .from('admission_document_verifications')
-                .update({
-                  verification_status: status,
-                  document_url: JSON.stringify(parsed),
-                })
-                .eq('id', d.id);
-            } catch (pErr) {}
-          }
-        }
-      } catch (e) {}
-
-      try {
-        const { data: cData } = await supabase.from('concerns').select('*').eq('id', id).single();
-        if (cData && (cData.user_id || cData.student_id)) {
-          await this.createNotification({
-            user_id: cData.user_id || cData.student_id,
-            title: `Grievance Response: ${cData.subject || 'Ticket Resolved'}`,
-            message: resolutionNotes || `Your grievance #${id.slice(0, 8)} status was updated to ${status}.`,
-            type: 'info',
-            priority: 'medium',
-            is_read: false,
-          });
-        }
-      } catch {}
-
-      return true;
-    } catch (err) {
-      console.error('updateConcernStatus error:', err);
-      return false;
+    const { data, error } = await (supabase as any).from('concerns').update({ status, resolution_notes: resolutionNotes ?? null }).eq('id', id).select().maybeSingle();
+    if (error) throw new Error(error.message);
+    if (!data) throw new Error('The concern was not updated (it may not exist, or you may not have permission).');
+    const target = data.user_id || data.student_id;
+    if (target) {
+      await this.createNotification({
+        user_id: target, title: `Grievance update: ${data.subject || 'your concern'}`,
+        message: resolutionNotes || `Your concern #${String(id).slice(0, 8)} is now ${status}.`, type: 'info', priority: 'medium', is_read: false,
+      });
     }
+    return true;
   },
 
   async submitComplaint(complaint: any): Promise<T.Concern | null> {

@@ -330,7 +330,7 @@ export default function PlacementOfficerDashboard() {
                   step="0.1"
                   required
                   value={formData.salary_package_lpa}
-                  onChange={(e) => setFormData({ ...formData, salary_package_lpa: Number(e.target.value) })}
+                  onChange={(e) => setFormData({ ...formData, salary_package_lpa: e.target.value })}
                   className="h-8 text-xs font-mono"
                 />
               </div>
@@ -344,7 +344,7 @@ export default function PlacementOfficerDashboard() {
                   step="0.1"
                   required
                   value={formData.min_cgpa}
-                  onChange={(e) => setFormData({ ...formData, min_cgpa: Number(e.target.value) })}
+                  onChange={(e) => setFormData({ ...formData, min_cgpa: e.target.value })}
                   className="h-8 text-xs font-mono"
                 />
               </div>
@@ -355,7 +355,7 @@ export default function PlacementOfficerDashboard() {
                   type="number"
                   required
                   value={formData.max_history_arrears}
-                  onChange={(e) => setFormData({ ...formData, max_history_arrears: Number(e.target.value) })}
+                  onChange={(e) => setFormData({ ...formData, max_history_arrears: e.target.value })}
                   className="h-8 text-xs font-mono"
                 />
               </div>

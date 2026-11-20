@@ -179,7 +179,7 @@ export default function AdminOverview() {
       // 3. Pending approvals
       const pendingAdmissions = admissions.filter(a => a.status === 'Submitted' || a.status === 'Under Review');
       const overdueFees = fees.filter(f => f.status === 'overdue');
-      const pendingConcerns = concerns.filter(c => c.status === 'pending' || c.status === 'Pending' || c.status === 'open');
+      const pendingConcerns = concerns.filter(c => c.status === 'Pending' || c.status === 'In Progress');
       const pendingProcurement = inventoryTx.filter(t => t.status === 'pending');
 
       setPendingApprovals([
@@ -222,7 +222,7 @@ export default function AdminOverview() {
       if (pendingAdmissions.length > 0) {
         acts.push({
           activity: `New admission submitted for ${pendingAdmissions[0].applicant_name}`,
-          user: pendingAdmissions[0].program || 'Admissions',
+          user: pendingAdmissions[0].class_name || 'Admissions',
           time: 'Active',
           type: 'success'
         });

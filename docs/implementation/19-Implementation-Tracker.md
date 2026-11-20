@@ -301,3 +301,9 @@ Legend: ✅ done & verified as stated · 🟡 written, not runnable here · ⬜ 
 | Window, request, decision with history, supplementary creation/papers/eligibility | ✅ SQL | 19 smoke checks (358 total) |
 | COE "Revaluation" tab (window, requests, decide, supplementary + paper generation); student card to request and see outcomes | 🟡 UI | build |
 | Revaluation fee through the fee engine; second-valuer assignment | ⬜ | |
+
+## Type-check clean-up
+| Item | Status | Evidence |
+|------|--------|----------|
+| The Supabase client was typed with an out-of-date `Database` type that turned every insert/update into `never` — client is now untyped (`SupabaseClient<any>`), UserRole definitions aligned (21 roles), missing optional fields added | ✅ | TS errors 608 → 68 (remaining: deprecated multi-college/platform-admin code, tests, minor typings) |
+| Real defects found this way and fixed: concerns saved/read through a document-table workaround and unknown column `student_name`; shortage warnings wrote non-existent columns (never saved); parent attendance compared 'Present'/'Late' to lower-case values (everything showed as absent); admin dashboard complaint counts and faculty-deployment score; linked-guardian list showed blank names and always "Verified"; afternoon wellness check-in rejected by the database; my earlier edit broke StudentDashboard (`acc`) | ✅ | |

@@ -39,7 +39,7 @@ export function ParentChildSwitcher({
     return (
       <div className="flex items-center gap-3 bg-white/10 dark:bg-slate-900/40 backdrop-blur-md border border-white/20 dark:border-slate-800 rounded-2xl px-4 py-2.5 shadow-xs">
         <Avatar className="h-10 w-10 border-2 border-white/60 shadow-sm shrink-0">
-          <AvatarImage src={activeChild.avatar_url || activeChild.avatar} alt={activeChild.name} className="object-cover" />
+          <AvatarImage src={activeChild.avatar_url} alt={activeChild.name} className="object-cover" />
           <AvatarFallback className="bg-primary/20 text-primary font-bold">
             {activeChild.name?.charAt(0) || 'S'}
           </AvatarFallback>
@@ -70,7 +70,7 @@ export function ParentChildSwitcher({
           className="h-auto py-2 px-3.5 bg-white/15 dark:bg-slate-900/50 hover:bg-white/25 border-white/30 dark:border-slate-700 rounded-2xl shadow-xs transition-smooth text-left flex items-center gap-3 min-w-[240px] max-w-sm"
         >
           <Avatar className="h-10 w-10 border-2 border-primary/40 shadow-sm shrink-0">
-            <AvatarImage src={activeChild.avatar_url || activeChild.avatar} alt={activeChild.name} className="object-cover" />
+            <AvatarImage src={activeChild.avatar_url} alt={activeChild.name} className="object-cover" />
             <AvatarFallback className="bg-primary text-primary-foreground font-bold">
               {activeChild.name?.charAt(0) || 'S'}
             </AvatarFallback>
@@ -114,7 +114,7 @@ export function ParentChildSwitcher({
               }`}
             >
               <Avatar className="h-9 w-9 border border-border shrink-0">
-                <AvatarImage src={s.avatar_url || s.avatar} alt={s.name} className="object-cover" />
+                <AvatarImage src={s.avatar_url} alt={s.name} className="object-cover" />
                 <AvatarFallback className="text-xs font-bold">
                   {s.name?.charAt(0) || 'S'}
                 </AvatarFallback>

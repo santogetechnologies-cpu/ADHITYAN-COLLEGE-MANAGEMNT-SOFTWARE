@@ -158,9 +158,8 @@ export function AdminDashboard() {
       setDepartmentHealth([
         { name: 'Academic Performance', score: academicScore, status: academicScore >= 90 ? 'excellent' : 'good' },
         { name: 'Student Attendance & Wellbeing', score: Math.round(attRate), status: attRate >= 92 ? 'excellent' : 'good' },
-        { name: 'Staff Faculty Deployment', score: teachers.length > 0 ? 100 : 0, status: teachers.length > 0 ? 'good' : 'fair' },
+        { name: 'Staff Faculty Deployment', score: teachers > 0 ? 100 : 0, status: teachers > 0 ? 'good' : 'fair' },
         { name: 'Financial Health', score: financialScore, status: financialScore >= 80 ? 'good' : 'fair' },
-        { name: 'Infrastructure & Facilities', score: depts.length > 0 ? 95 : 0, status: 'excellent' }
       ]);
 
       // 4. Recent Alerts
@@ -193,7 +192,7 @@ export function AdminDashboard() {
             event: e.title,
             date: e.date ? new Date(e.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : 'Upcoming',
             type: e.category ? e.category.charAt(0).toUpperCase() + e.category.slice(1) : 'Academic',
-            attendees: e.target_audience === 'all' ? (students.length + teachers.length || 0) : 0
+            attendees: e.target_audience === 'all' ? (students.length + teachers) : 0
           }));
         setUpcomingEvents(sorted);
       } else {

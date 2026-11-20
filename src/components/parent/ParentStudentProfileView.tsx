@@ -41,7 +41,7 @@ export function ParentStudentProfileView({
         <Card className="rounded-2xl shadow-sm border-border">
           <CardContent className="p-6 text-center space-y-4">
             <Avatar className="h-28 w-28 mx-auto border-4 border-[#1D61E7]/20 shadow-lg">
-              <AvatarImage src={student.avatar_url || student.avatar} alt={student.name} className="object-cover" />
+              <AvatarImage src={student.avatar_url} alt={student.name} className="object-cover" />
               <AvatarFallback className="text-2xl font-bold bg-primary text-primary-foreground">
                 {student.name?.charAt(0) || 'S'}
               </AvatarFallback>

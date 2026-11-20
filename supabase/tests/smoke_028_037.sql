@@ -915,6 +915,10 @@ SELECT set_config('request.jwt.claim.sub','c0000000-0000-0000-0000-000000000008'
 SELECT pg_temp.chk('admin can', (SELECT count(*)>=1 FROM storage.objects WHERE bucket_id='admission-documents'));
 RESET ROLE;
 
+-- ---- 071 wellness afternoon ----
+SELECT pg_temp.chk('an afternoon check-in can be saved', (SELECT true FROM (SELECT 1) x WHERE NOT pg_temp.fails($q$INSERT INTO public.wellness_checkins (user_id, checkin_type, date) VALUES ('c0000000-0000-0000-0000-000000000001','afternoon',CURRENT_DATE)$q$)));
+SELECT pg_temp.chk('an unknown check-in type is still refused', pg_temp.fails($q$INSERT INTO public.wellness_checkins (user_id, checkin_type, date) VALUES ('c0000000-0000-0000-0000-000000000001','midnight',CURRENT_DATE)$q$));
+
 SELECT name, CASE WHEN ok THEN 'PASS' ELSE 'FAIL' END AS result FROM _r ORDER BY ok, name;
 DO $$ BEGIN
   IF EXISTS (SELECT 1 FROM _r WHERE NOT ok) THEN RAISE EXCEPTION 'SMOKE TEST FAILED'; END IF;

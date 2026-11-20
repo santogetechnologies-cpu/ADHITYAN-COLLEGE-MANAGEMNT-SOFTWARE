@@ -473,24 +473,24 @@ export function StudentSettingsTab({ onLogout }: { onLogout: () => void }) {
               ) : (
                 <div className="space-y-3">
                   {linkedGuardians.map((g) => (
-                    <div key={g.guardian_user_id} className="p-3.5 rounded-xl border border-slate-200 bg-slate-50/70 flex items-center justify-between">
+                    <div key={g.link_id} className="p-3.5 rounded-xl border border-slate-200 bg-slate-50/70 flex items-center justify-between">
                       <div className="space-y-0.5">
                         <div className="font-bold text-slate-900 flex items-center space-x-1.5">
-                          <span>{g.guardian_name || 'Registered Parent'}</span>
-                          <Badge className="bg-emerald-50 text-emerald-700 border-emerald-200 text-[9px]">Verified</Badge>
+                          <span>{g.parent?.name || 'Registered Parent'}</span>
+                          <Badge className={g.verified ? "bg-emerald-50 text-emerald-700 border-emerald-200 text-[9px]" : "bg-amber-50 text-amber-700 border-amber-200 text-[9px]"}>{g.verified ? "Verified" : "Awaiting verification"}</Badge>
                         </div>
                         <div className="text-[11px] text-slate-500 flex items-center space-x-2">
                           <span>{g.relationship || 'Guardian'}</span>
-                          {g.guardian_email && (
+                          {g.parent?.email && (
                             <>
                               <span>•</span>
-                              <span>{g.guardian_email}</span>
+                              <span>{g.parent.email}</span>
                             </>
                           )}
-                          {g.guardian_phone && (
+                          {g.parent?.phone && (
                             <>
                               <span>•</span>
-                              <span>{g.guardian_phone}</span>
+                              <span>{g.parent.phone}</span>
                             </>
                           )}
                         </div>

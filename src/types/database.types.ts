@@ -12,7 +12,13 @@ export type UserRole =
   | 'store_manager'
   | 'finance_manager'
   | 'transport_driver'
-  | 'naac_coordinator';
+  | 'naac_coordinator'
+  | 'hr_manager'
+  | 'coe'
+  | 'hod'
+  | 'librarian'
+  | 'hostel_warden'
+  | 'placement_officer';
 
 export interface Profile {
   id: string;
@@ -32,7 +38,18 @@ export interface Profile {
     language?: string;
     notifications?: boolean;
     timezone?: string;
+    assigned_classes?: string[];
+    designation?: string;
+    [key: string]: any;
   };
+  /** read from preferences by the services that load profiles */
+  assigned_classes?: string[];
+  designation?: string;
+  phone_number?: string;
+  enrollment_status?: string;
+  staff_id?: string;
+  address?: string;
+  parent_phone?: string;
   created_at?: string;
   updated_at?: string;
 }
@@ -137,6 +154,8 @@ export interface DailyTeachingUpdate {
   next_class_prep?: string;
   notes?: string;
   created_at?: string;
+  course_name?: string;
+  next_plan?: string;
 }
 
 export interface FeedbackSubmission {
@@ -149,6 +168,7 @@ export interface FeedbackSubmission {
   user_id?: string;
   user_name?: string;
   created_at?: string;
+  rating?: number;
 }
 
 export interface Concern {
@@ -165,6 +185,11 @@ export interface Concern {
   resolution_notes?: string;
   attachments?: string[];
   created_at?: string;
+  /** derived from concern_type / user_name for the screens */
+  category?: string;
+  student_name?: string;
+  class_name?: string;
+  admin_response?: string;
 }
 
 export interface TeacherMessage {
@@ -184,8 +209,8 @@ export interface TeacherMessage {
 export interface WellnessCheckin {
   id: string;
   user_id?: string;
-  checkin_type: 'morning' | 'evening';
-  type?: 'morning' | 'evening';
+  checkin_type: 'morning' | 'afternoon' | 'evening';
+  type?: 'morning' | 'afternoon' | 'evening';
   date: string;
   mood?: string;
   energy_level?: number;
@@ -301,6 +326,7 @@ export interface TransportStop {
   stop_order: number;
   status: 'Completed' | 'Current' | 'Upcoming' | 'Skipped';
   students_count: number;
+  arrival_time?: string;
 }
 
 export interface VehicleMaintenance {
@@ -382,6 +408,8 @@ export interface AdmissionApplication {
   remarks?: string;
   documents?: any[];
   created_at?: string;
+  roll_number?: string;
+  program?: string;
 }
 
 export interface AlumniProfile {
@@ -529,6 +557,7 @@ export interface ExamSchedule {
   max_marks: number;
   passing_marks?: number;
   created_at?: string;
+  exam_type?: string;
 }
 
 export interface ExamResult {
@@ -549,6 +578,9 @@ export interface ExamResult {
   published_at?: string;
   remarks?: string;
   created_at?: string;
+  exam_name?: string;
+  status?: string;
+  percentage?: number | null;
 }
 
 export interface SportsEvent {
@@ -590,6 +622,8 @@ export interface CalendarEvent {
   status: 'upcoming' | 'ongoing' | 'completed' | 'cancelled';
   created_at?: string;
 }
+
+export type Notification = NotificationItem;
 
 export interface NotificationItem {
   id: string;
@@ -701,6 +735,7 @@ export interface StudentFee {
   description?: string | null;
   original_amount?: number | null;
   waived_amount?: number;
+  term?: string;
 }
 
 export interface FeeHead { id: string; code: string; name: string; category: string; refundable: boolean; active: boolean; description?: string | null; created_at?: string; updated_at?: string }
@@ -764,6 +799,8 @@ export interface StudentAttendance {
   recorded_by?: string;
   created_at?: string;
   updated_at?: string;
+  class_name?: string;
+  session?: string;
 }
 
 export interface StudentMoodCheckin {
@@ -787,6 +824,7 @@ export interface StudentTransportLog {
   status: 'checked_in' | 'waiting' | 'absent' | 'dropped';
   checkin_time?: string;
   date: string;
+  scan_time?: string;
 }
 
 // ============================================================================
