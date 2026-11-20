@@ -1,102 +1,39 @@
 import { supabase } from '@/lib/supabase';
-import { handleSupabaseError } from './api/errors';
 
-export interface AlumniProfileItem {
-  id: string;
-  name: string;
-  graduation_year: number;
-  degree: string;
-  current_company?: string;
-  designation?: string;
-  email?: string;
-  phone?: string;
-  linkedin_url?: string;
-}
+const sb: any = supabase;
 
-export interface AlumniEventItem {
-  id: string;
-  event_name: string;
-  event_date: string;
-  location?: string;
-  description?: string;
-  registered_count?: number;
-}
-
-export interface AlumniDonationItem {
-  id: string;
-  alumni_id?: string;
-  donor_name?: string;
-  amount: number;
-  purpose?: string;
-  created_at: string;
-}
+export interface DonationRow { id: string; alumni_id: string | null; donor_name: string; amount: number; cause: string; transaction_id: string | null; payment_mode: string | null; status: string; donated_at: string }
+export interface MentorshipRow { id: string; mentor_id: string; mentee_name: string; domain: string; start_date: string; duration_months: number | null; status: string; notes: string | null; mentor?: { first_name: string; last_name: string; company: string | null } | null }
 
 export const alumniService = {
-  async listProfiles(): Promise<AlumniProfileItem[]> {
-    try {
-      const { data, error } = await supabase
-        .from('alumni_profiles')
-        .select('*')
-        .order('graduation_year', { ascending: false });
-
-      if (error) throw error;
-      return data || [];
-    } catch (error) {
-      throw handleSupabaseError(error, 'Failed to fetch alumni directory');
-    }
+  async listDonations(): Promise<DonationRow[]> {
+    const { data, error } = await sb.from('alumni_donations').select('*').order('donated_at', { ascending: false });
+    if (error) throw new Error(error.message);
+    return (data || []).map((d: any) => ({ ...d, amount: Number(d.amount) }));
   },
-
-  async createProfile(input: Omit<AlumniProfileItem, 'id'>): Promise<AlumniProfileItem> {
-    try {
-      const { data, error } = await supabase
-        .from('alumni_profiles')
-        .insert(input)
-        .select()
-        .single();
-
-      if (error) throw error;
-      return data;
-    } catch (error) {
-      throw handleSupabaseError(error, 'Failed to add alumni member');
-    }
+  async recordDonation(d: { donor_name: string; amount: number; cause: string; alumni_id?: string | null; payment_mode?: string; transaction_id?: string; status?: string }): Promise<void> {
+    const { error } = await sb.from('alumni_donations').insert({ ...d, alumni_id: d.alumni_id || null });
+    if (error) throw new Error(error.message);
   },
-
-  async listEvents(): Promise<AlumniEventItem[]> {
-    try {
-      const { data, error } = await supabase
-        .from('alumni_events')
-        .select('*')
-        .order('event_date', { ascending: true });
-
-      if (error) throw error;
-      return (data || []).map((e: any) => ({
-        id: e.id,
-        event_name: e.event_name,
-        event_date: e.event_date,
-        location: e.location || 'Campus Auditorium',
-        description: e.description,
-        registered_count: e.registered_count || 0,
-      }));
-    } catch (error) {
-      throw handleSupabaseError(error, 'Failed to load alumni events');
-    }
+  async setDonationStatus(id: string, status: string): Promise<void> {
+    const { error } = await sb.from('alumni_donations').update({ status }).eq('id', id);
+    if (error) throw new Error(error.message);
   },
-
-  async recordDonation(input: { donor_name: string; amount: number; purpose?: string }): Promise<void> {
-    try {
-      const { error } = await supabase
-        .from('alumni_donations')
-        .insert({
-          amount: input.amount,
-          purpose: input.purpose || 'Scholarship & Lab Development Fund',
-        });
-
-      if (error) throw error;
-    } catch (error) {
-      throw handleSupabaseError(error, 'Failed to record alumni contribution');
-    }
+  async listMentorships(): Promise<MentorshipRow[]> {
+    const { data, error } = await sb.from('alumni_mentorships').select('*, mentor:alumni_profiles(first_name,last_name,company)').order('created_at', { ascending: false });
+    if (error) throw new Error(error.message);
+    return data || [];
+  },
+  async createMentorship(m: { mentor_id: string; mentee_name: string; domain: string; duration_months?: number | null; notes?: string }): Promise<void> {
+    const { error } = await sb.from('alumni_mentorships').insert(m);
+    if (error) throw new Error(error.message);
+  },
+  async setMentorshipStatus(id: string, status: string): Promise<void> {
+    const { error } = await sb.from('alumni_mentorships').update({ status }).eq('id', id);
+    if (error) throw new Error(error.message);
+  },
+  async setEventStatus(id: string, status: string): Promise<void> {
+    const { error } = await sb.from('alumni_events').update({ status }).eq('id', id);
+    if (error) throw new Error(error.message);
   },
 };
-
-export default alumniService;
-

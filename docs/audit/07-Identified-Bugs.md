@@ -52,3 +52,5 @@ See `01-Executive-Audit.md` for the full table with status. Quick index:
 | Result pass mark hard-coded at 35 in analytics; grades computed in the browser | Fixed: pass mark from the paper (or the institution's pass %), grades on the server |
 | Hall tickets were created with invented defaults (hall B-302, seat 14-B, 88% attendance, 'Semester 4', a fake COE signature) and `issueHallTicket` swallowed errors; student screen invented an exam and matched tickets by fuzzy name | Fixed (046, rewritten screens) |
 | `record_fee_payment` / `record_admission_deposit` failed where pgcrypto lives in the `extensions` schema | Fixed (search_path) |
+| Alumni directory (names, e-mail, phone) readable by every signed-in user including students and parents | Fixed (047) |
+| Alumni donations/mentorship tabs showed invented figures (₹12.5L, 78 mentors, 92% success) and hard-coded rows; realtime listened to a table that does not exist (`alumni_members`) | Fixed (rebuilt on real tables) |

@@ -144,3 +144,9 @@ Legend: ✅ done & verified as stated · 🟡 written, not runnable here · ⬜ 
 | Create examination + papers with clash check; publish timetable; progress board | 🟡 | build + type-check |
 | Hall tickets: eligibility from attendance/fees, bulk generation, audited release, publish to students, verification | ✅ SQL (17 checks, 179 total), 🟡 UI | migration 046; `HallTicketGeneration` rewritten; student view shows only issued tickets |
 | Exam registration, seating/invigilation, revaluation, supplementary exams, grade sheets/transcripts, GPA/CGPA, configurable grading scales | ⬜ | master prompt §22–24 |
+
+## Module — Alumni (migration 047)
+| Item | Status | Evidence |
+|------|--------|----------|
+| Directory hidden from students/parents; donations and mentorships stored in the database, staff-only | ✅ SQL | 4 smoke checks (183 total) |
+| Donations tab (record, status, export, real totals), Mentorship tab (pairings, status, real stats), directory filter + export, event status change; invented totals/rows and two fake dialogs removed | 🟡 UI | build + type-check; dead buttons 81 → 68 |

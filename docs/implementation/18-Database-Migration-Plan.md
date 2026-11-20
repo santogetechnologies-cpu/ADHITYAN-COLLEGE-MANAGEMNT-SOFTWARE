@@ -34,6 +34,7 @@ back-fills of NULLs and a de-duplication of `super_admin_releases` rows with the
 | 044_shared_app_settings.sql | shared, versioned settings: `app_settings` (live, readable by all signed-in users), append-only `app_setting_versions` (release log), `app_setting_drafts`; admin-only `app_settings_draft_merge/save`, `app_settings_publish`, `app_settings_rollback`. **Fixes:** Control Center config lived in each browser's localStorage and was read back from admin-only `audit_logs` (other roles got defaults, so disabled modules stayed open to them) | 043 |
 | 045_exam_core.sql | **SECURITY: legacy permissive policies let students/parents read UNPUBLISHED marks and let any teacher edit any result — dropped**; teachers enter marks only for their classes while unpublished; one result per exam+student+subject; `exam_save_marks` (all-or-nothing, server grading), `exam_publish_results` (publish / withdraw with reason), `exam_analytics`; students see an exam once its timetable/hall tickets/results are published | 044 |
 | 046_hall_tickets.sql | Hall tickets from real attendance and (optional) fee clearance: `exam_generate_hall_tickets`, audited `exam_release_hall_ticket`, `exam_set_hall_tickets_visible`, public `exam_verify_hall_ticket`; removed fabricated defaults (hall B-302, seat 14-B, attendance 88, signature); students see tickets only after publishing; `record_fee_payment`/`record_admission_deposit` search_path includes `extensions` | 045 |
+| 047_alumni.sql | **SECURITY: alumni directory (e-mail/phone of former students) was readable by every signed-in user — now admin/principal/placement/HOD only**; donations get validated amount/status; new `alumni_mentorships` table with staff-only RLS | 046 |
 | 036_reconcile_legacy_columns.sql | `timetables.session_type`, `exam_schedules.day_of_week`, `student_attendance.*`, reception columns | 029 |
 
 **Behaviour changes to expect after 032:** buckets `documents`, `attachments`, `student_documents`, `staff_documents`
@@ -47,7 +48,7 @@ Not carried over on purpose: multi-college tables (`colleges`, `college_*`, `pla
 ```bash
 psql "$STAGING_DB_URL" -v ON_ERROR_STOP=1 -f supabase/tests/smoke_028_037.sql   # synthetic data, rolls back
 ```
-All lines must read PASS (179 checks). Edge-function checks: `scripts/test-edge-gate.sh` (type-check + authorization/validation cases; needs no database). Then in the SQL editor: `select count(*) from public.profiles where role is null;` (must be 0).
+All lines must read PASS (183 checks). Edge-function checks: `scripts/test-edge-gate.sh` (type-check + authorization/validation cases; needs no database). Then in the SQL editor: `select count(*) from public.profiles where role is null;` (must be 0).
 
 ### Rollback
 Each file is one transaction, so a failure leaves nothing half-applied. To undo a *successful* run use the backup/PITR from

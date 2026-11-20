@@ -421,6 +421,16 @@ SELECT set_config('request.jwt.claim.sub','c0000000-0000-0000-0000-000000000005'
 SELECT pg_temp.chk('receptionist can read admission documents', (SELECT count(*) FROM public.admission_document_verifications)>=1);
 RESET ROLE;
 
+-- ---- 047 alumni ----
+INSERT INTO public.alumni_profiles (first_name,last_name,email,department,graduation_year,status) VALUES ('Smoke','Alumnus','smoke.alumnus@example.test','CSE','2020','Active');
+SET LOCAL ROLE authenticated;
+SELECT set_config('request.jwt.claim.sub','c0000000-0000-0000-0000-000000000001',true);   -- student
+SELECT pg_temp.chk('student cannot read the alumni directory', (SELECT count(*)=0 FROM public.alumni_profiles));
+SELECT pg_temp.chk('student cannot read mentorships', (SELECT count(*)=0 FROM public.alumni_mentorships));
+RESET ROLE;
+SELECT pg_temp.chk('donation amount must be positive', pg_temp.fails($q$INSERT INTO public.alumni_donations (donor_name,amount,cause) VALUES ('x',0,'y')$q$));
+SELECT pg_temp.chk('donation status is validated', pg_temp.fails($q$INSERT INTO public.alumni_donations (donor_name,amount,cause,status) VALUES ('x',5,'y','Bogus')$q$));
+
 SELECT name, CASE WHEN ok THEN 'PASS' ELSE 'FAIL' END AS result FROM _r ORDER BY ok, name;
 DO $$ BEGIN
   IF EXISTS (SELECT 1 FROM _r WHERE NOT ok) THEN RAISE EXCEPTION 'SMOKE TEST FAILED'; END IF;
