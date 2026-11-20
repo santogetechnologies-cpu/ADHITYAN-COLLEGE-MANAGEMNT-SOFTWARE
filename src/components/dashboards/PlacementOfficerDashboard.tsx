@@ -19,9 +19,16 @@ import {
   GraduationCap
 } from 'lucide-react';
 import { db } from '@/services/supabase/database';
+import { supabase } from '@/lib/supabase';
+import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/context/AuthContext';
 import { PlacementDrive, PlacementApplication } from '@/types/database.types';
 
 export default function PlacementOfficerDashboard() {
+  const { toast } = useToast();
+  const { user } = useAuth();
+  const canManage = ['admin', 'principal', 'placement_officer'].includes(user?.role ?? '');
+  const [applicantsFor, setApplicantsFor] = useState<PlacementDrive | null>(null);
   const [drives, setDrives] = useState<PlacementDrive[]>([]);
   const [applications, setApplications] = useState<PlacementApplication[]>([]);
   const [loading, setLoading] = useState(true);
@@ -34,10 +41,11 @@ export default function PlacementOfficerDashboard() {
     company_name: '',
     job_role: '',
     salary_package_lpa: '',
-    eligible_departments: 'Dialysis Technology, Medical Lab Technology',
+    eligible_departments: '',
     min_cgpa: '',
     max_history_arrears: '0',
     drive_date: new Date().toISOString().split('T')[0],
+    application_deadline: new Date().toISOString().split('T')[0],
     venue: '',
     rounds_description: '',
   });
@@ -67,45 +75,43 @@ export default function PlacementOfficerDashboard() {
 
   const handleCreateDrive = async (e: React.FormEvent) => {
     e.preventDefault();
-    try {
-      setCreatingDrive(true);
-      const rounds = formData.rounds_description.split(',').map(s => s.trim()).filter(Boolean);
-      const newDrive: Partial<PlacementDrive> = {
-        company_name: formData.company_name,
-        job_title: formData.job_role,
-        package_lpa: Number(formData.salary_package_lpa) || 4.5,
-        eligible_departments: formData.eligible_departments.split(',').map(s => s.trim()),
-        min_cgpa: Number(formData.min_cgpa) || 6.0,
-        max_backlogs: Number(formData.max_history_arrears) || 0,
-        drive_date: formData.drive_date,
-        application_deadline: formData.drive_date,
-        job_location: formData.venue || 'Campus Placement Cell',
-        selection_rounds: rounds.length > 0 ? rounds : ['Written Assessment', 'HR Interview'],
-        status: 'Open'
-      };
-
-      const res = await db.createPlacementDrive(newDrive);
-      if (res) {
-        await loadData();
-        setFormData({
-          company_name: '',
-          job_role: '',
-          salary_package_lpa: '',
-          eligible_departments: 'Dialysis Technology, Medical Lab Technology',
-          min_cgpa: '',
-          max_history_arrears: '0',
-          drive_date: new Date().toISOString().split('T')[0],
-          venue: '',
-          rounds_description: '',
-        });
-      }
-      setDriveModalOpen(false);
-    } catch (err) {
-      console.error('Error creating drive:', err);
-    } finally {
-      setCreatingDrive(false);
-    }
+    const pkg = Number(formData.salary_package_lpa), cgpa = Number(formData.min_cgpa), arrears = Number(formData.max_history_arrears);
+    if (!formData.company_name.trim() || !formData.job_role.trim()) return toast({ title: 'Company and job role are required', variant: 'destructive' });
+    if (!(pkg > 0)) return toast({ title: 'Enter the package (LPA)', variant: 'destructive' });
+    if (!(cgpa >= 0 && cgpa <= 10)) return toast({ title: 'Minimum CGPA must be between 0 and 10', variant: 'destructive' });
+    if (formData.application_deadline > formData.drive_date) return toast({ title: 'The application deadline must be on or before the drive date', variant: 'destructive' });
+    const rounds = formData.rounds_description.split(',').map(s => s.trim()).filter(Boolean);
+    setCreatingDrive(true);
+    const { error } = await (supabase as any).from('placement_drives').insert({
+      company_name: formData.company_name.trim(), job_title: formData.job_role.trim(), package_lpa: pkg,
+      eligible_departments: formData.eligible_departments.split(',').map(s => s.trim()).filter(Boolean),
+      min_cgpa: cgpa, max_backlogs: Number.isFinite(arrears) ? arrears : 0, drive_date: formData.drive_date,
+      application_deadline: formData.application_deadline, job_location: formData.venue.trim() || null, selection_rounds: rounds, status: 'Open'
+    });
+    setCreatingDrive(false);
+    if (error) return toast({ title: 'Drive not saved', description: error.message, variant: 'destructive' });
+    toast({ title: 'Drive scheduled' });
+    setFormData({ company_name: '', job_role: '', salary_package_lpa: '', eligible_departments: '', min_cgpa: '', max_history_arrears: '0',
+      drive_date: new Date().toISOString().split('T')[0], application_deadline: new Date().toISOString().split('T')[0], venue: '', rounds_description: '' });
+    setDriveModalOpen(false);
+    await loadData();
   };
+
+  const setDriveStatus = async (d: PlacementDrive, status: string) => {
+    const { error } = await (supabase as any).from('placement_drives').update({ status }).eq('id', d.id);
+    if (error) toast({ title: 'Not updated', description: error.message, variant: 'destructive' }); else await loadData();
+  };
+  const setAppStatus = async (id: string, status: string) => {
+    const { error } = await (supabase as any).from('placement_applications').update({ status, current_round: status }).eq('id', id);
+    if (error) toast({ title: 'Not updated', description: error.message, variant: 'destructive' }); else await loadData();
+  };
+
+  const selected = applications.filter(a => a.status === 'Selected');
+  const driveById = new Map(drives.map(d => [d.id, d]));
+  const offerPackages = selected.map(a => Number(driveById.get(a.drive_id as string)?.package_lpa)).filter(n => Number.isFinite(n));
+  const highest = offerPackages.length ? Math.max(...offerPackages) : null;
+  const average = offerPackages.length ? offerPackages.reduce((s, n) => s + n, 0) / offerPackages.length : null;
+  const recruiters = new Set(drives.map(d => d.company_name.trim().toLowerCase())).size;
 
   const filteredDrives = useMemo(() => {
     if (!searchQuery) return drives;
@@ -131,7 +137,7 @@ export default function PlacementOfficerDashboard() {
                 Hospital Rotations & Clinical Career Placement Desk
               </h1>
               <Badge className="bg-blue-100 text-blue-800 text-[10px] font-bold border-blue-200">
-                100% Hospital Placements
+                Placement cell
               </Badge>
             </div>
             <p className="text-xs text-slate-500">
@@ -162,8 +168,8 @@ export default function PlacementOfficerDashboard() {
               <span className="text-xs font-medium uppercase tracking-wider">Highest CTC Package</span>
               <DollarSign className="w-4 h-4 text-emerald-600" />
             </div>
-            <div className="text-2xl font-black text-emerald-800">₹ 7.8 LPA</div>
-            <span className="text-[11px] text-slate-500">Apollo Multi-Speciality</span>
+            <div className="text-2xl font-black text-emerald-800">{highest !== null ? `₹ ${highest} LPA` : '—'}</div>
+            <span className="text-[11px] text-slate-500">Across selected students</span>
           </CardContent>
         </Card>
 
@@ -173,8 +179,8 @@ export default function PlacementOfficerDashboard() {
               <span className="text-xs font-medium uppercase tracking-wider">Average Package (CTC)</span>
               <TrendingUp className="w-4 h-4 text-blue-600" />
             </div>
-            <div className="text-2xl font-black text-slate-900">₹ 4.8 LPA</div>
-            <span className="text-[11px] text-emerald-600 font-medium">+18% over previous batch</span>
+            <div className="text-2xl font-black text-slate-900">{average !== null ? `₹ ${average.toFixed(1)} LPA` : '—'}</div>
+            <span className="text-[11px] text-slate-500">Mean of selected offers</span>
           </CardContent>
         </Card>
 
@@ -184,8 +190,8 @@ export default function PlacementOfficerDashboard() {
               <span className="text-xs font-medium uppercase tracking-wider">Total Offers Received</span>
               <Award className="w-4 h-4 text-primary" />
             </div>
-            <div className="text-2xl font-black text-slate-900">185</div>
-            <span className="text-[11px] text-slate-500">94% Clinical Batch Placed</span>
+            <div className="text-2xl font-black text-slate-900">{selected.length}</div>
+            <span className="text-[11px] text-slate-500">{applications.length} applications</span>
           </CardContent>
         </Card>
 
@@ -195,8 +201,8 @@ export default function PlacementOfficerDashboard() {
               <span className="text-xs font-medium uppercase tracking-wider">Partner Recruiters</span>
               <Building className="w-4 h-4 text-amber-600" />
             </div>
-            <div className="text-2xl font-black text-slate-900">84</div>
-            <span className="text-[11px] text-slate-500">Tier-1 IT & Core Giants</span>
+            <div className="text-2xl font-black text-slate-900">{recruiters}</div>
+            <span className="text-[11px] text-slate-500">{drives.filter(d => d.status === 'Open').length} drive(s) open</span>
           </CardContent>
         </Card>
       </div>
@@ -267,9 +273,15 @@ export default function PlacementOfficerDashboard() {
                       <div className="text-[10px] text-slate-500">{d.job_location || (d as any).venue}</div>
                     </td>
                     <td className="p-3">
-                      <Badge className="bg-blue-100 text-blue-800 text-[10px] font-semibold border-blue-200">
-                        {d.status || 'Scheduled'}
-                      </Badge>
+                      <div className="flex items-center gap-1.5">
+                        <Badge className="bg-blue-100 text-blue-800 text-[10px] font-semibold border-blue-200">{d.status}</Badge>
+                        <Button size="sm" variant="outline" className="h-6 text-[10px] px-2" onClick={() => setApplicantsFor(d)}>
+                          Applicants ({applications.filter(a => a.drive_id === d.id).length})
+                        </Button>
+                        {canManage && (d.status === 'Open'
+                          ? <Button size="sm" variant="outline" className="h-6 text-[10px] px-2" onClick={() => setDriveStatus(d, 'Closed')}>Close</Button>
+                          : <Button size="sm" variant="outline" className="h-6 text-[10px] px-2" onClick={() => setDriveStatus(d, 'Open')}>Reopen</Button>)}
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -352,12 +364,16 @@ export default function PlacementOfficerDashboard() {
             <div className="space-y-1">
               <label className="font-semibold text-slate-700">Eligible Disciplines</label>
               <Input
-                required
-                placeholder="e.g. CSE, IT, ECE"
+                placeholder="e.g. Nursing, Radiology (empty = all)"
                 value={formData.eligible_departments}
                 onChange={(e) => setFormData({ ...formData, eligible_departments: e.target.value })}
                 className="h-8 text-xs"
               />
+            </div>
+
+            <div className="space-y-1">
+              <label className="font-semibold text-slate-700">Application deadline</label>
+              <Input type="date" required value={formData.application_deadline} onChange={(e) => setFormData({ ...formData, application_deadline: e.target.value })} className="h-8 text-xs" />
             </div>
 
             <div className="grid grid-cols-2 gap-2">
@@ -375,7 +391,6 @@ export default function PlacementOfficerDashboard() {
               <div className="space-y-1">
                 <label className="font-semibold text-slate-700">Venue / Location</label>
                 <Input
-                  required
                   value={formData.venue}
                   onChange={(e) => setFormData({ ...formData, venue: e.target.value })}
                   className="h-8 text-xs"
@@ -392,6 +407,30 @@ export default function PlacementOfficerDashboard() {
               </Button>
             </DialogFooter>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!applicantsFor} onOpenChange={(o) => !o && setApplicantsFor(null)}>
+        <DialogContent className="max-w-2xl bg-white p-6 rounded-2xl">
+          <DialogHeader><DialogTitle className="text-base font-bold">Applicants — {applicantsFor?.company_name}</DialogTitle></DialogHeader>
+          <p className="text-[11px] text-slate-500">CGPA is declared by the student; verify it against the mark sheet before shortlisting.</p>
+          <div className="max-h-80 overflow-y-auto">
+            <table className="w-full text-xs">
+              <thead className="text-slate-500 uppercase text-[10px]"><tr className="border-b"><th className="p-2 text-left">Student</th><th className="p-2 text-left">Dept</th><th className="p-2 text-right">CGPA</th><th className="p-2 text-left">Status</th></tr></thead>
+              <tbody>
+                {applications.filter(a => a.drive_id === applicantsFor?.id).length === 0 ? <tr><td colSpan={4} className="p-6 text-center text-slate-500">No applications yet.</td></tr> :
+                  applications.filter(a => a.drive_id === applicantsFor?.id).map(a => (
+                    <tr key={a.id} className="border-b last:border-0">
+                      <td className="p-2"><div className="font-semibold">{a.student_name}</div><div className="text-[10px] text-slate-500 font-mono">{a.roll_number}</div></td>
+                      <td className="p-2">{a.department}</td><td className="p-2 text-right font-mono">{a.cgpa}</td>
+                      <td className="p-2">{canManage ? (
+                        <select className="border rounded px-1 py-0.5 text-xs" value={a.status} onChange={(e) => setAppStatus(a.id, e.target.value)}>
+                          {['Applied', 'Shortlisted', 'Selected', 'Rejected', 'Withdrawn'].map(x => <option key={x}>{x}</option>)}
+                        </select>) : a.status}</td>
+                    </tr>))}
+              </tbody>
+            </table>
+          </div>
         </DialogContent>
       </Dialog>
     </div>

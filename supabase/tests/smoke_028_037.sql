@@ -571,6 +571,26 @@ SELECT pg_temp.chk('driver sees their riders', (SELECT count(*)=1 FROM public.st
 RESET ROLE;
 SELECT pg_temp.chk('seats cannot exceed capacity', pg_temp.fails($q$UPDATE public.transport_vehicles SET occupied_seats=99 WHERE id='c9100000-0000-0000-0000-000000000001'$q$));
 
+-- ---- 055 placement ----
+INSERT INTO auth.users(id,email) VALUES ('c0000000-0000-0000-0000-0000000000c1','pl.student@example.test');
+INSERT INTO public.profiles(id,email,name,role,department,student_id) VALUES ('c0000000-0000-0000-0000-0000000000c1','pl.student@example.test','Place Student','student','Nursing','PL-1');
+INSERT INTO public.placement_drives (id, company_name, job_title, package_lpa, min_cgpa, eligible_departments, drive_date, application_deadline, status) VALUES
+ ('c9200000-0000-0000-0000-000000000001','Acme','Tech',5,6.5,ARRAY['Nursing'],CURRENT_DATE+10,CURRENT_DATE+5,'Open'),
+ ('c9200000-0000-0000-0000-000000000002','Other','Tech',5,6.0,ARRAY['Engineering'],CURRENT_DATE+10,CURRENT_DATE+5,'Open'),
+ ('c9200000-0000-0000-0000-000000000003','Late','Tech',5,6.0,ARRAY['Nursing'],CURRENT_DATE-1,CURRENT_DATE-2,'Open');
+SET LOCAL ROLE authenticated;
+SELECT set_config('request.jwt.claim.sub','c0000000-0000-0000-0000-0000000000c1',true);
+SELECT pg_temp.chk('cannot apply below the minimum CGPA', (public.placement_apply('c9200000-0000-0000-0000-000000000001', 5.0)->>'code')='NOT_ELIGIBLE');
+SELECT pg_temp.chk('cannot apply to another department''s drive', (public.placement_apply('c9200000-0000-0000-0000-000000000002', 9.0)->>'code')='NOT_ELIGIBLE');
+SELECT pg_temp.chk('cannot apply after the deadline', (public.placement_apply('c9200000-0000-0000-0000-000000000003', 9.0)->>'code')='CLOSED');
+SELECT pg_temp.chk('eligible student applies', (public.placement_apply('c9200000-0000-0000-0000-000000000001', 7.2)->>'success')='true');
+SELECT pg_temp.chk('a second application is refused', (public.placement_apply('c9200000-0000-0000-0000-000000000001', 7.2)->>'code')='ALREADY_APPLIED');
+SELECT pg_temp.chk('students cannot insert applications directly', pg_temp.fails($q$INSERT INTO public.placement_applications (drive_id,student_id,student_name,roll_number,department,cgpa,status) VALUES ('c9200000-0000-0000-0000-000000000002','c0000000-0000-0000-0000-0000000000c1','x','y','z',9,'Applied')$q$));
+SELECT pg_temp.chk('an applicant cannot mark themselves Selected', pg_temp.fails($q$UPDATE public.placement_applications SET status='Selected' WHERE student_id='c0000000-0000-0000-0000-0000000000c1'$q$));
+UPDATE public.placement_applications SET cgpa=10, current_round='Final' WHERE student_id='c0000000-0000-0000-0000-0000000000c1';
+RESET ROLE;
+SELECT pg_temp.chk('an applicant cannot change their CGPA, round or outcome', (SELECT cgpa=7.2 AND status='Applied' AND current_round='Applied' FROM public.placement_applications WHERE student_id='c0000000-0000-0000-0000-0000000000c1'));
+
 SELECT name, CASE WHEN ok THEN 'PASS' ELSE 'FAIL' END AS result FROM _r ORDER BY ok, name;
 DO $$ BEGIN
   IF EXISTS (SELECT 1 FROM _r WHERE NOT ok) THEN RAISE EXCEPTION 'SMOKE TEST FAILED'; END IF;

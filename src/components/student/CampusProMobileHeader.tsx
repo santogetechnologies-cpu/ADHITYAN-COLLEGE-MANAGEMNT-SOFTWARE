@@ -18,6 +18,7 @@ const VIEW_TITLES: Record<string, string> = {
   'fees': 'Fees & Receipts',
   'store': 'Campus Store',
   'transport': 'Bus Tracking',
+  'placement': 'Placements',
   'complaints': 'Raise Complaints',
   'settings': 'Student Profile',
 };

@@ -211,3 +211,11 @@ Legend: ✅ done & verified as stated · 🟡 written, not runnable here · ⬜ 
 | Driver scoped to own vehicle; riders/parents see own bus only; guard trigger on vehicle edits | ✅ SQL | 6 smoke checks (235 total) |
 | Driver dashboard: no fallback to "first bus" (a driver with no assignment saw and edited someone else's), GPS failure no longer fakes a live location ("simulator"), invented speed 32 km/h / ETA 15 min / 12 riders / 3 trips removed, manifest prints, "Notify parents" no longer claims an SMS was sent (sends in-app notices to waiting riders), reports export CSV | 🟡 UI | build |
 | Route/stop/fleet administration screen for admin; student-to-route allocation linked to fees | ⬜ | |
+
+## Module — Placement (migration 055)
+| Item | Status | Evidence |
+|------|--------|----------|
+| Server-checked applications, applicant cannot tamper with CGPA/outcome | ✅ SQL | 8 smoke checks (243 total) |
+| Officer dashboard: real KPIs (highest/average package from selected students, applications, recruiters; invented ₹7.8/4.8 LPA, 185, 94%, 84 removed), drive creation validates and no longer invents package/CGPA/venue/rounds or closes on failure, application deadline field, applicants list with status updates, close/reopen | 🟡 UI | build |
+| New student "Placements" view (apply with eligibility checks, withdraw) — there was no student side at all | 🟡 UI | build, nav check |
+| CGPA from computed grade points; backlog count; offer-letter upload | ⬜ | needs GPA engine |

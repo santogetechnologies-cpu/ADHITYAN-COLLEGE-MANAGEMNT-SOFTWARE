@@ -42,6 +42,7 @@ back-fills of NULLs and a de-duplication of `super_admin_releases` rows with the
 | 052_hostel_outpass_integrity.sql | **INTEGRITY: students/parents could set `parent_otp_verified` on their own out-pass**; trigger enforces who may set consent/gate fields, valid status flow Pending→Approved→Exited→Returned (Rejected), gate times stamped by the server; return time must be after departure | 032 |
 | 053_payroll.sql | **CRITICAL PRIVACY: `staff_service_records` allowed every signed-in user to read AND edit all staff PAN/bank/salary** — now own record or HR/finance/principal/admin; HR/admin only can write. Payroll computed on the server (`payroll_run_create`) from service records + approved leave-without-pay, rules in `payroll_settings` (EPF %, ceiling, ESI, PT — **must be set by the institution before the first run**), Draft → Approved (not by the preparer) → Disbursed (bank reference required), cancel with reason; direct writes revoked; invented pay/bank defaults removed | 028 |
 | 054_transport_access.sql | **PRIVACY/INTEGRITY: any driver could edit every vehicle, stop, rider log and maintenance record; every signed-in user could read all vehicles (driver phone, live location)** — drivers act only on their own bus (and may only report location/status/seats), riders/parents see only their own bus, seats cannot exceed capacity | 001 |
+| 055_placement.sql | Students apply only through `placement_apply` (deadline, drive open, department and minimum-CGPA checks, one application per drive); applicants cannot edit CGPA/round/outcome (only withdraw); drive statuses validated; drives hidden from non-college roles. CGPA is self-declared until grade points are computed from results | 032 |
 | 036_reconcile_legacy_columns.sql | `timetables.session_type`, `exam_schedules.day_of_week`, `student_attendance.*`, reception columns | 029 |
 
 **Behaviour changes to expect after 032:** buckets `documents`, `attachments`, `student_documents`, `staff_documents`
@@ -55,7 +56,7 @@ Not carried over on purpose: multi-college tables (`colleges`, `college_*`, `pla
 ```bash
 psql "$STAGING_DB_URL" -v ON_ERROR_STOP=1 -f supabase/tests/smoke_028_037.sql   # synthetic data, rolls back
 ```
-All lines must read PASS (235 checks). Edge-function checks: `scripts/test-edge-gate.sh` (type-check + authorization/validation cases; needs no database). Then in the SQL editor: `select count(*) from public.profiles where role is null;` (must be 0).
+All lines must read PASS (243 checks). Edge-function checks: `scripts/test-edge-gate.sh` (type-check + authorization/validation cases; needs no database). Then in the SQL editor: `select count(*) from public.profiles where role is null;` (must be 0).
 
 ### Rollback
 Each file is one transaction, so a failure leaves nothing half-applied. To undo a *successful* run use the backup/PITR from

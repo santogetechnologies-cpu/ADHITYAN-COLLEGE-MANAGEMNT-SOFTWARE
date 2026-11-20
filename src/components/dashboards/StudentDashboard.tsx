@@ -22,6 +22,7 @@ import { StudentClassTimetableTab } from '@/components/student/StudentClassTimet
 import { StudentExams } from '@/components/student/StudentExams';
 import { StudentFeesTab } from '@/components/student/StudentFeesTab';
 import { StudentStoreTab } from '@/components/student/StudentStoreTab';
+import { StudentPlacementTab } from '@/components/student/StudentPlacementTab';
 import { StudentBusTab } from '@/components/student/StudentBusTab';
 import { StudentComplaintsTab } from '@/components/student/StudentComplaintsTab';
 import { StudentSettingsTab } from '@/components/student/StudentSettingsTab';
@@ -43,7 +44,7 @@ export function StudentDashboard() {
     'dashboard', 'attendance', 'timetable', 'class-timetable', 
     'learning', 'assignments', 'performance', 'morning-checkin', 
     'evening-checkin', 'exams', 'fees', 'store', 'transport', 
-    'complaints', 'settings'
+    'placement', 'complaints', 'settings'
   ]), []);
 
   const currentView = validViews.has(rawView) ? rawView : 'dashboard';
@@ -410,6 +411,10 @@ export function StudentDashboard() {
           {/* 10. Bus Tracking */}
           {currentView === 'transport' && (
             <StudentBusTab />
+          )}
+
+          {currentView === 'placement' && (
+            <StudentPlacementTab />
           )}
 
           {/* 11. Raise Complaints */}

@@ -39,6 +39,7 @@ export function CampusProDesktopSidebar({
     { id: 'fees', label: 'Fees & Receipts', icon: CreditCard },
     { id: 'store', label: 'Store', icon: ShoppingBag },
     { id: 'transport', label: 'Bus Tracking', icon: Bus },
+    { id: 'placement', label: 'Placements', icon: GraduationCap },
     { id: 'complaints', label: 'Raise Complaints', icon: AlertCircle },
   ];
 
