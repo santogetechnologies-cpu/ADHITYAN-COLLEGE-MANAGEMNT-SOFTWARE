@@ -157,3 +157,9 @@ Legend: ✅ done & verified as stated · 🟡 written, not runnable here · ⬜ 
 | Server-issued numbers/hash, student requests, staff decisions (reason on reject), public verification, audited | ✅ SQL | 11 smoke checks (194 total) |
 | Certificate screen rebuilt (issue by student search, requests table with issue/reject/print/export/search, verify tab); fake templates, transcript and bulk-print tabs removed; Principal dashboard uses the same functions | 🟡 UI | build; dead buttons 68 → ~57 |
 | Student-side "request a certificate" screen; transcripts from real results; certificate templates editor | ⬜ | API ready (`db.requestCertificate`) |
+
+## Module — Medical (migration 049)
+| Item | Status | Evidence |
+|------|--------|----------|
+| Health data private to owner/admin/principal; infirmary log staff-only; contacts and alerts stored in the database | ✅ SQL | 4 smoke checks (198 total) |
+| Medical screen rebuilt (record create/edit/export/filter, infirmary log with status/search/range, contacts, alerts); invented counts, flu outbreak and phone numbers removed; two orphan fake dialogs deleted | 🟡 UI | build; dead buttons -15 |

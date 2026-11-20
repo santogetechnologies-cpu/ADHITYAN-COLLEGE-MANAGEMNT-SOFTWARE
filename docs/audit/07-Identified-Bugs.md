@@ -55,3 +55,5 @@ See `01-Executive-Audit.md` for the full table with status. Quick index:
 | Alumni directory (names, e-mail, phone) readable by every signed-in user including students and parents | Fixed (047) |
 | Alumni donations/mentorship tabs showed invented figures (₹12.5L, 78 mentors, 92% success) and hard-coded rows; realtime listened to a table that does not exist (`alumni_members`) | Fixed (rebuilt on real tables) |
 | Certificates: browser invented the number (`CRT-2024-####`), typed the student name, auto-approved, and displayed a certificate even when the database insert failed; realtime listened to a non-existent table | Fixed (048, screen rebuilt) |
+| Teachers could read every student's allergies and medical conditions (policy allowed role `teacher`) | Fixed (049) |
+| Medical screen: invented totals (2847 records, 23 visits, 7 alerts), fake flu outbreak, fake emergency numbers, "100% updated"; infirmary table read non-existent columns (`complaint`, `doctor_name`); New Record / Log Visit only showed toasts | Fixed (rebuilt) |

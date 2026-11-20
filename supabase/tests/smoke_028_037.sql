@@ -454,6 +454,18 @@ SELECT pg_temp.chk('a decided request cannot be decided again', (public.certific
 RESET ROLE;
 SELECT pg_temp.chk('anyone can verify a genuine number, forged ones fail', (public.certificate_verify((SELECT r->>'certificate_number' FROM _cert))->>'valid')='true' AND (public.certificate_verify('CERT-2026-999999')->>'valid')='false');
 
+-- ---- 049 medical ----
+INSERT INTO public.health_records (name, role, roll_no, blood_group) VALUES ('Smoke Patient','student','MED-1','O+');
+INSERT INTO public.wellness_alerts (title, message, active) VALUES ('Smoke active','m',true), ('Smoke retired','m',false);
+SET LOCAL ROLE authenticated;
+SELECT set_config('request.jwt.claim.sub','c0000000-0000-0000-0000-000000000001',true);   -- student
+SELECT pg_temp.chk('student cannot read other people health records', (SELECT count(*)=0 FROM public.health_records));
+SELECT pg_temp.chk('student sees only active wellness alerts', (SELECT count(*)=1 FROM public.wellness_alerts));
+SELECT pg_temp.chk('student cannot read the infirmary log', (SELECT count(*)=0 FROM public.infirmary_visits));
+SELECT set_config('request.jwt.claim.sub','c0000000-0000-0000-0000-000000000008',true);   -- admin
+SELECT pg_temp.chk('admin reads health records', (SELECT count(*)>=1 FROM public.health_records));
+RESET ROLE;
+
 SELECT name, CASE WHEN ok THEN 'PASS' ELSE 'FAIL' END AS result FROM _r ORDER BY ok, name;
 DO $$ BEGIN
   IF EXISTS (SELECT 1 FROM _r WHERE NOT ok) THEN RAISE EXCEPTION 'SMOKE TEST FAILED'; END IF;
