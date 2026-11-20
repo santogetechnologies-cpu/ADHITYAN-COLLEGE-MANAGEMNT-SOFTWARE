@@ -106,6 +106,7 @@ Legend: ✅ done & verified as stated · 🟡 written, not runnable here · ⬜ 
 | Waiver / concession / cancellation (reason mandatory, append-only history, paid fees cannot be cancelled); cancel a whole run keeping paid items | ✅ SQL | smoke |
 | Students without a portal login can be billed and can pay; fees link to the login when it is created | ✅ SQL | smoke |
 | API actions `fee_generate` / `fee_adjust` / `fee_cancel_run` / `fee_plan_clone` (finance_manager + admin only) | 🟡 | tsc + 45 gate cases |
-| Fee setup screens (heads, plans, billing wizard with preview, history) | ⬜ → next | |
+| Fee setup screens: fee types, plans + items (publish/clone/archive), billing wizard with mandatory preview, history with run cancel; per-fee Adjust (concession/waiver/cancel); Collect works for students without a login | 🟡 | build + type-check only (0 errors in new files) |
+| Finance table: fake id `AIP-VERIFIED` removed; shows fee type + term; waived/cancelled statuses | 🟡 | migration 041 |
 | Late-fee rules, installment schedules, scholarship auto-application, refunds | ⬜ | |
 | Old `fee_structures` table and `FeeStructureManager` still exist (fixed columns); to be migrated into plans and retired | ⬜ | |

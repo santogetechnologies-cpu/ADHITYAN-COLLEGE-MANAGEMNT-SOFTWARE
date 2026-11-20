@@ -687,9 +687,28 @@ export interface StudentFee {
   total_due: number;
   paid_amount: number;
   due_date: string;
-  status: 'paid' | 'pending' | 'overdue' | 'partially_paid';
+  status: 'paid' | 'pending' | 'overdue' | 'partially_paid' | 'waived' | 'cancelled';
   created_at?: string;
+  // fee engine (migrations 040/041)
+  student_record_id?: string | null;
+  student_code?: string | null;
+  fee_head_id?: string | null;
+  plan_item_id?: string | null;
+  run_id?: string | null;
+  charge_key?: string | null;
+  academic_year?: string | null;
+  term_label?: string | null;
+  description?: string | null;
+  original_amount?: number | null;
+  waived_amount?: number;
 }
+
+export interface FeeHead { id: string; code: string; name: string; category: string; refundable: boolean; active: boolean; description?: string | null; created_at?: string; updated_at?: string }
+export interface FeePlan { id: string; name: string; academic_year: string; department: string | null; class_name: string | null; quota: string | null; description: string | null; status: 'Draft' | 'Published' | 'Archived'; created_by?: string | null; published_at?: string | null; created_at?: string; updated_at?: string }
+export interface FeePlanItem { id: string; plan_id: string; fee_head_id: string; amount: number; billing_cycle: 'one_time' | 'per_semester' | 'per_year'; semesters: number[] | null; due_days: number; description?: string | null; sort_order?: number; created_at?: string }
+export interface FeeRun { id: string; run_type: 'plan' | 'adhoc'; plan_id: string | null; fee_head_id: string | null; amount: number | null; description: string | null; scope_type: 'student' | 'class' | 'department' | 'all'; scope_value: string | null; quota_filter: string | null; semester_filter: number | null; academic_year: string; due_date: string | null; status: 'Completed' | 'Cancelled'; students_count: number; demands_count: number; total_amount: number; created_at: string }
+export interface FeeAdjustment { id: string; student_fee_id: string; kind: 'waiver' | 'concession' | 'cancellation'; amount: number; reason: string; created_by?: string | null; created_at: string }
+export interface StudentRecord { id: string; user_id: string | null; student_id: string; name: string; department: string | null; class_name: string | null; current_semester: number; status: string; admission_quota?: string | null; admission_type?: string | null; entry_academic_year?: string | null }
 
 export interface StudentAchievement {
   id: string;

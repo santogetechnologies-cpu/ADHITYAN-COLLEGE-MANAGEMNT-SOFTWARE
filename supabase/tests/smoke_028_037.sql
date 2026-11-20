@@ -159,6 +159,7 @@ SELECT pg_temp.chk('preview writes nothing', (SELECT count(*) FROM public.studen
 SELECT pg_temp.chk('execute creates the demands', (SELECT (r->>'created')::int=11 AND (r->>'total_amount')::numeric=130500
    FROM (SELECT public.fee_generate(true,'c5000000-0000-0000-0000-000000000001',NULL,NULL,NULL,'department','DeptX',NULL,NULL,NULL,NULL,true,true,'c0000000-0000-0000-0000-000000000005') r) x));
 SELECT pg_temp.chk('one invoice per head, student has no login yet', (SELECT count(*)=4 FROM public.student_fees WHERE student_record_id='c4000000-0000-0000-0000-000000000001' AND student_id IS NULL AND original_amount=total_due));
+SELECT pg_temp.chk('fee rows carry the student code automatically', (SELECT bool_and(student_code = 'FE-001') FROM public.student_fees WHERE student_record_id='c4000000-0000-0000-0000-000000000001'));
 SELECT pg_temp.chk('lab fee skipped for semester 3', (SELECT count(*)=0 FROM public.student_fees f JOIN public.fee_heads h ON h.id=f.fee_head_id WHERE f.student_record_id='c4000000-0000-0000-0000-000000000003' AND h.code='LAB'));
 SELECT pg_temp.chk('rerun bills nothing twice', (public.fee_generate(true,'c5000000-0000-0000-0000-000000000001',NULL,NULL,NULL,'department','DeptX',NULL,NULL,NULL,NULL,true,true,'c0000000-0000-0000-0000-000000000005')->>'code')='NOTHING_TO_BILL');
 SELECT pg_temp.chk('semester run does not repeat semester fees', (public.fee_generate(false,'c5000000-0000-0000-0000-000000000001',NULL,NULL,NULL,'department','DeptX',NULL,1,NULL,NULL,false,false,'c0000000-0000-0000-0000-000000000005')->>'to_create')::int=0);

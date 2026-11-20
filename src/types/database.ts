@@ -253,6 +253,42 @@ export interface Database {
         Update: Partial<DBTypes.StudentFee>;
         Relationships: [];
       };
+      fee_heads: {
+        Row: DBTypes.FeeHead;
+        Insert: Partial<DBTypes.FeeHead> & { code: string; name: string };
+        Update: Partial<DBTypes.FeeHead>;
+        Relationships: [];
+      };
+      fee_plans: {
+        Row: DBTypes.FeePlan;
+        Insert: Partial<DBTypes.FeePlan> & { name: string; academic_year: string };
+        Update: Partial<DBTypes.FeePlan>;
+        Relationships: [];
+      };
+      fee_plan_items: {
+        Row: DBTypes.FeePlanItem;
+        Insert: Partial<DBTypes.FeePlanItem> & { plan_id: string; fee_head_id: string; amount: number; billing_cycle: string };
+        Update: Partial<DBTypes.FeePlanItem>;
+        Relationships: [];
+      };
+      fee_runs: {
+        Row: DBTypes.FeeRun;
+        Insert: Partial<DBTypes.FeeRun>;
+        Update: Partial<DBTypes.FeeRun>;
+        Relationships: [];
+      };
+      fee_adjustments: {
+        Row: DBTypes.FeeAdjustment;
+        Insert: Partial<DBTypes.FeeAdjustment>;
+        Update: Partial<DBTypes.FeeAdjustment>;
+        Relationships: [];
+      };
+      students: {
+        Row: DBTypes.StudentRecord;
+        Insert: Partial<DBTypes.StudentRecord> & { student_id: string; name: string };
+        Update: Partial<DBTypes.StudentRecord>;
+        Relationships: [];
+      };
       student_achievements: {
         Row: DBTypes.StudentAchievement;
         Insert: Partial<DBTypes.StudentAchievement> & { student_id: string; title: string; category: string };

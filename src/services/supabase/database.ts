@@ -2065,6 +2065,33 @@ export const db = {
     } });
   },
 
+  // ---- Fee engine (migration 040). All writes are server-side, atomic and idempotent. ----
+  /** execute=false returns a preview of exactly what would be billed; execute=true bills it. */
+  async feeGenerate(execute: boolean, generate: {
+    planId?: string; feeHeadId?: string; amount?: number; description?: string;
+    scopeType: 'student' | 'class' | 'department' | 'all'; scopeValue?: string; quota?: string; semester?: number | null;
+    academicYear?: string; dueDate?: string; includeYearly?: boolean; includeOneTime?: boolean;
+  }): Promise<any> {
+    return await callAdminApi('fee_generate', { execute, generate: {
+      plan_id: generate.planId, fee_head_id: generate.feeHeadId, amount: generate.amount, description: generate.description,
+      scope_type: generate.scopeType, scope_value: generate.scopeValue, quota: generate.quota, semester: generate.semester,
+      academic_year: generate.academicYear, due_date: generate.dueDate,
+      include_yearly: generate.includeYearly, include_one_time: generate.includeOneTime,
+    } });
+  },
+
+  async feeAdjust(studentFeeId: string, kind: 'waiver' | 'concession' | 'cancellation', amount: number | undefined, reason: string): Promise<any> {
+    return await callAdminApi('fee_adjust', { adjustment: { student_fee_id: studentFeeId, kind, amount, reason } });
+  },
+
+  async feeCancelRun(runId: string, reason: string): Promise<{ cancelled: number; kept_because_paid: number; run_closed: boolean }> {
+    return await callAdminApi('fee_cancel_run', { run_id: runId, reason });
+  },
+
+  async feePlanClone(planId: string, name: string, academicYear: string): Promise<{ plan_id: string }> {
+    return await callAdminApi('fee_plan_clone', { plan_id: planId, name, academic_year: academicYear });
+  },
+
   /** Enrols an Approved/Offered applicant: creates (or links) the permanent student record. Idempotent. */
   async enrollAdmission(id: string, opts: { department?: string; class_name?: string } = {}): Promise<{
     student_id: string; student_record_id: string; already_enrolled: boolean; linked_existing?: boolean;

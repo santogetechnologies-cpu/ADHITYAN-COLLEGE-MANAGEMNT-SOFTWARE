@@ -50,7 +50,9 @@ import {
 import { db } from '@/services/supabase/database';
 import { StudentFee, FinanceTransaction, Profile, FeeReceipt } from '@/types/database.types';
 import { useToast } from '@/hooks/use-toast';
-import { FeeStructureManager } from '@/components/finance/FeeStructureManager';
+import { FeeSetup } from '@/components/finance/FeeSetup';
+import { FeeAdjustDialog, type AdjustableFee } from '@/components/finance/FeeAdjustDialog';
+import { StudentRecordSearch } from '@/components/shared/StudentRecordSearch';
 import { ScholarshipManager } from '@/components/finance/ScholarshipManager';
 import { MiscExpensesModule } from '@/components/finance/MiscExpensesModule';
 import { StudentSearchSelect } from '@/components/shared/StudentSearchSelect';
@@ -73,6 +75,7 @@ export default function FinanceManagerDashboard() {
 
   // Dialog States
   const [collectPaymentOpen, setCollectPaymentOpen] = useState(false);
+  const [adjustFee, setAdjustFee] = useState<AdjustableFee | null>(null);
   const [addFeeInvoiceOpen, setAddFeeInvoiceOpen] = useState(false);
   const [payrollDialogOpen, setPayrollDialogOpen] = useState(false);
   const [refundDialogOpen, setRefundDialogOpen] = useState(false);
@@ -89,6 +92,7 @@ export default function FinanceManagerDashboard() {
   // Forms
   const EMPTY_PAYMENT = {
     student_id: '',
+    student_record_id: '',
     student_name: '',
     student_fee_id: '',
     amount: '',
@@ -241,8 +245,11 @@ export default function FinanceManagerDashboard() {
 
   // Open invoices of the student chosen in the payment dialog (total_due = outstanding balance)
   const openFeesForPayment = useMemo(
-    () => studentFees.filter((f: any) => f.student_id === paymentForm.student_id && Number(f.total_due) > 0),
-    [studentFees, paymentForm.student_id]
+    () => studentFees.filter((f: any) =>
+      Number(f.total_due) > 0 &&
+      ((paymentForm.student_record_id && f.student_record_id === paymentForm.student_record_id) ||
+       (paymentForm.student_id && f.student_id === paymentForm.student_id))),
+    [studentFees, paymentForm.student_id, paymentForm.student_record_id]
   );
   const selectedPaymentFee: any = openFeesForPayment.find((f: any) => f.id === paymentForm.student_fee_id);
   const REFERENCE_REQUIRED = ['UPI', 'Card', 'Bank_Transfer', 'Cheque', 'Online_Gateway'];
@@ -262,7 +269,7 @@ export default function FinanceManagerDashboard() {
     const fail = (description: string) =>
       toast({ title: 'Check the payment details', description, variant: 'destructive' });
 
-    if (!paymentForm.student_id) return fail('Select an enrolled student.');
+    if (!paymentForm.student_id && !paymentForm.student_record_id) return fail('Select an enrolled student.');
     if (!selectedPaymentFee) return fail('Select the invoice this payment is for.');
     if (!Number.isFinite(amountNum) || amountNum <= 0) return fail('Enter an amount greater than zero.');
     if (amountNum > balance) return fail(`Amount cannot exceed the outstanding balance of ₹${balance.toLocaleString('en-IN')}.`);
@@ -509,7 +516,7 @@ export default function FinanceManagerDashboard() {
           onClick={() => setActiveFinanceTab('structures')}
           className="text-xs font-bold"
         >
-          Fee Structures Master
+          Fee Setup
         </Button>
         <Button
           size="sm"
@@ -804,7 +811,7 @@ export default function FinanceManagerDashboard() {
                   ) : (
                     filteredFees.map((fee) => {
                       const matchedStudent = students.find(s => s.id === fee.student_id);
-                      const displayId = matchedStudent?.student_id || matchedStudent?.roll_number || 'AIP-VERIFIED';
+                      const displayId = fee.student_code || matchedStudent?.student_id || matchedStudent?.roll_number || '—';
 
                       return (
                         <tr key={fee.id} className="hover:bg-slate-50/50">
@@ -814,6 +821,7 @@ export default function FinanceManagerDashboard() {
                           </td>
                           <td className="p-3 text-slate-700 font-medium">
                             {fee.class_name}
+                            {fee.description && <div className="text-[10px] text-slate-500 font-normal">{fee.description}{fee.term_label ? ` · ${fee.term_label}` : ''}</div>}
                           </td>
                           <td className="p-3 font-semibold text-slate-800">
                             ₹{(Number(fee.total_due) + Number(fee.paid_amount)).toLocaleString('en-IN')}
@@ -836,20 +844,22 @@ export default function FinanceManagerDashboard() {
                               }
                               className={`text-[10px] font-bold capitalize ${
                                 fee.status === 'paid' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
-                                fee.status === 'partially_paid' ? 'bg-amber-50 text-amber-700 border-amber-200' : ''
+                                fee.status === 'partially_paid' ? 'bg-amber-50 text-amber-700 border-amber-200' :
+                                fee.status === 'waived' || fee.status === 'cancelled' ? 'bg-zinc-100 text-zinc-600 border-zinc-200' : ''
                               }`}
                             >
                               {fee.status?.replace('_', ' ')}
                             </Badge>
                           </td>
                           <td className="p-3 text-right space-x-1">
-                            {fee.status !== 'paid' && (
+                            {fee.status !== 'paid' && fee.status !== 'cancelled' && fee.status !== 'waived' && (
                               <>
                                 <Button
                                   size="sm"
                                   className="h-7 text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg"
                                   onClick={() => openCollectDialog({
                                     student_id: fee.student_id || '',
+                                    student_record_id: fee.student_record_id || '',
                                     student_name: fee.student_name,
                                     student_fee_id: fee.id,
                                     amount: String(fee.total_due),
@@ -864,6 +874,9 @@ export default function FinanceManagerDashboard() {
                                   onClick={() => handleSendReminder(fee)}
                                 >
                                   <Bell className="w-3 h-3 mr-1" /> Remind
+                                </Button>
+                                <Button size="sm" variant="outline" className="h-7 text-xs rounded-lg" onClick={() => setAdjustFee(fee)}>
+                                  Adjust
                                 </Button>
                               </>
                             )}
@@ -942,7 +955,7 @@ export default function FinanceManagerDashboard() {
 
       {/* 3. FEE STRUCTURES TAB */}
       {activeFinanceTab === 'structures' && (
-        <FeeStructureManager />
+        <FeeSetup />
       )}
 
       {/* 4. EXPENSES TAB */}
@@ -1122,18 +1135,20 @@ export default function FinanceManagerDashboard() {
           <form onSubmit={handleRecordPayment} className="space-y-3.5 text-xs">
             <div>
               <Label className="text-xs font-bold">Select Enrolled Student *</Label>
-              <StudentSearchSelect
-                value={paymentForm.student_id}
+              <StudentRecordSearch
+                key={paymentForm.student_record_id || paymentForm.student_id || 'none'}
+                selectedLabel={paymentForm.student_name || undefined}
                 onSelect={(st) => {
                   setPaymentForm(prev => ({
                     ...prev,
-                    student_id: st?.id || '',
+                    student_id: st?.user_id || '',
+                    student_record_id: st?.id || '',
                     student_name: st?.name || '',
                     student_fee_id: '',
                     amount: '',
                   }));
                 }}
-                placeholder="Search by AIP Student ID or Name..."
+                placeholder="Search by student ID or name…"
               />
             </div>
             <div>
@@ -1234,6 +1249,8 @@ export default function FinanceManagerDashboard() {
           </form>
         </DialogContent>
       </Dialog>
+
+      <FeeAdjustDialog fee={adjustFee} onOpenChange={(o) => { if (!o) setAdjustFee(null); }} onDone={loadFinanceData} />
 
       {/* Issue Fee Invoice Dialog */}
       <Dialog open={addFeeInvoiceOpen} onOpenChange={setAddFeeInvoiceOpen}>
