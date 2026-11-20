@@ -38,5 +38,16 @@ async function expect(name, caller, body, status, code) {
   await expect('create application w/o student id', c('receptionist'), { action: 'create_admission_application', application: { name: 'A' } }, 400, 'STUDENT_ID_REQUIRED');
   await expect('create application bad e-mail', c('receptionist'), { action: 'create_admission_application', application: { student_id: 'S1', name: 'A', email: 'nope' } }, 400, 'VALIDATION_ERROR');
   await expect('create application w/o course', c('receptionist'), { action: 'create_admission_application', application: { student_id: 'S1', name: 'A', email: '' } }, 400, 'VALIDATION_ERROR');
+  await expect('student schedule tests', c('student'), { action: 'schedule_admission_tests', application_ids: ['x'], test_date: '2026-06-01' }, 403, 'FORBIDDEN');
+  await expect('teacher publish merit', c('teacher'), { action: 'publish_merit_list', course: 'X', seats: 1, weight_qualifying: 50 }, 403);
+  await expect('schedule: bad ids', c('receptionist'), { action: 'schedule_admission_tests', application_ids: ['nope'], test_date: '2026-06-01' }, 400, 'VALIDATION_ERROR');
+  await expect('schedule: no date', c('receptionist'), { action: 'schedule_admission_tests', application_ids: ['11111111-1111-1111-1111-111111111111'] }, 400, 'VALIDATION_ERROR');
+  await expect('result: bad test id', c('receptionist'), { action: 'record_entrance_result', test_id: 'x', status: 'Completed', score: 5 }, 400, 'VALIDATION_ERROR');
+  await expect('merit: fractional seats refused', c('receptionist'), { action: 'publish_merit_list', course: 'X', seats: 1.5, weight_qualifying: 50 }, 400, 'VALIDATION_ERROR');
+  await expect('merit: no course', c('receptionist'), { action: 'publish_merit_list', seats: 5, weight_qualifying: 50 }, 400, 'VALIDATION_ERROR');
+  await expect('apply merit: no course', c('principal'), { action: 'apply_merit_decisions' }, 400, 'VALIDATION_ERROR');
+  await expect('deposit: bad id', c('receptionist'), { action: 'record_admission_deposit', deposit: { application_id: 'x', amount: 5 } }, 400, 'VALIDATION_ERROR');
+  await expect('deposit: negative amount', c('receptionist'), { action: 'record_admission_deposit', deposit: { application_id: '11111111-1111-1111-1111-111111111111', amount: -5 } }, 400, 'VALIDATION_ERROR');
+  await expect('student deposit', c('student'), { action: 'record_admission_deposit', deposit: {} }, 403);
   console.log(fail ? `\n${fail} FAILED` : '\nALL GATE TESTS PASSED'); process.exit(fail ? 1 : 0);
 })();

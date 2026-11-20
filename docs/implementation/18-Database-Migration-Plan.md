@@ -26,6 +26,7 @@ back-fills of NULLs and a de-duplication of `super_admin_releases` rows with the
 | 035_record_fee_payment.sql | transactional, idempotent `record_fee_payment()` + receipts (service_role only) | 028 |
 | 037_admissions_lifecycle.sql | **closes RLS on `admission_document_verifications` / `admission_merit_lists`** (were open to the public key), typed application columns + backfill from the JSON workaround (originals kept), wider status set, `admission_set_status()` (validated transitions + audit), `admission_enroll()` (transactional, idempotent student record), student↔profile adoption | 028, 036 |
 | 038_admission_deposit.sql | `record_admission_deposit()`: admission deposit + receipt + ledger row in one transaction, idempotent | 037 |
+| 039_admission_tests_and_merit.sql | entrance tests per applicant (`admission_schedule_tests`, `admission_record_test_result`), server-side merit ranking (`admission_publish_merit`: qualifying × w% + entrance × (100−w)%, seats, tie-break by submission date then id) and `admission_apply_merit` (Approved/Waitlisted through `admission_set_status`) | 038 |
 | 036_reconcile_legacy_columns.sql | `timetables.session_type`, `exam_schedules.day_of_week`, `student_attendance.*`, reception columns | 029 |
 
 **Behaviour changes to expect after 032:** buckets `documents`, `attachments`, `student_documents`, `staff_documents`
@@ -39,7 +40,7 @@ Not carried over on purpose: multi-college tables (`colleges`, `college_*`, `pla
 ```bash
 psql "$STAGING_DB_URL" -v ON_ERROR_STOP=1 -f supabase/tests/smoke_028_037.sql   # synthetic data, rolls back
 ```
-All lines must read PASS (39 checks). Edge-function checks: `scripts/test-edge-gate.sh` (type-check + authorization/validation cases; needs no database). Then in the SQL editor: `select count(*) from public.profiles where role is null;` (must be 0).
+All lines must read PASS (56 checks). Edge-function checks: `scripts/test-edge-gate.sh` (type-check + authorization/validation cases; needs no database). Then in the SQL editor: `select count(*) from public.profiles where role is null;` (must be 0).
 
 ### Rollback
 Each file is one transaction, so a failure leaves nothing half-applied. To undo a *successful* run use the backup/PITR from

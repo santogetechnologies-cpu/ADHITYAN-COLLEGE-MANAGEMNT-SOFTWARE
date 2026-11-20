@@ -6154,64 +6154,37 @@ export const db = {
   // ===========================================================================
   // ADMISSION MERIT LISTS
   // ===========================================================================
-  async getAdmissionMeritLists(): Promise<T.AdmissionMeritEntry[]> {
-    try {
-      const { data, error } = await supabase.from('admission_merit_lists').select('*').order('rank', { ascending: true });
-      if (error) throw error;
-      return data || [];
-    } catch (err) {
-      console.warn('getAdmissionMeritLists warning:', err);
-      return [];
-    }
+  /** Published merit rows (linked to applications). */
+  async getAdmissionMeritLists(): Promise<any[]> {
+    const { data, error } = await supabase.from('admission_merit_lists').select('*').not('application_id', 'is', null).order('rank', { ascending: true });
+    if (error) throw new Error(`Could not load the merit list: ${error.message}`);
+    return data || [];
   },
 
-  async addAdmissionMeritEntry(entry: Partial<T.AdmissionMeritEntry>): Promise<T.AdmissionMeritEntry | null> {
-    try {
-      const { data, error } = await supabase.from('admission_merit_lists').insert(entry).select().single();
-      if (error) throw error;
-      return data;
-    } catch (err) {
-      console.error('addAdmissionMeritEntry error:', err);
-      return null;
-    }
+  async publishMeritList(params: { course: string; academicYear?: string; seats: number; weightQualifying: number }): Promise<any> {
+    return await callAdminApi('publish_merit_list', {
+      course: params.course, academic_year: params.academicYear || null, seats: params.seats, weight_qualifying: params.weightQualifying,
+    });
   },
 
-  async updateMeritStatus(id: string, status: 'Selected' | 'Waitlist' | 'Admitted' | 'Declined'): Promise<boolean> {
-    try {
-      const { error } = await supabase.from('admission_merit_lists').update({
-        status,
-        updated_at: new Date().toISOString()
-      }).eq('id', id);
-      if (error) throw error;
-      return true;
-    } catch (err) {
-      console.error('updateMeritStatus error:', err);
-      return false;
-    }
+  async applyMeritDecisions(params: { course: string; academicYear?: string }): Promise<{ updated: number; skipped: any[] }> {
+    return await callAdminApi('apply_merit_decisions', { course: params.course, academic_year: params.academicYear || null });
   },
 
   // ===========================================================================
-  // ADMISSION ENTRANCE TESTS
+  // ADMISSION ENTRANCE TESTS (one record per applicant)
   // ===========================================================================
-  async getAdmissionEntranceTests(): Promise<T.AdmissionEntranceTest[]> {
-    try {
-      const { data, error } = await supabase.from('admission_entrance_tests').select('*').order('test_date', { ascending: true });
-      if (error) throw error;
-      return data || [];
-    } catch (err) {
-      console.warn('getAdmissionEntranceTests warning:', err);
-      return [];
-    }
+  async getAdmissionEntranceTests(): Promise<any[]> {
+    const { data, error } = await supabase.from('admission_entrance_tests').select('*').order('test_date', { ascending: true });
+    if (error) throw new Error(`Could not load entrance tests: ${error.message}`);
+    return data || [];
   },
 
-  async addAdmissionEntranceTest(test: Partial<T.AdmissionEntranceTest>): Promise<T.AdmissionEntranceTest | null> {
-    try {
-      const { data, error } = await supabase.from('admission_entrance_tests').insert(test).select().single();
-      if (error) throw error;
-      return data;
-    } catch (err) {
-      console.error('addAdmissionEntranceTest error:', err);
-      return null;
-    }
+  async scheduleEntranceTests(applicationIds: string[], testDate: string): Promise<{ scheduled: number; rescheduled: number; skipped: any[] }> {
+    return await callAdminApi('schedule_admission_tests', { application_ids: applicationIds, test_date: testDate });
+  },
+
+  async recordEntranceResult(testId: string, result: { status: 'Completed' | 'Absent'; score?: number; maxScore?: number }): Promise<void> {
+    await callAdminApi('record_entrance_result', { test_id: testId, status: result.status, score: result.score ?? null, max_score: result.maxScore ?? null });
   },
 };

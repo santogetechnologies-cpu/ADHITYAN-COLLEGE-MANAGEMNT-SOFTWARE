@@ -84,4 +84,15 @@ Legend: ✅ done & verified as stated · 🟡 written, not runnable here · ⬜ 
 | "Deposit" button on applications to retry/collect a deposit | 🟡 | |
 | Predictable shared initial password removed (3 places) | ✅ code, 🟡 untested against auth | |
 | `confirm_admission` aligned: uses application's student id, finishes via `admission_enroll` | 🟡 | still long and not transactional (auth user creation cannot be rolled back by SQL) |
-| **Step 3b (next):** Entrance-test tab (per-applicant scheduling/results) and Merit list tab (server-side ranking from marks + entrance score, seats, publish → approve/waitlist) | ⬜ | |
+| **Step 3b:** see below | | |
+
+## Module 2 — step 3b: entrance tests and merit list
+| Item | Status | Evidence |
+|------|--------|----------|
+| Entrance tests per applicant: schedule (single/bulk by course), reschedule pending, record score/absent, validation (score ≤ max) | ✅ SQL, 🟡 UI | smoke tests (17 new checks incl. skip closed applications, no reschedule after result) |
+| Merit ranking on the server: weights, seats, exclusions with reasons, tie-break, replace-on-regenerate, hand-computed expected ranks (85 / 82.5 / 70) | ✅ SQL | smoke |
+| Apply merit to applications through the status function (document gate + audit), idempotent | ✅ SQL | smoke |
+| Entrance Test + Merit List screens rebuilt on applications; old hand-typed candidate forms removed; real load errors with Retry | 🟡 | build + type-check only |
+| Gate tests for the new actions | ✅ | 39 cases pass (`scripts/test-edge-gate.sh`) |
+| Known limits | | one test record per applicant (DB `UNIQUE(roll_no)`); scores assumed to be percentages (qualifying marks 0–100); old manual merit rows without an application stay in the table but are hidden |
+| Not yet built | ⬜ | seat/quota categories (reservation), configurable formulas beyond two weights, applicant-facing portal, offer letters, admission-deposit → first-fee reconciliation at provisioning |

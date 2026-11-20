@@ -116,6 +116,10 @@ export async function handleAdminUserOperation(token: string, body: any): Promis
     'update_admission_status',
     'enroll_admission',
     'record_admission_deposit',
+    'schedule_admission_tests',
+    'record_entrance_result',
+    'publish_merit_list',
+    'apply_merit_decisions',
     'resolve_login_id',
     'check_student_id_availability',
     'list_unprovisioned_approved_students',
@@ -627,6 +631,55 @@ export async function handleAdminUserOperation(token: string, body: any): Promis
         });
         if (error) return { status: 500, body: { error: 'The deposit could not be recorded.', code: 'DEPOSIT_FAILED' } };
         if (!data?.success) return { status: data?.code === 'NOT_FOUND' ? 404 : 400, body: { error: data?.error ?? 'Deposit rejected.', code: data?.code } };
+        return { status: 200, body: data };
+      }
+
+      case 'schedule_admission_tests': {
+        const ids: unknown[] = Array.isArray(body.application_ids) ? body.application_ids : [];
+        const date = String(body.test_date ?? '');
+        if (ids.length === 0 || ids.length > 500 || !ids.every(isUuidStr) || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+          return { status: 400, body: { error: 'application_ids (1-500 uuids) and test_date (YYYY-MM-DD) are required.', code: 'VALIDATION_ERROR' } };
+        }
+        const { data, error } = await supabaseAdmin.rpc('admission_schedule_tests', { p_application_ids: ids, p_test_date: date, p_actor: callerUser.id });
+        if (error) return { status: 500, body: { error: 'The tests could not be scheduled.', code: 'SCHEDULE_FAILED' } };
+        if (!data?.success) return { status: 400, body: { error: data?.error ?? 'Scheduling rejected.', code: data?.code } };
+        return { status: 200, body: data };
+      }
+
+      case 'record_entrance_result': {
+        const { test_id, status: testStatus, score, max_score } = body;
+        if (!isUuidStr(test_id)) return { status: 400, body: { error: 'test_id (uuid) is required.', code: 'VALIDATION_ERROR' } };
+        const { data, error } = await supabaseAdmin.rpc('admission_record_test_result', {
+          p_test_id: test_id, p_status: String(testStatus ?? ''),
+          p_score: score === '' || score == null ? null : Number(score),
+          p_max_score: max_score === '' || max_score == null ? null : Number(max_score), p_actor: callerUser.id,
+        });
+        if (error) return { status: 500, body: { error: 'The result could not be saved.', code: 'RESULT_FAILED' } };
+        if (!data?.success) return { status: data?.code === 'NOT_FOUND' ? 404 : 400, body: { error: data?.error ?? 'Result rejected.', code: data?.code } };
+        return { status: 200, body: data };
+      }
+
+      case 'publish_merit_list': {
+        const { course, academic_year, seats, weight_qualifying } = body;
+        if (!course || !Number.isInteger(Number(seats)) || !Number.isInteger(Number(weight_qualifying))) {
+          return { status: 400, body: { error: 'course, seats and weight_qualifying (whole numbers) are required.', code: 'VALIDATION_ERROR' } };
+        }
+        const { data, error } = await supabaseAdmin.rpc('admission_publish_merit', {
+          p_course: String(course), p_academic_year: academic_year ? String(academic_year) : null,
+          p_seats: Number(seats), p_weight_qualifying: Number(weight_qualifying), p_actor: callerUser.id,
+        });
+        if (error) return { status: 500, body: { error: 'The merit list could not be generated.', code: 'MERIT_FAILED' } };
+        if (!data?.success) return { status: 400, body: { error: data?.error ?? 'Merit list rejected.', code: data?.code } };
+        return { status: 200, body: data };
+      }
+
+      case 'apply_merit_decisions': {
+        const { course, academic_year } = body;
+        if (!course) return { status: 400, body: { error: 'course is required.', code: 'VALIDATION_ERROR' } };
+        const { data, error } = await supabaseAdmin.rpc('admission_apply_merit', {
+          p_course: String(course), p_academic_year: academic_year ? String(academic_year) : null, p_actor: callerUser.id,
+        });
+        if (error) return { status: 500, body: { error: 'The decisions could not be applied.', code: 'APPLY_FAILED' } };
         return { status: 200, body: data };
       }
 

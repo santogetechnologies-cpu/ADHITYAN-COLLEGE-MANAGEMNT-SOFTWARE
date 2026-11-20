@@ -1,4 +1,4 @@
--- Smoke test for migrations 028-038. Synthetic data only; everything is rolled back.
+-- Smoke test for migrations 028-039. Synthetic data only; everything is rolled back.
 -- Run against a SCRATCH/STAGING database that has 001-015 + 028-037 applied (never production):
 --   psql "$STAGING_DB_URL" -v ON_ERROR_STOP=1 -f supabase/tests/smoke_028_037.sql
 -- Any failed assertion raises an exception and the script exits non-zero.
@@ -88,6 +88,44 @@ SELECT pg_temp.chk('deposit refused for rejected application', (public.record_ad
 SELECT pg_temp.chk('deposit rejects bad amount / mode', (public.record_admission_deposit('c2000000-0000-0000-0000-000000000002',0,'Cash',NULL,'smoke-dep-0003','c0000000-0000-0000-0000-000000000005')->>'code')='INVALID_AMOUNT'
    AND (public.record_admission_deposit('c2000000-0000-0000-0000-000000000002',10,'Barter',NULL,'smoke-dep-0004','c0000000-0000-0000-0000-000000000005')->>'code')='INVALID_MODE');
 SELECT pg_temp.chk('authenticated cannot call record_admission_deposit', has_function_privilege('authenticated','public.record_admission_deposit(uuid,numeric,text,text,text,uuid)','EXECUTE')=false);
+
+-- ===================== 039 entrance tests + merit =====================
+INSERT INTO public.admission_applications(id,application_number,applicant_name,email,phone,class_name,parent_name,parent_phone,status,academic_year,qualifying_marks,submission_date) VALUES
+ ('c3000000-0000-0000-0000-00000000000a','MRT-A','Cand A','a@x.t','1','Merit Course','P','1','Under Review','2026-27',90,'2026-05-01'),
+ ('c3000000-0000-0000-0000-00000000000b','MRT-B','Cand B','b@x.t','1','Merit Course','P','1','Under Review','2026-27',70,'2026-05-02'),
+ ('c3000000-0000-0000-0000-00000000000c','MRT-C','Cand C','c@x.t','1','Merit Course','P','1','Under Review','2026-27',95,'2026-05-03'),
+ ('c3000000-0000-0000-0000-00000000000d','MRT-D','Cand D','d@x.t','1','Merit Course','P','1','Under Review','2026-27',60,'2026-05-04'),
+ ('c3000000-0000-0000-0000-00000000000e','MRT-E','Cand E','e@x.t','1','Merit Course','P','1','Under Review','2026-27',NULL,'2026-05-05'),
+ ('c3000000-0000-0000-0000-00000000000f','MRT-F','Cand F','f@x.t','1','Merit Course','P','1','Rejected','2026-27',99,'2026-05-06');
+SELECT pg_temp.chk('schedule creates one test per eligible applicant, skips closed',
+  (SELECT (r->>'scheduled')::int = 5 AND jsonb_array_length(r->'skipped') = 1 FROM (SELECT public.admission_schedule_tests(ARRAY[
+     'c3000000-0000-0000-0000-00000000000a','c3000000-0000-0000-0000-00000000000b','c3000000-0000-0000-0000-00000000000c',
+     'c3000000-0000-0000-0000-00000000000d','c3000000-0000-0000-0000-00000000000e','c3000000-0000-0000-0000-00000000000f']::uuid[],
+     DATE '2026-06-01','c0000000-0000-0000-0000-000000000005') r) x));
+SELECT pg_temp.chk('rescheduling a pending test moves the date', (public.admission_schedule_tests(ARRAY['c3000000-0000-0000-0000-00000000000a']::uuid[],DATE '2026-06-02','c0000000-0000-0000-0000-000000000005')->>'rescheduled')='1');
+SELECT pg_temp.chk('score above maximum refused', (public.admission_record_test_result((SELECT id FROM public.admission_entrance_tests WHERE roll_no='MRT-A'),'Completed',120,100,'c0000000-0000-0000-0000-000000000005')->>'code')='VALIDATION_ERROR');
+SELECT pg_temp.chk('record A 80/100', (public.admission_record_test_result((SELECT id FROM public.admission_entrance_tests WHERE roll_no='MRT-A'),'Completed',80,100,'c0000000-0000-0000-0000-000000000005')->>'success')='true');
+SELECT pg_temp.chk('record B 95/100', (public.admission_record_test_result((SELECT id FROM public.admission_entrance_tests WHERE roll_no='MRT-B'),'Completed',95,100,'c0000000-0000-0000-0000-000000000005')->>'success')='true');
+SELECT pg_temp.chk('record D 40/50', (public.admission_record_test_result((SELECT id FROM public.admission_entrance_tests WHERE roll_no='MRT-D'),'Completed',40,50,'c0000000-0000-0000-0000-000000000005')->>'success')='true');
+SELECT pg_temp.chk('record E absent', (public.admission_record_test_result((SELECT id FROM public.admission_entrance_tests WHERE roll_no='MRT-E'),'Absent',NULL,NULL,'c0000000-0000-0000-0000-000000000005')->>'success')='true');
+SELECT pg_temp.chk('completed test cannot be rescheduled', (public.admission_schedule_tests(ARRAY['c3000000-0000-0000-0000-00000000000a']::uuid[],DATE '2026-07-01','c0000000-0000-0000-0000-000000000005')->'skipped'->0->>'reason') LIKE 'test already completed');
+-- 50/50 weights: A=(90+80)/2=85, B=(70+95)/2=82.5, D=(60+80)/2=70; C no entrance, E no entrance & no marks -> excluded; F rejected -> not a candidate
+SELECT pg_temp.chk('merit: ranks A,B,D with 2 seats; C,E excluded', (SELECT
+    (r->>'ranked')::int = 3 AND (r->>'selected')::int = 2 AND jsonb_array_length(r->'excluded') = 2
+    AND r->'rows'->0->>'name' = 'Cand A' AND (r->'rows'->0->>'score')::numeric = 85
+    AND r->'rows'->1->>'name' = 'Cand B' AND (r->'rows'->1->>'score')::numeric = 82.5
+    AND r->'rows'->2->>'name' = 'Cand D' AND r->'rows'->2->>'status' = 'Waitlist'
+  FROM (SELECT public.admission_publish_merit('Merit Course','2026-27',2,50,'c0000000-0000-0000-0000-000000000005') r) x));
+SELECT pg_temp.chk('republishing replaces, does not duplicate', (public.admission_publish_merit('Merit Course','2026-27',2,50,'c0000000-0000-0000-0000-000000000005')->>'ranked')='3'
+   AND (SELECT count(*) FROM public.admission_merit_lists WHERE course_name='Merit Course')=3);
+SELECT pg_temp.chk('weights outside 0-100 refused', (public.admission_publish_merit('Merit Course','2026-27',2,150,'c0000000-0000-0000-0000-000000000005')->>'code')='VALIDATION_ERROR');
+SELECT pg_temp.chk('100% qualifying weight ignores entrance (C now ranks first)', (public.admission_publish_merit('Merit Course','2026-27',2,100,'c0000000-0000-0000-0000-000000000005')->'rows'->0->>'name')='Cand C');
+SELECT pg_temp.chk('back to 50/50', (public.admission_publish_merit('Merit Course','2026-27',2,50,'c0000000-0000-0000-0000-000000000005')->>'selected')='2');
+SELECT pg_temp.chk('apply merit: A,B approved, D waitlisted', (SELECT (r->>'updated')::int = 3 FROM (SELECT public.admission_apply_merit('Merit Course','2026-27','c0000000-0000-0000-0000-000000000005') r) x));
+SELECT pg_temp.chk('statuses after apply', (SELECT string_agg(application_number||':'||status, ',' ORDER BY application_number) FROM public.admission_applications WHERE class_name='Merit Course' AND application_number IN ('MRT-A','MRT-B','MRT-D'))='MRT-A:Approved,MRT-B:Approved,MRT-D:Waitlisted');
+SELECT pg_temp.chk('apply merit again changes nothing', (public.admission_apply_merit('Merit Course','2026-27','c0000000-0000-0000-0000-000000000005')->>'updated')='0');
+SELECT pg_temp.chk('merit/test functions not callable by authenticated', has_function_privilege('authenticated','public.admission_publish_merit(text,text,integer,integer,uuid)','EXECUTE')=false
+   AND has_function_privilege('authenticated','public.admission_schedule_tests(uuid[],date,uuid)','EXECUTE')=false);
 
 SET LOCAL ROLE anon;
 SELECT pg_temp.chk('anon cannot read admission documents', (SELECT count(*) FROM information_schema.role_table_grants WHERE grantee='anon' AND table_name IN ('admission_document_verifications','admission_merit_lists'))=0);
