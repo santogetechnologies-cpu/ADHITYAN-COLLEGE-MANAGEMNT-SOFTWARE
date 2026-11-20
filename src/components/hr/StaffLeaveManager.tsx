@@ -51,7 +51,7 @@ export function StaffLeaveManager() {
       setLoading(true);
       const [leavesData, profilesData] = await Promise.all([
         db.getStaffLeaveApplications(),
-        db.getProfiles()
+        db.getAllProfiles().catch(() => [])
       ]);
       setLeaves(leavesData || []);
       const staffOnly = (profilesData || []).filter(p => p.role !== 'student' && p.role !== 'parent');
@@ -341,7 +341,7 @@ export function StaffLeaveManager() {
                       setFormData(prev => ({
                         ...prev,
                         staff_profile_id: prof.id,
-                        staff_name: prof.full_name || prof.email,
+                        staff_name: prof.name || prof.email,
                         department: prof.department || prev.department
                       }));
                     } else {
@@ -353,7 +353,7 @@ export function StaffLeaveManager() {
                   <option value="">-- Choose registered faculty / staff member --</option>
                   {staffProfiles.map(p => (
                     <option key={p.id} value={p.id}>
-                      {p.full_name || p.email} ({p.role.toUpperCase()} - {p.department || 'General'})
+                      {p.name || p.email} ({p.role.toUpperCase()} - {p.department || 'General'})
                     </option>
                   ))}
                 </select>

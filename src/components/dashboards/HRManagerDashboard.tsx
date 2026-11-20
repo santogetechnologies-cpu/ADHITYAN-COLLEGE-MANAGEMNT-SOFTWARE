@@ -100,7 +100,7 @@ export default function HRManagerDashboard() {
         return;
       }
 
-      const res = await db.createStaffServiceRecord({
+      const res = await db.upsertStaffServiceRecord({
         ...newStaff,
         user_id: targetUserId
       });
@@ -127,6 +127,7 @@ export default function HRManagerDashboard() {
           status: 'Active' as const
         });
       }
+      if (!res) { toast.error('The service record could not be saved. Check the details and your permissions.'); return; }
       setAddStaffOpen(false);
     } catch (err: any) {
       console.error('Error creating staff service record:', err);

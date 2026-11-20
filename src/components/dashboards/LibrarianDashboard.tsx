@@ -49,7 +49,7 @@ export default function LibrarianDashboard() {
       const [circData, booksData, profilesData] = await Promise.all([
         db.getLibraryCirculation(),
         db.getLibraryBooks(),
-        db.getProfiles()
+        db.getAllProfiles().catch(() => [])
       ]);
 
       setCirculations(circData || []);
@@ -96,7 +96,7 @@ export default function LibrarianDashboard() {
         book_title: formData.book_title,
         accession_no: formData.accession_no || `ACC-${Date.now().toString().slice(-6)}`,
         user_id: resolvedUserId,
-        user_name: formData.user_name || matchedProfile?.full_name || 'Borrower',
+        user_name: formData.user_name || matchedProfile?.name || 'Borrower',
         user_role: formData.user_role,
         issue_date: today.toISOString().split('T')[0],
         due_date: dueDate.toISOString().split('T')[0],

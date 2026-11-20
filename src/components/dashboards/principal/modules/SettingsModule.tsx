@@ -131,7 +131,7 @@ export function SettingsModule({ principalProfile }: SettingsModuleProps) {
             <div className="space-y-1">
               <Label className="text-[11px] text-muted-foreground font-medium">Authorized Executive Name</Label>
               <div className="p-2 rounded-md bg-slate-50 border border-slate-200 font-semibold text-slate-800">
-                {principalProfile?.full_name || 'Dr. Principal & Dean'}
+                {principalProfile?.name || 'Principal'}
               </div>
             </div>
 

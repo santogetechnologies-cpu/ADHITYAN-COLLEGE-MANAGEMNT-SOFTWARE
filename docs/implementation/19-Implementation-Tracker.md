@@ -181,3 +181,11 @@ Legend: ✅ done & verified as stated · 🟡 written, not runnable here · ⬜ 
 |------|--------|----------|
 | Own-reports-only visibility, principal/admin decisions with audit, resolve needs an action | ✅ SQL | 6 smoke checks (208 total) |
 | Screen: failed reports/resolutions now show the error instead of success; fake defaults (ST001, B.VOC MLT class) removed; Edit button → "Start investigation"; unused service that wrote a non-existent column deleted | 🟡 UI | build |
+
+## Module — Hostel out-pass (migration 052) and broken-call sweep
+| Item | Status | Evidence |
+|------|--------|----------|
+| Consent/gate fields staff-only, status flow enforced, time check | ✅ SQL | 5 smoke checks (213 total) |
+| Warden dashboard: loads (it called a non-existent `db.getProfiles()` so it never showed data), Approve/Reject/Exit/Arrival, honest errors, parent phone required, no invented bed counts or phone number, notifications only to the real student (was broadcast to everyone) | 🟡 UI | build |
+| Same non-existent call fixed in Librarian dashboard and HR leave manager; `db.getTeachers()` (parent contact view) and `db.createStaffServiceRecord()` (HR add staff) pointed at real methods; `profile.full_name` (column is `name`) fixed in 6 places | 🟡 | TS errors 761 → 746 |
+| Remaining dashboards: Transport, HR (payroll), Placement, Store, Receptionist, Teacher, Parent, Student | ⬜ | |

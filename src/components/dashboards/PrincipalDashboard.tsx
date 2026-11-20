@@ -447,7 +447,7 @@ export default function PrincipalDashboard() {
   }): Promise<boolean> => {
     setPublishingBroadcast(true);
     try {
-      const author = principalProfile?.full_name || 'Dr. Principal & Dean';
+      const author = principalProfile?.name || user?.name || 'Principal';
       const created = await db.createInstitutionalBroadcast({
         title: data.title,
         message: data.message,
@@ -742,7 +742,7 @@ export default function PrincipalDashboard() {
           pendingApprovals: totalPendingApprovals,
           pendingAdmissions: pendingAdmissionsCount
         }}
-        principalName={principalProfile?.full_name || 'Dr. Principal & Dean'}
+        principalName={principalProfile?.name || user?.name || 'Principal'}
       />
 
       {/* -------------------------------------------------------------------- */}

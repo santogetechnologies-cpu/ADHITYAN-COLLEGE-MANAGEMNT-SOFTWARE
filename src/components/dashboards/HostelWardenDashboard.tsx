@@ -21,10 +21,15 @@ import {
 } from 'lucide-react';
 import { db } from '@/services/supabase/database';
 import { HostelRoom, HostelOutPass, Profile } from '@/types/database.types';
+import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/context/AuthContext';
 
 const IS_UUID = (v?: string | null): v is string => !!v && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v);
 
 export default function HostelWardenDashboard() {
+  const { toast } = useToast();
+  const { user } = useAuth();
+  const canAct = ['admin', 'principal', 'hostel_warden'].includes(user?.role ?? '');
   const [rooms, setRooms] = useState<HostelRoom[]>([]);
   const [outPasses, setOutPasses] = useState<HostelOutPass[]>([]);
   const [profiles, setProfiles] = useState<Profile[]>([]);
@@ -41,9 +46,10 @@ export default function HostelWardenDashboard() {
     room_number: '',
     destination: '',
     purpose: '',
+    parent_phone: '',
     out_time: new Date().toISOString().slice(0, 16),
     expected_in_time: new Date(Date.now() + 86400000).toISOString().slice(0, 16),
-    parent_consent_verified: true,
+    parent_consent_verified: false,
   });
 
   const loadData = useCallback(async () => {
@@ -52,7 +58,7 @@ export default function HostelWardenDashboard() {
       const [roomsData, passesData, profilesData] = await Promise.all([
         db.getHostelRooms(),
         db.getHostelOutPasses(),
-        db.getProfiles()
+        db.getAllProfiles().catch(() => [])
       ]);
 
       setRooms(roomsData || []);
@@ -72,74 +78,77 @@ export default function HostelWardenDashboard() {
   }, [loadData]);
 
   const handleUpdateStatus = async (id: string, newStatus: string) => {
-    await db.updateHostelOutPassStatus(id, newStatus);
+    const ok = await db.updateHostelOutPassStatus(id, newStatus);
+    if (!ok) {
+      toast({ title: 'Not updated', description: 'The status change was refused. The pass may already have moved on, or you may not have permission.', variant: 'destructive' });
+      await loadData();
+      return;
+    }
     await loadData();
     const targetPass = outPasses.find(p => p.id === id);
-    if (targetPass) {
+    if (targetPass?.student_id && IS_UUID(targetPass.student_id)) {
       db.createNotification({
-        user_id: targetPass.student_id || 'all',
-        title: `Hostel Out-Pass ${newStatus}`,
-        message: `Status updated for ${targetPass.student_name} (${targetPass.roll_number}) to ${newStatus}.`,
-        type: 'info',
-        priority: 'normal',
-        is_read: false
+        user_id: targetPass.student_id,
+        title: `Hostel out-pass ${newStatus}`,
+        message: `Your out-pass (${targetPass.destination_address || 'out of campus'}) is now ${newStatus}.`,
+        type: 'info', priority: 'medium', is_read: false
       }).catch(console.warn);
     }
   };
 
   const handleCreatePass = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!formData.student_name.trim() || !formData.roll_number.trim() || !formData.destination.trim() || !formData.purpose.trim() || !formData.room_number.trim()) {
+      toast({ title: 'Fill in student, ID, room, destination and purpose', variant: 'destructive' });
+      return;
+    }
+    if (!/^[+\d][\d\s-]{6,}$/.test(formData.parent_phone.trim())) {
+      toast({ title: 'Enter the parent / guardian phone number', variant: 'destructive' });
+      return;
+    }
+    if (new Date(formData.expected_in_time) <= new Date(formData.out_time)) {
+      toast({ title: 'Return time must be after the departure time', variant: 'destructive' });
+      return;
+    }
     try {
       setSubmitting(true);
-      const matchedProfile = profiles.find(p => 
-        (p.roll_number && p.roll_number.toLowerCase() === formData.roll_number.toLowerCase()) ||
-        (p.email && p.email.toLowerCase() === formData.roll_number.toLowerCase())
+      const matchedProfile = profiles.find(p =>
+        (p.roll_number && p.roll_number.toLowerCase() === formData.roll_number.trim().toLowerCase()) ||
+        (p.email && p.email.toLowerCase() === formData.roll_number.trim().toLowerCase())
       );
       const resolvedStudentId = matchedProfile?.id && IS_UUID(matchedProfile.id) ? matchedProfile.id : undefined;
 
-      const newPass: Partial<HostelOutPass> = {
+      const res = await db.submitHostelOutPass({
         student_id: resolvedStudentId,
-        student_name: formData.student_name || matchedProfile?.full_name || 'Hostel Student',
-        roll_number: formData.roll_number,
-        room_details: `${formData.hostel_block} - Room ${formData.room_number}`,
-        purpose: formData.purpose,
-        destination_address: formData.destination,
+        student_name: formData.student_name.trim(),
+        roll_number: formData.roll_number.trim(),
+        room_details: `${formData.hostel_block} - Room ${formData.room_number.trim()}`,
+        purpose: formData.purpose.trim(),
+        destination_address: formData.destination.trim(),
         departure_time: new Date(formData.out_time).toISOString(),
         expected_return_time: new Date(formData.expected_in_time).toISOString(),
-        parent_phone: matchedProfile?.phone || '9876543210',
+        parent_phone: formData.parent_phone.trim(),
         parent_otp_verified: formData.parent_consent_verified,
         warden_status: 'Approved'
-      };
-
-      const res = await db.submitHostelOutPass(newPass);
-      if (res) {
-        await loadData();
-        setFormData({
-          student_name: '',
-          roll_number: '',
-          hostel_block: 'Block-A (Boys)',
-          room_number: '',
-          destination: '',
-          purpose: '',
-          out_time: new Date().toISOString().slice(0, 16),
-          expected_in_time: new Date(Date.now() + 86400000).toISOString().slice(0, 16),
-          parent_consent_verified: true,
-        });
+      } as Partial<HostelOutPass>);
+      if (!res) {
+        toast({ title: 'Out-pass not saved', description: 'Nothing was recorded. Check the details and try again.', variant: 'destructive' });
+        return;
       }
-
-      // Cross-role alert
-      db.createNotification({
-        user_id: resolvedStudentId || 'all',
-        title: 'Hostel Digital Gate Pass Approved',
-        message: `Out-pass authorized for ${formData.student_name} (${formData.roll_number}) to ${formData.destination}. Expected return: ${formData.expected_in_time}.`,
-        type: 'info',
-        priority: 'normal',
-        is_read: false
-      }).catch(console.warn);
-
+      toast({ title: 'Out-pass issued' });
+      if (resolvedStudentId) {
+        db.createNotification({
+          user_id: resolvedStudentId, title: 'Hostel out-pass approved',
+          message: `Out-pass authorised to ${formData.destination.trim()}. Expected return: ${new Date(formData.expected_in_time).toLocaleString()}.`,
+          type: 'info', priority: 'medium', is_read: false
+        }).catch(console.warn);
+      }
+      setFormData({ student_name: '', roll_number: '', hostel_block: 'Block-A (Boys)', room_number: '', destination: '', purpose: '', parent_phone: '',
+        out_time: new Date().toISOString().slice(0, 16), expected_in_time: new Date(Date.now() + 86400000).toISOString().slice(0, 16), parent_consent_verified: false });
       setPassModalOpen(false);
-    } catch (err) {
-      console.error('Error creating out pass:', err);
+      await loadData();
+    } catch (err: any) {
+      toast({ title: 'Out-pass not saved', description: err?.message, variant: 'destructive' });
     } finally {
       setSubmitting(false);
     }
@@ -174,11 +183,11 @@ export default function HostelWardenDashboard() {
                 Hostel Directorate & Digital Gate Out-Pass Desk
               </h1>
               <Badge className="bg-blue-100 text-blue-800 text-[10px] font-bold border-blue-200">
-                Biometric & Parent Verified
+                Parent consent recorded
               </Badge>
             </div>
             <p className="text-xs text-slate-500">
-              Adhityan Institution of Paramedical Sciences | Campus Residential Halls & Gate Security
+              Residential halls & gate security
             </p>
           </div>
         </div>
@@ -205,8 +214,8 @@ export default function HostelWardenDashboard() {
               <span className="text-xs font-medium uppercase tracking-wider">Total Bed Capacity</span>
               <Home className="w-4 h-4 text-primary" />
             </div>
-            <div className="text-2xl font-black text-slate-900">{totalBeds || 650}</div>
-            <span className="text-[11px] text-slate-500">Across 3 Residential Blocks</span>
+            <div className="text-2xl font-black text-slate-900">{totalBeds}</div>
+            <span className="text-[11px] text-slate-500">{new Set(rooms.map(r => r.block_name)).size} block(s)</span>
           </CardContent>
         </Card>
 
@@ -216,8 +225,8 @@ export default function HostelWardenDashboard() {
               <span className="text-xs font-medium uppercase tracking-wider">Hostellers Resident</span>
               <Users className="w-4 h-4 text-blue-600" />
             </div>
-            <div className="text-2xl font-black text-slate-900">{occupiedBeds || 612}</div>
-            <span className="text-[11px] text-emerald-600 font-medium">94.1% Occupancy Rate</span>
+            <div className="text-2xl font-black text-slate-900">{occupiedBeds}</div>
+            <span className="text-[11px] text-emerald-600 font-medium">{totalBeds ? Math.round((occupiedBeds / totalBeds) * 100) : 0}% occupancy</span>
           </CardContent>
         </Card>
 
@@ -227,7 +236,7 @@ export default function HostelWardenDashboard() {
               <span className="text-xs font-medium uppercase tracking-wider">Available Vacancies</span>
               <ShieldCheck className="w-4 h-4 text-emerald-600" />
             </div>
-            <div className="text-2xl font-black text-emerald-800">{availableBeds || 38}</div>
+            <div className="text-2xl font-black text-emerald-800">{availableBeds}</div>
             <span className="text-[11px] text-slate-500">Ready for Allotment</span>
           </CardContent>
         </Card>
@@ -239,7 +248,7 @@ export default function HostelWardenDashboard() {
               <LogOut className="w-4 h-4 text-amber-600" />
             </div>
             <div className="text-2xl font-black text-amber-700">{outPasses.length}</div>
-            <span className="text-[11px] text-slate-500">Parent Consent Confirmed</span>
+            <span className="text-[11px] text-slate-500">Out-passes on record</span>
           </CardContent>
         </Card>
       </div>
@@ -317,9 +326,9 @@ export default function HostelWardenDashboard() {
                     </td>
                     <td className="p-3">
                       {(() => {
-                        const st = p.warden_status || (p as any).status || 'Approved';
-                        const isReturned = st === 'Returned_Safe' || st === 'Returned';
-                        const isExited = st === 'Gate_Departed' || st === 'Exited';
+                        const st = p.warden_status || 'Pending';
+                        const isReturned = st === 'Returned';
+                        const isExited = st === 'Exited';
                         return (
                           <Badge
                             className={`text-[10px] font-semibold ${
@@ -327,42 +336,46 @@ export default function HostelWardenDashboard() {
                                 ? 'bg-slate-100 text-slate-700 border-slate-200'
                                 : isExited
                                 ? 'bg-amber-100 text-amber-800 border-amber-200'
+                                : st === 'Pending' || st === 'Rejected'
+                                ? 'bg-slate-100 text-slate-700 border-slate-200'
                                 : 'bg-emerald-100 text-emerald-800 border-emerald-200'
                             }`}
                           >
-                            {isReturned ? 'Returned Safe' : isExited ? 'Outside Campus' : 'Authorized'}
+                            {isReturned ? 'Returned' : isExited ? 'Outside campus' : st === 'Pending' ? 'Awaiting approval' : st === 'Rejected' ? 'Rejected' : 'Authorised'}
                           </Badge>
                         );
                       })()}
                     </td>
                     <td className="p-3 text-right">
                       {(() => {
-                        const st = p.warden_status || (p as any).status || 'Approved';
-                        if (st === 'Approved_Warden' || st === 'Approved') {
+                        const st = p.warden_status || 'Pending';
+                        if (!canAct) return <span className="text-[10px] text-slate-400 font-medium">{st}</span>;
+                        if (st === 'Pending') {
                           return (
-                            <Button
-                              size="sm"
-                              onClick={() => handleUpdateStatus(p.id, 'Exited')}
-                              className="h-7 px-2.5 text-[11px] bg-amber-600 hover:bg-amber-700 text-white font-semibold"
-                            >
+                            <div className="flex justify-end gap-1">
+                              <Button size="sm" onClick={() => handleUpdateStatus(p.id, 'Approved')} className="h-7 px-2.5 text-[11px] bg-emerald-600 hover:bg-emerald-700 text-white font-semibold">Approve</Button>
+                              <Button size="sm" variant="outline" onClick={() => handleUpdateStatus(p.id, 'Rejected')} className="h-7 px-2.5 text-[11px]">Reject</Button>
+                            </div>
+                          );
+                        }
+                        if (st === 'Approved') {
+                          return (
+                            <Button size="sm" onClick={() => handleUpdateStatus(p.id, 'Exited')} className="h-7 px-2.5 text-[11px] bg-amber-600 hover:bg-amber-700 text-white font-semibold">
                               <LogOut className="w-3 h-3 mr-1" />
                               Log Exit
                             </Button>
                           );
                         }
-                        if (st === 'Gate_Departed' || st === 'Exited') {
+                        if (st === 'Exited') {
                           return (
-                            <Button
-                              size="sm"
-                              onClick={() => handleUpdateStatus(p.id, 'Returned')}
-                              className="h-7 px-2.5 text-[11px] bg-emerald-600 hover:bg-emerald-700 text-white font-semibold"
-                            >
+                            <Button size="sm" onClick={() => handleUpdateStatus(p.id, 'Returned')} className="h-7 px-2.5 text-[11px] bg-emerald-600 hover:bg-emerald-700 text-white font-semibold">
                               <LogIn className="w-3 h-3 mr-1" />
                               Log Arrival
                             </Button>
                           );
                         }
-                        return <span className="text-[10px] text-slate-400 font-medium">Checked In</span>;
+                        if (st === 'Rejected') return <span className="text-[10px] text-slate-400 font-medium">Rejected</span>;
+                        return <span className="text-[10px] text-slate-400 font-medium">Returned</span>;
                       })()}
                     </td>
                   </tr>
@@ -473,6 +486,16 @@ export default function HostelWardenDashboard() {
                   className="h-8 text-xs"
                 />
               </div>
+            </div>
+
+            <div className="space-y-1">
+              <label className="font-semibold text-slate-700">Parent / guardian phone</label>
+              <Input
+                required
+                value={formData.parent_phone}
+                onChange={(e) => setFormData({ ...formData, parent_phone: e.target.value })}
+                className="h-8 text-xs"
+              />
             </div>
 
             <div className="flex items-center space-x-2 pt-1">

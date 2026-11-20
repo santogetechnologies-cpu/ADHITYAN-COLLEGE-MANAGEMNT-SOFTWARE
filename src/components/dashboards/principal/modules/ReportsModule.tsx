@@ -72,7 +72,7 @@ export function ReportsModule({
         const headers = ['Student ID', 'Full Name', 'Department / Program', 'Class / Year', 'Email', 'Phone', 'Enrollment Status'];
         const rows = students.map(s => [
           s.student_id || s.id.slice(0, 8),
-          s.full_name,
+          s.name,
           s.department || 'Paramedical Sciences',
           s.class_name || 'Year 1',
           s.email || '—',
@@ -110,7 +110,7 @@ export function ReportsModule({
         const headers = ['Staff ID', 'Faculty Name', 'Department', 'Designation', 'Email', 'Assigned Classes'];
         const rows = faculty.map(f => [
           f.staff_id || f.id.slice(0, 8),
-          f.full_name,
+          f.name,
           f.department || 'Paramedical',
           f.designation || 'Lecturer / Clinical Instructor',
           f.email || '—',

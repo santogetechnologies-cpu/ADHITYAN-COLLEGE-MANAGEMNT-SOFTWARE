@@ -492,6 +492,25 @@ SELECT pg_temp.chk('admin sees incidents and needs an action to resolve', (SELEC
 SELECT pg_temp.chk('admin resolves with an action', (public.discipline_update((SELECT id FROM public.disciplinary_incidents LIMIT 1),'Resolved','Warning issued')->>'status')='Resolved');
 RESET ROLE;
 
+-- ---- 052 hostel out-pass ----
+SET LOCAL ROLE authenticated;
+SELECT set_config('request.jwt.claim.sub','c0000000-0000-0000-0000-000000000001',true);   -- student
+INSERT INTO public.hostel_out_passes (id, student_id, student_name, roll_number, room_details, purpose, destination_address, parent_phone, parent_otp_verified, warden_status, departure_time, expected_return_time)
+VALUES ('c8000000-0000-0000-0000-000000000001','c0000000-0000-0000-0000-000000000001','Smoke Student','H-1','B-1','visit','home','9000000000',true,'Pending',now()+interval '1 day',now()+interval '2 days');
+SELECT pg_temp.chk('a student cannot self-assert parent consent on insert', (SELECT parent_otp_verified=false FROM public.hostel_out_passes WHERE id='c8000000-0000-0000-0000-000000000001'));
+UPDATE public.hostel_out_passes SET parent_otp_verified=true, purpose='x' WHERE id='c8000000-0000-0000-0000-000000000001';
+SELECT pg_temp.chk('a student cannot self-assert parent consent on update', (SELECT parent_otp_verified=false AND purpose='x' FROM public.hostel_out_passes WHERE id='c8000000-0000-0000-0000-000000000001'));
+RESET ROLE;
+SELECT pg_temp.chk('return time before departure is rejected', pg_temp.fails($q$INSERT INTO public.hostel_out_passes (student_name,roll_number,room_details,purpose,destination_address,parent_phone,departure_time,expected_return_time) VALUES ('x','y','r','p','d','1',now()+interval '2 days',now()+interval '1 day')$q$));
+SET LOCAL ROLE authenticated;
+SELECT set_config('request.jwt.claim.sub','c0000000-0000-0000-0000-000000000008',true);   -- admin acts as warden
+SELECT pg_temp.chk('cannot jump Pending -> Returned', pg_temp.fails($q$UPDATE public.hostel_out_passes SET warden_status='Returned' WHERE id='c8000000-0000-0000-0000-000000000001'$q$));
+UPDATE public.hostel_out_passes SET warden_status='Approved' WHERE id='c8000000-0000-0000-0000-000000000001';
+UPDATE public.hostel_out_passes SET warden_status='Exited' WHERE id='c8000000-0000-0000-0000-000000000001';
+UPDATE public.hostel_out_passes SET warden_status='Returned' WHERE id='c8000000-0000-0000-0000-000000000001';
+SELECT pg_temp.chk('full cycle stamps gate times', (SELECT warden_status='Returned' AND guard_exit_time IS NOT NULL AND guard_entry_time IS NOT NULL FROM public.hostel_out_passes WHERE id='c8000000-0000-0000-0000-000000000001'));
+RESET ROLE;
+
 SELECT name, CASE WHEN ok THEN 'PASS' ELSE 'FAIL' END AS result FROM _r ORDER BY ok, name;
 DO $$ BEGIN
   IF EXISTS (SELECT 1 FROM _r WHERE NOT ok) THEN RAISE EXCEPTION 'SMOKE TEST FAILED'; END IF;
