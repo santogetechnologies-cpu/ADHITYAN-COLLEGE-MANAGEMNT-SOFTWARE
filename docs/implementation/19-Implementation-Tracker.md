@@ -286,3 +286,10 @@ Legend: ✅ done & verified as stated · 🟡 written, not runnable here · ⬜ 
 | Gateway adapter (Razorpay): checkout + webhook HMAC verification, order creation, payment re-read | ✅ unit (11 signature checks in `test-edge-gate.sh`), ⚠️ not run against the live gateway | needs your keys |
 | Student/parent "Pay online" dialog (select fees, partial amounts), Finance "Online payments" tab (switches + recent orders + review alert) | 🟡 UI | build |
 | Refunds, payment links, instalment reminders, reconciliation report against the gateway settlement file | ⬜ | |
+
+## Refunds and reconciliation (067)
+| Item | Status | Evidence |
+|------|--------|----------|
+| Reverse/refund with ledger restoration, void receipts, idempotent, finance-only; reconciliation exceptions | ✅ SQL | 11 smoke checks (339 total) |
+| Finance "Online payments" tab: refund online orders, reverse counter payments, 30-day reconciliation | 🟡 UI | build |
+| Partial refunds, refund of one fee within a multi-fee order, gateway settlement-file import | ⬜ | |

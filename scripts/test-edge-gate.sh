@@ -5,7 +5,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 W="$(mktemp -d)"; trap 'rm -rf "$W"' EXIT
 cd "$W" && npm init -y >/dev/null && npm i @supabase/supabase-js@2 typescript >/dev/null 2>&1
-mkdir fn && cp -r "$ROOT"/supabase/functions/{_shared,admin-api,admin-create-user,admin-users,auth-resolve-login-id,auth-first-login,payments-create-order,payments-verify,payments-webhook} fn/
+mkdir fn && cp -r "$ROOT"/supabase/functions/{_shared,admin-api,admin-create-user,admin-users,auth-resolve-login-id,auth-first-login,payments-create-order,payments-verify,payments-webhook,payments-refund} fn/
 cat > fn/deno.d.ts <<'D'
 declare const Deno: { env: { get(k: string): string | undefined }; serve(h: (r: Request) => Response | Promise<Response>): void };
 D

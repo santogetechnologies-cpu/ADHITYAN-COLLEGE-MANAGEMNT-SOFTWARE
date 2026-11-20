@@ -820,6 +820,26 @@ SELECT pg_temp.chk('admin switches online payment and the exam fee rule', (publi
 RESET ROLE;
 SELECT pg_temp.chk('the flags took effect', (SELECT online_payments_enabled=false AND exam_requires_fee_clearance=true FROM public.institutional_settings LIMIT 1));
 
+-- ---- 067 refunds / reconciliation ----
+CREATE TEMP TABLE _rf AS SELECT public.payment_order_refund_apply((SELECT (r->>'order_id')::uuid FROM _po2), 'Student withdrew', 'c0000000-0000-0000-0000-000000000008', 'rfnd_SMOKE') AS r;
+SELECT pg_temp.chk('refunding a paid online order succeeds', (SELECT (r->>'success')='true' FROM _rf));
+SELECT pg_temp.chk('the fee is back on the ledger and the receipt is voided', (SELECT paid_amount=0 AND total_due=600 FROM public.student_fees WHERE id='c9600000-0000-0000-0000-000000000001')
+  AND (SELECT status='Reversed' FROM public.fee_payments WHERE transaction_reference='pay_SMOKE2')
+  AND (SELECT count(*)=1 FROM public.fee_receipts r2 JOIN public.fee_payments fp ON fp.receipt_id=r2.id WHERE fp.transaction_reference='pay_SMOKE2' AND r2.voided_at IS NOT NULL));
+SELECT pg_temp.chk('the order is Refunded with a refund record', (SELECT status='Refunded' FROM public.payment_orders WHERE gateway_order_id='order_SMOKE2') AND (SELECT count(*)=1 FROM public.payment_refunds WHERE gateway_refund_id='rfnd_SMOKE'));
+SELECT pg_temp.chk('refunding twice is a no-op', (public.payment_order_refund_apply((SELECT (r->>'order_id')::uuid FROM _po2), 'again', 'c0000000-0000-0000-0000-000000000008', 'rfnd_SMOKE2')->>'duplicate')='true' AND (SELECT count(*)=1 FROM public.payment_refunds));
+SELECT pg_temp.chk('an order in review can be refunded without touching the ledger', (public.payment_order_refund_apply((SELECT (r->>'order_id')::uuid FROM _po3), 'Fee already cleared', 'c0000000-0000-0000-0000-000000000008', 'rfnd_SMOKE3')->>'success')='true');
+SET LOCAL ROLE authenticated;
+SELECT set_config('request.jwt.claim.sub','c0000000-0000-0000-0000-000000000008',true);
+SELECT pg_temp.chk('finance cannot reverse an online payment from the ledger', (public.fee_payment_reverse((SELECT id FROM public.fee_payments WHERE payment_mode='Online_Gateway' LIMIT 1),'wrong amount entered')->>'code')='USE_GATEWAY_REFUND');
+SELECT pg_temp.chk('a reason is required for a counter reversal', (public.fee_payment_reverse((SELECT id FROM public.fee_payments WHERE payment_mode='Cash' AND status='Completed' LIMIT 1),'x')->>'code')='REASON_REQUIRED');
+SELECT pg_temp.chk('finance reverses a counter payment', (public.fee_payment_reverse((SELECT id FROM public.fee_payments WHERE payment_mode='Cash' AND status='Completed' LIMIT 1),'Cash entered against the wrong student')->>'success')='true');
+SELECT pg_temp.chk('a reversed payment cannot be reversed again', (public.fee_payment_reverse((SELECT id FROM public.fee_payments WHERE payment_mode='Cash' AND status='Reversed' LIMIT 1),'second attempt here')->>'code')='NOT_REVERSIBLE');
+SELECT pg_temp.chk('reconciliation lists days and exceptions', (SELECT jsonb_array_length(r->'days')>=1 FROM (SELECT public.payment_reconciliation(CURRENT_DATE-30, CURRENT_DATE+1) r) x));
+SELECT set_config('request.jwt.claim.sub','c0000000-0000-0000-0000-000000000001',true);
+SELECT pg_temp.chk('students cannot reconcile or reverse', (public.payment_reconciliation(CURRENT_DATE-1, CURRENT_DATE)->>'code')='FORBIDDEN' AND (public.fee_payment_reverse((SELECT id FROM public.fee_payments LIMIT 1),'trying to cheat')->>'code')='FORBIDDEN');
+RESET ROLE;
+
 SELECT name, CASE WHEN ok THEN 'PASS' ELSE 'FAIL' END AS result FROM _r ORDER BY ok, name;
 DO $$ BEGIN
   IF EXISTS (SELECT 1 FROM _r WHERE NOT ok) THEN RAISE EXCEPTION 'SMOKE TEST FAILED'; END IF;

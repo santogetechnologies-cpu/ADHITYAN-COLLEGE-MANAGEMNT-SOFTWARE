@@ -54,6 +54,7 @@ back-fills of NULLs and a de-duplication of `super_admin_releases` rows with the
 | 064_grading_gpa.sql | **New:** configurable grade scale (bands → grade/grade points; edited by COE/principal/admin, audited), credits per paper, `student_gpa` (SGPA per examination + CGPA over published results, latest attempt per subject, arrears), `exam_gpa_report`; `exam_grade` now reads the scale. Placement applications use the computed CGPA (ignoring a typed one) when the student has published results; self-declared otherwise and flagged | 045, 055 |
 | 065_exam_registration_seating.sql | **New:** optional exam registration (open/close, deadline, class registration, fee clearance), exam rooms with capacity, seating generated per session (classes interleaved, capacity checked, previous plan kept on refusal), invigilator assignment without double-booking, seating visible to students only after hall tickets are published; hall tickets honour registration and carry hall/seat; fee-dues check also finds fees attached to the student record | 046 |
 | 066_online_payments.sql | **New:** online fee payments — `payment_orders`/items/events, service-role-only `payment_order_create/attach/settle/fail` (server prices the order, amount re-checked on settlement, idempotent by gateway event, applies money through `record_fee_payment`, parks unapplicable money in `Review`), `institutional_settings.online_payments_enabled`, audited `payment_flags_set` (online switch + exam fee-clearance rule) | 035, 040 |
+| 067_refunds_reconciliation.sql | **New:** payment reversal (ledger restored, receipt voided, finance entry, audited; counter payments by finance, online payments only via the gateway refund so money actually returns), `payments-refund` edge function, `payment_refunds`, daily reconciliation report with exceptions (orders in review / stuck / online payments without an order) | 066 |
 | 036_reconcile_legacy_columns.sql | `timetables.session_type`, `exam_schedules.day_of_week`, `student_attendance.*`, reception columns | 029 |
 
 **Behaviour changes to expect after 032:** buckets `documents`, `attachments`, `student_documents`, `staff_documents`
@@ -67,7 +68,7 @@ Not carried over on purpose: multi-college tables (`colleges`, `college_*`, `pla
 ```bash
 psql "$STAGING_DB_URL" -v ON_ERROR_STOP=1 -f supabase/tests/smoke_028_037.sql   # synthetic data, rolls back
 ```
-All lines must read PASS (328 checks). Edge-function checks: `scripts/test-edge-gate.sh` (type-check + authorization/validation cases; needs no database). Then in the SQL editor: `select count(*) from public.profiles where role is null;` (must be 0).
+All lines must read PASS (339 checks). Edge-function checks: `scripts/test-edge-gate.sh` (type-check + authorization/validation cases; needs no database). Then in the SQL editor: `select count(*) from public.profiles where role is null;` (must be 0).
 
 ### Rollback
 Each file is one transaction, so a failure leaves nothing half-applied. To undo a *successful* run use the backup/PITR from
@@ -126,6 +127,7 @@ See `docs/audit/01-Executive-Audit.md` ("High / medium") and `19-Implementation-
    supabase functions deploy payments-create-order
    supabase functions deploy payments-verify
    supabase functions deploy payments-webhook --no-verify-jwt
+   supabase functions deploy payments-refund
    ```
 4. Apply migration 066, then in the app: Finance → Fee Setup → **Online payments** → switch on. Test with a ₹1 fee in test mode:
    pay, confirm the receipt appears, replay the webhook from the Razorpay dashboard and confirm nothing is applied twice.

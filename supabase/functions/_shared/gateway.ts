@@ -54,3 +54,12 @@ export async function fetchGatewayPayment(c: GatewayConfig, paymentId: string): 
   if (!res.ok || !body?.id) throw new Error(body?.error?.description || `Could not read the payment (${res.status}).`);
   return { id: body.id, order_id: body.order_id, amount: body.amount, status: body.status };
 }
+
+export async function refundGatewayPayment(c: GatewayConfig, paymentId: string, amountPaise: number, notes: Record<string, string>): Promise<{ id: string }> {
+  const res = await fetch(`https://api.razorpay.com/v1/payments/${encodeURIComponent(paymentId)}/refund`, {
+    method: "POST", headers: { "Content-Type": "application/json", Authorization: basic(c) }, body: JSON.stringify({ amount: amountPaise, notes }),
+  });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok || !body?.id) throw new Error(body?.error?.description || `Gateway refused the refund (${res.status}).`);
+  return { id: body.id };
+}
