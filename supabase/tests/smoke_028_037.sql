@@ -670,6 +670,27 @@ SELECT set_config('request.jwt.claim.sub','c0000000-0000-0000-0000-0000000000a1'
 SELECT pg_temp.chk('HR sees staff profiles but not students or parents', (SELECT count(*)>=3 FROM public.profiles WHERE role='teacher' OR role='admin') AND (SELECT count(*)=0 FROM public.profiles WHERE role IN ('student','parent')));
 RESET ROLE;
 
+-- ---- 062 staff leave ----
+INSERT INTO public.staff_leave_applications (id, user_id, staff_name, department, leave_type, start_date, end_date, total_days, reason, status) VALUES
+ ('c9500000-0000-0000-0000-000000000001','c0000000-0000-0000-0000-0000000000a3','Smoke Staff','DeptX','Casual Leave (CL)','2026-08-03','2026-08-04',2,'x','Pending_Principal'),
+ ('c9500000-0000-0000-0000-000000000002','c0000000-0000-0000-0000-0000000000a3','Smoke Staff','DeptX','Casual Leave (CL)','2026-08-10','2026-08-30',20,'x','Pending_Principal'),
+ ('c9500000-0000-0000-0000-000000000003','c0000000-0000-0000-0000-0000000000a3','Smoke Staff','DeptX','Loss of Pay (LOP)','2026-09-01','2026-09-20',20,'x','Pending_Principal');
+SET LOCAL ROLE authenticated;
+SELECT set_config('request.jwt.claim.sub','c0000000-0000-0000-0000-0000000000a3',true);   -- the applicant (a teacher)
+SELECT pg_temp.chk('staff cannot approve their own leave (no role)', (public.staff_leave_decide('c9500000-0000-0000-0000-000000000001','Approve')->>'code')='FORBIDDEN');
+SELECT set_config('request.jwt.claim.sub','c0000000-0000-0000-0000-000000000008',true);   -- admin
+SELECT pg_temp.chk('rejecting needs a reason', (public.staff_leave_decide('c9500000-0000-0000-0000-000000000001','Reject')->>'code')='REASON_REQUIRED');
+SELECT pg_temp.chk('approval deducts the balance', (public.staff_leave_decide('c9500000-0000-0000-0000-000000000001','Approve')->>'status')='Approved');
+RESET ROLE;
+SELECT pg_temp.chk('casual days taken = 2 for 2026-27', (SELECT casual_leave_taken=2 FROM public.staff_leave_balances WHERE user_id='c0000000-0000-0000-0000-0000000000a3' AND academic_year='2026-2027'));
+SET LOCAL ROLE authenticated;
+SELECT set_config('request.jwt.claim.sub','c0000000-0000-0000-0000-000000000008',true);
+SELECT pg_temp.chk('leave beyond the quota is refused', (public.staff_leave_decide('c9500000-0000-0000-0000-000000000002','Approve')->>'code')='BALANCE_EXCEEDED');
+SELECT pg_temp.chk('leave without pay uses no quota', (public.staff_leave_decide('c9500000-0000-0000-0000-000000000003','Approve')->>'status')='Approved');
+SELECT pg_temp.chk('a decided application cannot be decided again', (public.staff_leave_decide('c9500000-0000-0000-0000-000000000001','Reject','changed')->>'code')='ALREADY_DECIDED');
+RESET ROLE;
+SELECT pg_temp.chk('quota untouched by the refused request and LOP', (SELECT casual_leave_taken=2 FROM public.staff_leave_balances WHERE user_id='c0000000-0000-0000-0000-0000000000a3' AND academic_year='2026-2027'));
+
 SELECT name, CASE WHEN ok THEN 'PASS' ELSE 'FAIL' END AS result FROM _r ORDER BY ok, name;
 DO $$ BEGIN
   IF EXISTS (SELECT 1 FROM _r WHERE NOT ok) THEN RAISE EXCEPTION 'SMOKE TEST FAILED'; END IF;

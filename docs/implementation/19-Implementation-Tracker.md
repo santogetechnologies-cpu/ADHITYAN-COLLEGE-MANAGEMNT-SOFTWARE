@@ -252,3 +252,9 @@ Legend: ✅ done & verified as stated · 🟡 written, not runnable here · ⬜ 
 | Provisioning statistics counted legacy merit-list rows and status spellings — now count `students` and lifecycle statuses | 🟡 | build |
 | Unused `admissionService` (marked applications 'accepted' on payment with a browser-made receipt number) deleted | ✅ | |
 | Invented counters removed: library 342/23/156 and 45,820 volumes, admin '14 accounts', '13 roles / 100% in sync', default module/widget counts | 🟡 | build |
+
+## Staff leave (062)
+| Item | Status | Evidence |
+|------|--------|----------|
+| Decision function (no self-approval, reason on reject, ledger-checked quota), days-fit-dates constraint | ✅ SQL | 8 smoke checks (282 total) |
+| HR leave manager: failed approvals used to be shown as done (local state set regardless); now real result + reload; rejection asks for a reason; recording leave validates days against dates | 🟡 UI | build |

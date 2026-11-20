@@ -4543,28 +4543,14 @@ export const db = {
     }
   },
 
-  async updateStaffLeaveStatus(id: string, status: string, approvedBy?: string, rejectionReason?: string): Promise<boolean> {
-    try {
-      const isUuid = approvedBy && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(approvedBy);
-      const updates = {
-        status,
-        approved_by: isUuid ? approvedBy : null,
-        rejection_reason: rejectionReason || null,
-        updated_at: new Date().toISOString()
-      };
-      let { data, error } = await supabase.from('staff_leave_applications').update(updates).eq('id', id).select();
-      if (error || !data || data.length === 0) {
-        const admin = await getAdminClient();
-        if (admin) {
-          const res = await admin.from('staff_leave_applications').update(updates).eq('id', id).select();
-          if (!res.error && res.data && res.data.length > 0) return true;
-        }
-      }
-      return !error && !!data && data.length > 0;
-    } catch (err) {
-      console.error('updateStaffLeaveStatus error:', err);
-      return false;
-    }
+  /** Decisions run on the server: no self-approval, rejection needs a reason, and the balance ledger refuses over-quota approvals. */
+  async updateStaffLeaveStatus(id: string, status: string, _approvedBy?: string, rejectionReason?: string): Promise<boolean> {
+    const decision = String(status).toLowerCase().startsWith('reject') ? 'Reject' : 'Approve';
+    const sb: any = supabase;
+    const { data, error } = await sb.rpc('staff_leave_decide', { p_id: id, p_decision: decision, p_reason: rejectionReason ?? null });
+    if (error) throw new Error(error.message);
+    if (!data?.success) throw new Error(data?.error || 'The leave could not be updated.');
+    return true;
   },
 
   async getStaffPayrollRuns(): Promise<T.StaffPayrollRun[]> {
