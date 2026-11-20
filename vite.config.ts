@@ -1,3 +1,12 @@
+try {
+  // Automatically load .env into process.env in Node 20+
+  if (typeof process !== 'undefined' && typeof (process as any).loadEnvFile === 'function') {
+    (process as any).loadEnvFile();
+  }
+} catch {
+  // Ignore
+}
+
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react-swc";
 import path from "path";

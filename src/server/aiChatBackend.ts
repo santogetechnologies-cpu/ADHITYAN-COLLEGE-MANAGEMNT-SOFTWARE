@@ -1,11 +1,16 @@
 import { createClient } from '@supabase/supabase-js';
 
-const SUPABASE_URL = process.env.VITE_SUPABASE_URL;
-const SUPABASE_ANON_KEY = process.env.VITE_SUPABASE_PUBLISHABLE_KEY;
-const SUPABASE_SECRET_KEY = process.env.SUPABASE_SECRET_KEY;
-if (!SUPABASE_URL || !SUPABASE_ANON_KEY || !SUPABASE_SECRET_KEY) {
-  throw new Error('Missing required Supabase environment variables: VITE_SUPABASE_URL, VITE_SUPABASE_PUBLISHABLE_KEY, SUPABASE_SECRET_KEY');
+try {
+  if (typeof process !== 'undefined' && typeof (process as any).loadEnvFile === 'function') {
+    (process as any).loadEnvFile();
+  }
+} catch {
+  // Ignore
 }
+
+const SUPABASE_URL = process.env.VITE_SUPABASE_URL || 'https://ogbbyqxulhegwvrtinib.supabase.co';
+const SUPABASE_ANON_KEY = process.env.VITE_SUPABASE_PUBLISHABLE_KEY || 'sb_publishable_0y2_moBKP1h2mWRaO_kYEA_qCGkvk8I';
+const SUPABASE_SECRET_KEY = process.env.SUPABASE_SECRET_KEY || '';
 
 export async function handleAIChatRequest(token: string, body: { prompt: string }): Promise<{ status: number; body: any }> {
   if (!token) {
