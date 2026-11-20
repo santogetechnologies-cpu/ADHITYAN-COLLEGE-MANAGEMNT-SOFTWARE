@@ -196,3 +196,11 @@ Legend: ✅ done & verified as stated · 🟡 written, not runnable here · ⬜ 
 | Teacher marks entry now uses the server-validated `exam_save_marks` (it wrote results directly, graded in the browser, force-published them and notified students, bypassing the COE) | 🟡 | build |
 | `db.getExamResults` no longer invents pass (>=50) or grade labels; parent results and principal exam module use the server's `result_status`/grade, real exam names; invented fallbacks ('Clinical Course', 'Student Candidate') removed | 🟡 | build; TS errors 746 → 684 |
 | Crash bugs found by the type-check fixed: `logout` undefined in LoginForm (role-mismatch path), `students` undefined in Admin dashboard (department chart, events), missing `Select` imports in Admissions management view, wrong service method names in user-account control (status toggle / password reset), `isUuidStr` out of scope in the dev admin backend | ✅ | tsc, build, edge gate tests |
+
+## Module — HR & Payroll (migration 053)
+| Item | Status | Evidence |
+|------|--------|----------|
+| Staff pay/bank data private; server-side payroll with configurable rules, LOP from approved leave, mid-month joiners, EPF ceiling, approval + separation of duties, bank-reference disbursement, audit | ✅ SQL | 16 smoke checks (229 total) incl. the LOP/EPF arithmetic |
+| Payroll screen rebuilt on the server functions; bank advice built from real account data (was one hard-coded account/IFSC for everyone); payslip header from institution settings, no invented PAN/UAN/bank/reference; HR dashboard KPIs real (invented 89 faculty, 42 staff, ₹48.6 L, 3 on leave removed); TDS and other deductions per employee | 🟡 UI | build |
+| Statutory rates (EPF/ESI/PT) are institution-specific and are NOT assumed: payroll refuses to run until HR sets them | ⚠️ action | HR must enter rules once |
+| Leave balances deduct on approval; payroll for state-specific professional-tax slabs; Form 16 / statutory returns | ⬜ | |

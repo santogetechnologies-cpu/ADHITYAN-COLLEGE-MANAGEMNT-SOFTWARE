@@ -40,6 +40,7 @@ back-fills of NULLs and a de-duplication of `super_admin_releases` rows with the
 | 050_naac.sql | **PRIVACY: NAAC evidence readable by every signed-in user (students, parents) and deletable by teachers — now staff-only, delete by coordinator/principal/admin**; new `naac_metrics`; progress % computed by trigger (no hand-typed %); evidence files go to a new PRIVATE bucket `naac-evidence` (signed links) instead of only saving the file name | 049 |
 | 051_discipline.sql | **PRIVACY/INTEGRITY: every teacher could read all disciplinary incidents and resolve any of them** — now reporters see only their own; principal/admin decide through audited `discipline_update` (a resolution needs the action taken); no direct update/delete | 050 |
 | 052_hostel_outpass_integrity.sql | **INTEGRITY: students/parents could set `parent_otp_verified` on their own out-pass**; trigger enforces who may set consent/gate fields, valid status flow Pending→Approved→Exited→Returned (Rejected), gate times stamped by the server; return time must be after departure | 032 |
+| 053_payroll.sql | **CRITICAL PRIVACY: `staff_service_records` allowed every signed-in user to read AND edit all staff PAN/bank/salary** — now own record or HR/finance/principal/admin; HR/admin only can write. Payroll computed on the server (`payroll_run_create`) from service records + approved leave-without-pay, rules in `payroll_settings` (EPF %, ceiling, ESI, PT — **must be set by the institution before the first run**), Draft → Approved (not by the preparer) → Disbursed (bank reference required), cancel with reason; direct writes revoked; invented pay/bank defaults removed | 028 |
 | 036_reconcile_legacy_columns.sql | `timetables.session_type`, `exam_schedules.day_of_week`, `student_attendance.*`, reception columns | 029 |
 
 **Behaviour changes to expect after 032:** buckets `documents`, `attachments`, `student_documents`, `staff_documents`
@@ -53,7 +54,7 @@ Not carried over on purpose: multi-college tables (`colleges`, `college_*`, `pla
 ```bash
 psql "$STAGING_DB_URL" -v ON_ERROR_STOP=1 -f supabase/tests/smoke_028_037.sql   # synthetic data, rolls back
 ```
-All lines must read PASS (213 checks). Edge-function checks: `scripts/test-edge-gate.sh` (type-check + authorization/validation cases; needs no database). Then in the SQL editor: `select count(*) from public.profiles where role is null;` (must be 0).
+All lines must read PASS (229 checks). Edge-function checks: `scripts/test-edge-gate.sh` (type-check + authorization/validation cases; needs no database). Then in the SQL editor: `select count(*) from public.profiles where role is null;` (must be 0).
 
 ### Rollback
 Each file is one transaction, so a failure leaves nothing half-applied. To undo a *successful* run use the backup/PITR from

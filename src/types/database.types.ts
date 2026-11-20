@@ -856,8 +856,10 @@ export interface StaffPayrollRun {
   total_net_disbursed: number;
   total_employees: number;
   run_date: string;
-  status: 'Draft' | 'Approved_Principal' | 'Disbursed';
+  status: 'Draft' | 'Approved' | 'Disbursed' | 'Cancelled';
   processed_by?: string;
+  approved_by?: string;
+  payment_reference?: string;
   created_at?: string;
 }
 

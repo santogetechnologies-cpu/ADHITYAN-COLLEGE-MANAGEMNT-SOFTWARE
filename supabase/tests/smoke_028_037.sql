@@ -20,7 +20,7 @@ INSERT INTO public.profiles(id,email,name,role,class_name) VALUES
  ('c0000000-0000-0000-0000-000000000001','smoke.s1@example.test','Smoke S1','student','C1'),
  ('c0000000-0000-0000-0000-000000000002','smoke.s2@example.test','Smoke S2','student','C1'),
  ('c0000000-0000-0000-0000-000000000003','smoke.lib@example.test','Smoke Lib','librarian',NULL),
- ('c0000000-0000-0000-0000-000000000004','smoke.fin@example.test','Smoke Fin','financier',NULL);
+ ('c0000000-0000-0000-0000-000000000004','smoke.fin2@example.test','Smoke Fin2','financier',NULL);
 
 SELECT pg_temp.chk('student gets permanent id', (SELECT student_id IS NOT NULL FROM public.profiles WHERE id='c0000000-0000-0000-0000-000000000001'));
 SELECT pg_temp.chk('students row created', EXISTS (SELECT 1 FROM public.students WHERE user_id='c0000000-0000-0000-0000-000000000001'));
@@ -509,6 +509,43 @@ UPDATE public.hostel_out_passes SET warden_status='Approved' WHERE id='c8000000-
 UPDATE public.hostel_out_passes SET warden_status='Exited' WHERE id='c8000000-0000-0000-0000-000000000001';
 UPDATE public.hostel_out_passes SET warden_status='Returned' WHERE id='c8000000-0000-0000-0000-000000000001';
 SELECT pg_temp.chk('full cycle stamps gate times', (SELECT warden_status='Returned' AND guard_exit_time IS NOT NULL AND guard_entry_time IS NOT NULL FROM public.hostel_out_passes WHERE id='c8000000-0000-0000-0000-000000000001'));
+RESET ROLE;
+
+-- ---- 053 payroll ----
+INSERT INTO auth.users(id,email) VALUES ('c0000000-0000-0000-0000-0000000000a1','pay.hr@example.test'),('c0000000-0000-0000-0000-0000000000a2','pay.fin@example.test'),('c0000000-0000-0000-0000-0000000000a3','pay.staff@example.test');
+INSERT INTO public.profiles(id,email,name,role) VALUES ('c0000000-0000-0000-0000-0000000000a1','pay.hr@example.test','Smoke HR','hr_manager'),('c0000000-0000-0000-0000-0000000000a2','pay.fin@example.test','Smoke Fin2','finance_manager'),('c0000000-0000-0000-0000-0000000000a3','pay.staff@example.test','Smoke Staff','teacher');
+INSERT INTO public.staff_service_records (user_id, employee_code, designation, department, qualification, date_of_joining, basic_pay, da_pct, hra_pct, special_allowance, bank_account_no, pan_number)
+VALUES ('c0000000-0000-0000-0000-0000000000a3','EMP-1','Lecturer','DeptX','MSc','2020-01-01',31000,10,20,1000,'1234567890','ABCDE1234F');
+INSERT INTO public.staff_leave_applications (user_id, staff_name, department, leave_type, start_date, end_date, total_days, reason, status) VALUES ('c0000000-0000-0000-0000-0000000000a3','Smoke Staff','DeptX','Loss of Pay (LOP)','2026-04-06','2026-04-08',3,'x','Approved');
+SET LOCAL ROLE authenticated;
+SELECT set_config('request.jwt.claim.sub','c0000000-0000-0000-0000-000000000001',true);   -- student
+SELECT pg_temp.chk('student cannot read staff bank/salary records', (SELECT count(*)=0 FROM public.staff_service_records));
+UPDATE public.staff_service_records SET basic_pay=1;
+RESET ROLE;
+SELECT pg_temp.chk('student cannot edit staff pay', (SELECT basic_pay=31000 FROM public.staff_service_records WHERE employee_code='EMP-1'));
+SET LOCAL ROLE authenticated;
+SELECT set_config('request.jwt.claim.sub','c0000000-0000-0000-0000-0000000000a3',true);   -- the staff member
+SELECT pg_temp.chk('staff member sees only their own record', (SELECT count(*)=1 FROM public.staff_service_records));
+SELECT set_config('request.jwt.claim.sub','c0000000-0000-0000-0000-0000000000a1',true);   -- HR
+SELECT pg_temp.chk('payroll refuses to run before rules are configured', (public.payroll_run_create('2026-04')->>'code')='NOT_CONFIGURED');
+SELECT pg_temp.chk('HR sets the payroll rules', (public.payroll_configure(12, 15000, 0.75, 21000, 200)->>'success')='true');
+CREATE TEMP TABLE _pr AS SELECT public.payroll_run_create('2026-04') AS r;
+SELECT pg_temp.chk('HR prepares a draft run', (SELECT (r->>'success')='true' AND (r->>'employees')::int=1 FROM _pr));
+RESET ROLE;
+SELECT pg_temp.chk('LOP days reduce pay and EPF respects the ceiling', (SELECT lop_days=3 AND days_worked=27 AND basic_earned=round(31000*27/30.0) AND epf_deduction=round(LEAST(basic_earned,15000)*0.12) AND esi_deduction=0 AND pt_deduction=200 AND net_salary=gross_salary-total_deductions AND payslip_number ~ '^PS-202604-' FROM public.staff_payroll_items WHERE employee_code='EMP-1'));
+SET LOCAL ROLE authenticated;
+SELECT set_config('request.jwt.claim.sub','c0000000-0000-0000-0000-0000000000a1',true);
+SELECT pg_temp.chk('the same month cannot be run twice', (public.payroll_run_create('2026-04')->>'code')='ALREADY_RUN');
+SELECT pg_temp.chk('the preparer cannot approve (separation of duties)', (public.payroll_run_approve((SELECT (r->>'run_id')::uuid FROM _pr))->>'code') IN ('FORBIDDEN','SEPARATION_OF_DUTIES'));
+SELECT set_config('request.jwt.claim.sub','c0000000-0000-0000-0000-0000000000a2',true);   -- finance
+SELECT pg_temp.chk('cannot disburse before approval', (public.payroll_run_disburse((SELECT (r->>'run_id')::uuid FROM _pr),'BANK-REF-1')->>'code')='BAD_STATE');
+SELECT pg_temp.chk('finance approves', (public.payroll_run_approve((SELECT (r->>'run_id')::uuid FROM _pr))->>'success')='true');
+SELECT pg_temp.chk('disbursing needs a bank reference', (public.payroll_run_disburse((SELECT (r->>'run_id')::uuid FROM _pr),'x')->>'code')='REFERENCE_REQUIRED');
+SELECT pg_temp.chk('finance records the bank reference', (public.payroll_run_disburse((SELECT (r->>'run_id')::uuid FROM _pr),'BANK-REF-1')->>'success')='true');
+SELECT pg_temp.chk('a paid run cannot be cancelled', (public.payroll_run_cancel((SELECT (r->>'run_id')::uuid FROM _pr),'oops')->>'code')='BAD_STATE');
+SELECT pg_temp.chk('no direct writes to payroll tables', has_table_privilege('authenticated','public.staff_payroll_items','INSERT')=false AND has_table_privilege('authenticated','public.staff_payroll_runs','UPDATE')=false);
+SELECT set_config('request.jwt.claim.sub','c0000000-0000-0000-0000-0000000000a3',true);
+SELECT pg_temp.chk('staff member sees their own payslip only', (SELECT count(*)=1 FROM public.staff_payroll_items) AND (SELECT count(*)=0 FROM public.staff_payroll_runs));
 RESET ROLE;
 
 SELECT name, CASE WHEN ok THEN 'PASS' ELSE 'FAIL' END AS result FROM _r ORDER BY ok, name;
