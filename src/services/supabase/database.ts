@@ -533,44 +533,13 @@ export const db = {
     }
   },
 
+  /** Grading runs on the server: only the teacher who set the work (or admin/principal) can grade, score 0–100. */
   async gradeAssignmentSubmission(submissionId: string, score: number, feedback?: string): Promise<boolean> {
-    try {
-      let client: any = supabase;
-      let { data, error } = await client
-        .from('assignment_submissions')
-        .update({
-          score,
-          feedback,
-          status: 'graded',
-        })
-        .eq('id', submissionId)
-        .select();
-
-      if (error || !data || data.length === 0) {
-        const admin = await getAdminClient();
-        if (admin) {
-          const res = await admin
-            .from('assignment_submissions')
-            .update({
-              score,
-              feedback,
-              status: 'graded',
-            })
-            .eq('id', submissionId)
-            .select();
-          if (!res.error && res.data && res.data.length > 0) {
-            return true;
-          }
-          error = res.error;
-        }
-      }
-
-      if (error) throw error;
-      return true;
-    } catch (err) {
-      console.error('gradeAssignmentSubmission error:', err);
-      return false;
-    }
+    const sb: any = supabase;
+    const { data, error } = await sb.rpc('assignment_grade', { p_submission: submissionId, p_score: score, p_feedback: feedback ?? null });
+    if (error) throw new Error(error.message);
+    if (!data?.success) throw new Error(data?.error || 'The grade was not saved.');
+    return true;
   },
 
   async getStudentsByClass(className?: string): Promise<T.Profile[]> {

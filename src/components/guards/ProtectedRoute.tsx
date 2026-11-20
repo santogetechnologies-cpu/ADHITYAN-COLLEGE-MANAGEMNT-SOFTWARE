@@ -5,6 +5,7 @@ import { ROLE_CONFIGS } from '@/config/roles';
 import { Loader2 } from 'lucide-react';
 import { permissionEnforcementService } from '@/services/permissionEnforcementService';
 import { toast } from 'sonner';
+import { ForcePasswordChange } from '@/components/auth/ForcePasswordChange';
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
@@ -31,6 +32,11 @@ export function ProtectedRoute({ children, allowedRoles }: ProtectedRouteProps) 
     const isGenericDashboard = location.pathname === '/dashboard' || location.pathname.startsWith('/dashboard/');
     const state = isGenericDashboard ? undefined : { from: location };
     return <Navigate to="/" state={state} replace />;
+  }
+
+  // A password set or reset by an administrator must be replaced by the user before anything else.
+  if (user.requires_password_change) {
+    return <ForcePasswordChange />;
   }
 
   // Platform super admin has global bypass across platform and college previews

@@ -192,7 +192,7 @@ export function ParentDashboard() {
             </div>
             <div>
               <h1 className="text-2xl font-bold">Welcome, {user?.name || 'Parent'}</h1>
-              <p className="opacity-90 text-sm font-mono pt-0.5">Parent ID: {user?.login_id || 'PAR-2026-0001'}</p>
+              <p className="opacity-90 text-sm font-mono pt-0.5">Parent ID: {user?.login_id || '—'}</p>
             </div>
           </div>
         </div>
@@ -212,7 +212,7 @@ export function ParentDashboard() {
               In accordance with institutional security policies, student and parent accounts are linked exclusively by authorized Administrators and Receptionists during admission confirmation.
             </p>
             <p className="text-muted-foreground">
-              Please contact the College Reception Desk with your <strong>Parent ID: {user?.login_id || 'PAR-2026-0001'}</strong> and your child's <strong>Student ID</strong> to link your accounts.
+              Please contact the College Reception Desk with your <strong>Parent ID: {user?.login_id || '—'}</strong> and your child's <strong>Student ID</strong> to link your accounts.
             </p>
             <div className="pt-2">
               <Button onClick={() => setActiveTab('contact')} variant="outline" className="border-blue-300 text-blue-700">
@@ -238,7 +238,7 @@ export function ParentDashboard() {
               <div className="flex items-center gap-2">
                 <h1 className="text-xl sm:text-2xl font-bold">Welcome, {user?.name || 'Parent'}</h1>
                 <Badge className="bg-white/20 text-white border-white/30 text-[10px] font-mono">
-                  {user?.login_id || 'PAR-2026-0001'}
+                  {user?.login_id || '—'}
                 </Badge>
               </div>
               <p className="text-xs text-white/80 pt-0.5">

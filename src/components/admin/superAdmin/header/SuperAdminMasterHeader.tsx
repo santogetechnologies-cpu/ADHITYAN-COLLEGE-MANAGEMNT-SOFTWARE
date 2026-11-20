@@ -42,7 +42,7 @@ export function SuperAdminMasterHeader({
   onModeChange,
   selectedRoleKey
 }: SuperAdminMasterHeaderProps) {
-  const { user, signOut } = useAuth();
+  const { user, logout } = useAuth();
   const { currentCollege, collegesList, switchCollege, isPlatformSuperAdmin } = useCollege();
   const navigate = useNavigate();
   const [createCollegeOpen, setCreateCollegeOpen] = useState(false);
@@ -204,7 +204,7 @@ export function SuperAdminMasterHeader({
             <Button
               variant="ghost"
               size="sm"
-              onClick={() => signOut()}
+              onClick={() => logout()}
               className="text-rose-400 hover:text-rose-300 hover:bg-rose-950/30 h-8 px-2 text-xs font-semibold"
               title="Sign Out"
             >

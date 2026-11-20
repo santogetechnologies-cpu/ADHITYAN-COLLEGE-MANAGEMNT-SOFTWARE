@@ -45,6 +45,8 @@ back-fills of NULLs and a de-duplication of `super_admin_releases` rows with the
 | 055_placement.sql | Students apply only through `placement_apply` (deadline, drive open, department and minimum-CGPA checks, one application per drive); applicants cannot edit CGPA/round/outcome (only withdraw); drive statuses validated; drives hidden from non-college roles. CGPA is self-declared until grade points are computed from results | 032 |
 | 056_store_orders.sql | **INTEGRITY: store orders trusted the browser's prices/total/status** (student could insert a 'Delivered' order for ₹0; stock changed from the browser); managers' status changes never saved (no UPDATE policy). Now only `checkout_store_order` (server prices + row locks) creates orders, `store_order_set_status` moves them (Pending→Processing→Delivered/Cancelled; cancel restocks; student may cancel own pending); old `place_store_order` revoked | 028 |
 | 057_notifications.sql | **Every cross-user alert was silently rejected by RLS** (users could only write notifications for themselves) — warden→student, store→admin, transport→riders, receptionist→admins etc. never arrived. Now `notify_users` / `notify_roles` (staff only, size-limited, validated type/priority); students/parents can only notify themselves | 001 |
+| 058_assignments.sql | **INTEGRITY: a student could submit work already 'graded' with any score; any teacher could edit/grade any other teacher's assignments** — submissions forced to submitted/late with no score; teachers manage and grade only their own (`assignment_grade`, 0–100); one submission per student; graded work locked | 001 |
+| 059_password_change_ack.sql | Lets a user clear their own "must change password" flag after choosing a new password (admin password resets now set the flag; the app blocks until the user changes it) | 028 |
 | 036_reconcile_legacy_columns.sql | `timetables.session_type`, `exam_schedules.day_of_week`, `student_attendance.*`, reception columns | 029 |
 
 **Behaviour changes to expect after 032:** buckets `documents`, `attachments`, `student_documents`, `staff_documents`
@@ -58,7 +60,7 @@ Not carried over on purpose: multi-college tables (`colleges`, `college_*`, `pla
 ```bash
 psql "$STAGING_DB_URL" -v ON_ERROR_STOP=1 -f supabase/tests/smoke_028_037.sql   # synthetic data, rolls back
 ```
-All lines must read PASS (258 checks). Edge-function checks: `scripts/test-edge-gate.sh` (type-check + authorization/validation cases; needs no database). Then in the SQL editor: `select count(*) from public.profiles where role is null;` (must be 0).
+All lines must read PASS (267 checks). Edge-function checks: `scripts/test-edge-gate.sh` (type-check + authorization/validation cases; needs no database). Then in the SQL editor: `select count(*) from public.profiles where role is null;` (must be 0).
 
 ### Rollback
 Each file is one transaction, so a failure leaves nothing half-applied. To undo a *successful* run use the backup/PITR from

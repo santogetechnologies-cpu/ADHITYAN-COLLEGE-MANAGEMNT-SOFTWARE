@@ -621,6 +621,33 @@ SELECT set_config('request.jwt.claim.sub','c0000000-0000-0000-0000-000000000001'
 SELECT pg_temp.chk('the student receives only their own notifications', (SELECT count(*)=2 FROM public.notifications) AND (SELECT bool_and(user_id='c0000000-0000-0000-0000-000000000001') FROM public.notifications));
 RESET ROLE;
 
+-- ---- 058 assignments ----
+INSERT INTO public.assignments (id, title, subject, due_date, teacher_id, teacher_name) VALUES ('c9400000-0000-0000-0000-000000000001','Smoke HW','Anatomy',now()+interval '3 days','c0000000-0000-0000-0000-000000000009','Smoke Teacher');
+SET LOCAL ROLE authenticated;
+SELECT set_config('request.jwt.claim.sub','c0000000-0000-0000-0000-000000000001',true);   -- student
+INSERT INTO public.assignment_submissions (assignment_id, student_id, student_name, subject, score, status, feedback) VALUES ('c9400000-0000-0000-0000-000000000001','c0000000-0000-0000-0000-000000000001','x','x',100,'graded','self-graded');
+SELECT pg_temp.chk('a student cannot submit work as already graded', (SELECT status='submitted' AND score IS NULL AND feedback IS NULL FROM public.assignment_submissions WHERE student_id='c0000000-0000-0000-0000-000000000001'));
+SELECT pg_temp.chk('one submission per student per assignment', pg_temp.fails($q$INSERT INTO public.assignment_submissions (assignment_id, student_id, student_name, subject) VALUES ('c9400000-0000-0000-0000-000000000001','c0000000-0000-0000-0000-000000000001','x','x')$q$));
+SELECT pg_temp.chk('a student cannot grade through the function', (public.assignment_grade((SELECT id FROM public.assignment_submissions LIMIT 1), 90)->>'code')='FORBIDDEN');
+SELECT set_config('request.jwt.claim.sub','c0000000-0000-0000-0000-0000000000a3',true);   -- a different teacher
+SELECT pg_temp.chk('another teacher cannot see or grade it', (SELECT count(*)=0 FROM public.assignment_submissions) AND (public.assignment_grade((SELECT id FROM public.assignment_submissions LIMIT 1), 90)->>'code') IS NOT NULL);
+SELECT set_config('request.jwt.claim.sub','c0000000-0000-0000-0000-000000000009',true);   -- the owner
+SELECT pg_temp.chk('score above 100 is refused', (public.assignment_grade((SELECT id FROM public.assignment_submissions LIMIT 1), 150)->>'code')='INVALID');
+SELECT pg_temp.chk('the owner grades', (public.assignment_grade((SELECT id FROM public.assignment_submissions LIMIT 1), 88, 'Good')->>'success')='true');
+SELECT set_config('request.jwt.claim.sub','c0000000-0000-0000-0000-000000000001',true);
+UPDATE public.assignment_submissions SET score=100, submission_text='edited after grading' WHERE student_id='c0000000-0000-0000-0000-000000000001';
+RESET ROLE;
+SELECT pg_temp.chk('graded work is locked and the score survives', (SELECT score=88 AND status='graded' AND submission_text IS DISTINCT FROM 'edited after grading' FROM public.assignment_submissions WHERE student_id='c0000000-0000-0000-0000-000000000001'));
+
+-- ---- 059 password-change acknowledgement ----
+UPDATE public.profiles SET requires_password_change = true WHERE id='c0000000-0000-0000-0000-000000000001';
+SET LOCAL ROLE authenticated;
+SELECT set_config('request.jwt.claim.sub','c0000000-0000-0000-0000-000000000001',true);
+SELECT public.acknowledge_password_change();
+RESET ROLE;
+SELECT pg_temp.chk('a user clears their own must-change-password flag', (SELECT requires_password_change=false FROM public.profiles WHERE id='c0000000-0000-0000-0000-000000000001'));
+SELECT pg_temp.chk('anonymous callers cannot acknowledge', has_function_privilege('anon','public.acknowledge_password_change()','EXECUTE')=false);
+
 SELECT name, CASE WHEN ok THEN 'PASS' ELSE 'FAIL' END AS result FROM _r ORDER BY ok, name;
 DO $$ BEGIN
   IF EXISTS (SELECT 1 FROM _r WHERE NOT ok) THEN RAISE EXCEPTION 'SMOKE TEST FAILED'; END IF;

@@ -227,3 +227,13 @@ Legend: ✅ done & verified as stated · 🟡 written, not runnable here · ⬜ 
 | Cross-role notifications delivered through `notify_users/notify_roles`; `db.createNotification` routes by recipient; `db.notifyMany` for bulk; receptionist and transport-emergency bulk inserts moved to it; invalid priority 'normal' and user ids 'admin'/'all' handled | ✅ SQL (7 checks, 258 total), 🟡 app | build |
 | Browser-side fallback that decremented stock and wrote orders directly removed; manager order updates now persist | 🟡 UI | build |
 | Inventory issue/return/purchase orders are still multi-step browser writes (storekeeper-only) — move to atomic functions; online payment for store orders | ⬜ | |
+
+## Teacher / Parent / Student dashboards, assignments (058) and sign-in flags (059)
+| Item | Status | Evidence |
+|------|--------|----------|
+| Assignments: server-forced submission state, owner-only grading with 0–100 check, locked after grading | ✅ SQL | 8 smoke checks |
+| Teacher dashboard: grading used to say "Graded" even when rejected (now shows the real error), score pre-filled 85, unbounded; invented subject 'Paramedical Sciences'; attendance rate used its own formula (late = ½) and fixed 75% — now identical to the hall-ticket rule and the institution's minimum | 🟡 UI | build |
+| Parent dashboard showed a made-up Parent ID 'PAR-2026-0001' because `login_id` was never loaded; `login_id`, `is_first_login`, `requires_password_change` now come from the profile | 🟡 | build |
+| Admin password reset: min 8 characters, sets must-change flag; app blocks with a "choose a new password" dialog until done | ✅ SQL (2 checks), 🟡 UI | |
+| Last-administrator protection read the role from user_metadata (untrusted, often empty) — now counts active admins in profiles | ✅ | edge gate tests |
+| Super-admin header logout called a non-existent `signOut` | ✅ | tsc |

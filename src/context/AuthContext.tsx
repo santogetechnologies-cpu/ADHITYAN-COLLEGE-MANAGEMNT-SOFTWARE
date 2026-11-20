@@ -40,6 +40,9 @@ export interface User {
   student_id?: string;
   preferences?: any;
   assigned_classes?: string[];
+  login_id?: string;
+  is_first_login?: boolean;
+  requires_password_change?: boolean;
 }
 
 interface AuthContextType {
@@ -91,6 +94,9 @@ function mapAuthToUser(authUser: SupabaseAuthUser, profileData?: any): User {
     student_id: resolvedStudentId,
     preferences: profileData?.preferences,
     assigned_classes: assignedClasses,
+    login_id: profileData?.login_id || undefined,
+    is_first_login: profileData?.is_first_login === true,
+    requires_password_change: profileData?.requires_password_change === true,
   };
 }
 

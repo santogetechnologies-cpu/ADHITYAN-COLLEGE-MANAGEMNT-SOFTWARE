@@ -2159,8 +2159,8 @@ export async function handleAdminUserOperation(caller: Caller, body: any, userTo
           return { status: 403, body: { error: 'Access denied: System Administrator privileges required to reset passwords.', code: 'FORBIDDEN' } };
         }
         const { userId, newPassword } = body;
-        if (!userId || !newPassword || newPassword.length < 6) {
-          return { status: 400, body: { error: 'Valid User ID and minimum 6-character password required.', code: 'WEAK_PASSWORD' } };
+        if (!userId || !newPassword || newPassword.length < 8) {
+          return { status: 400, body: { error: 'Valid User ID and a password of at least 8 characters are required.', code: 'WEAK_PASSWORD' } };
         }
 
         const { error: pwdError } = await supabaseAdmin.auth.admin.updateUserById(userId, {
@@ -2170,8 +2170,10 @@ export async function handleAdminUserOperation(caller: Caller, body: any, userTo
         if (pwdError) {
           return { status: 400, body: { error: pwdError.message, code: pwdError.code || 'PASSWORD_RESET_FAILED' } };
         }
+        // The user must choose their own password at next sign-in.
+        await supabaseAdmin.from('profiles').update({ requires_password_change: true }).eq('id', userId);
 
-        return { status: 200, body: { success: true, message: 'Password reset successfully in Supabase Auth.' } };
+        return { status: 200, body: { success: true, message: 'Password reset. The user will be asked to choose a new password at next sign-in.' } };
       }
 
       case 'delete_user': {
@@ -2189,11 +2191,11 @@ export async function handleAdminUserOperation(caller: Caller, body: any, userTo
         }
 
         // Guard 2: Cannot delete last remaining admin
-        const { data: allUsers } = await supabaseAdmin.auth.admin.listUsers();
-        const target = allUsers.users.find((u: any) => u.id === userId);
-        if (target?.user_metadata?.role === 'admin') {
-          const adminCount = allUsers.users.filter((u: any) => u.user_metadata?.role === 'admin').length;
-          if (adminCount <= 1) {
+        // Role comes from profiles (authoritative), never from user_metadata.
+        const { data: targetProfile } = await supabaseAdmin.from('profiles').select('role').eq('id', userId).maybeSingle();
+        if (targetProfile?.role === 'admin') {
+          const { count: adminCount } = await supabaseAdmin.from('profiles').select('id', { count: 'exact', head: true }).eq('role', 'admin').eq('status', 'active');
+          if ((adminCount ?? 0) <= 1) {
             return { status: 400, body: { error: 'Cannot delete the last remaining Administrator account.', code: 'LAST_ADMIN_PROTECTED' } };
           }
         }
