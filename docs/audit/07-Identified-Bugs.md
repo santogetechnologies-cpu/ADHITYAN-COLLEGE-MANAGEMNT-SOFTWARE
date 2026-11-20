@@ -32,3 +32,10 @@ See `01-Executive-Audit.md` for the full table with status. Quick index:
 | Return dialog fell back to `db.returnBook`, called a non-existent `db.getBookIssues()` (so no issued book could ever be found), and excluded Overdue books | Fixed |
 | Renew only showed "Renewed for 14 days" and saved nothing | Fixed (`renew_library_book`, max 2 renewals) |
 | `library_circulation` is a second, unused model of the same data | Open (consolidate) |
+
+## Module switches (Control Center)
+| Bug | Status |
+|-----|--------|
+| `permissionEnforcementService` tested `mod.status === 'disabled'`, but modules have `enabled` and no `status`: disabling a module never blocked any page | Fixed (`mod.enabled === false`) |
+| The route→module map used ids that do not exist (`alumni`, `medical`, `sports`, `compliance`, `communication`, `departments`), so those pages could never be switched off | Fixed: added Alumni / Medical / Sports modules; `/certificate-generation`→`certificates`, `/admin/departments`→`academics`, message-parents→`broadcasts` |
+| Config was only refreshed at start-up in other users' tabs | Fixed: refresh on focus and every minute |
