@@ -201,31 +201,38 @@ const DEFAULT_WORKFLOWS: InstitutionalWorkflow[] = [
   }
 ];
 
-const WORKFLOWS_CACHE_KEY = 'adhityan_super_admin_workflows_v2';
+const SETTING_KEY = 'workflows';
+const CACHE_TTL_MS = 15_000;
 
+/**
+ * Workflow DEFINITIONS (stages, responsible roles, ...). Stored in the shared, versioned table app_settings
+ * (key 'workflows') so every administrator and device sees the same definitions; each save is a new release in
+ * app_setting_versions with the acting administrator recorded. (They used to live in each browser's localStorage.)
+ *
+ * NOTE: nothing in the application enforces these definitions yet; the admissions flow, for example, is driven by
+ * migration 037/042. They are configuration for a future approval engine, not a running engine.
+ */
 class WorkflowEngineService {
   private cache: InstitutionalWorkflow[] | null = null;
+  private loadedAt = 0;
 
-  constructor() {
-    this.init();
-  }
-
-  private init() {
+  private async load(force = false): Promise<InstitutionalWorkflow[]> {
+    if (!force && this.cache && Date.now() - this.loadedAt < CACHE_TTL_MS) return this.cache;
     try {
-      const stored = localStorage.getItem(WORKFLOWS_CACHE_KEY);
-      if (stored) {
-        this.cache = JSON.parse(stored);
-      }
-    } catch {}
-
-    if (!this.cache || this.cache.length === 0) {
-      this.cache = DEFAULT_WORKFLOWS;
+      const { data, error } = await supabase.from('app_settings' as any).select('value').eq('key', SETTING_KEY).maybeSingle();
+      if (error) throw error;
+      const items = (data as any)?.value?.items;
+      this.cache = Array.isArray(items) && items.length > 0 ? items : DEFAULT_WORKFLOWS;
+      this.loadedAt = Date.now();
+    } catch (err) {
+      console.warn('Could not load workflow definitions; using the last known ones:', err);
+      if (!this.cache) this.cache = DEFAULT_WORKFLOWS;
     }
+    return this.cache as InstitutionalWorkflow[];
   }
 
   async getWorkflows(): Promise<InstitutionalWorkflow[]> {
-    if (!this.cache) this.init();
-    return [...(this.cache || DEFAULT_WORKFLOWS)];
+    return [...(await this.load())];
   }
 
   async getWorkflowById(id: string): Promise<InstitutionalWorkflow | undefined> {
@@ -234,37 +241,25 @@ class WorkflowEngineService {
   }
 
   async updateWorkflow(updated: InstitutionalWorkflow): Promise<boolean> {
-    const list = await this.getWorkflows();
+    // reload first so two administrators editing different workflows do not overwrite each other's work
+    const list = [...(await this.load(true))];
     const index = list.findIndex(w => w.id === updated.id);
     const itemToSave = {
       ...updated,
       version: (updated.version || 1) + 1,
       updatedAt: new Date().toISOString()
     };
+    if (index >= 0) list[index] = itemToSave; else list.push(itemToSave);
 
-    if (index >= 0) {
-      list[index] = itemToSave;
-    } else {
-      list.push(itemToSave);
+    const { error } = await supabase.rpc('app_settings_publish' as any, {
+      p_key: SETTING_KEY, p_value: { items: list } as any, p_summary: `Workflow "${updated.name}" updated`
+    });
+    if (error) {
+      console.warn('Workflow definition was not saved:', error.message);
+      return false;                       // the screen reports the failure; nothing is shown as saved locally
     }
-
     this.cache = list;
-    try {
-      localStorage.setItem(WORKFLOWS_CACHE_KEY, JSON.stringify(list));
-    } catch {}
-
-    // Record in audit_logs
-    try {
-      await supabase.from('audit_logs').insert([{
-        user_email: 'superadmin@adhityan.edu.in',
-        user_role: 'admin',
-        action: 'update_workflow_configuration',
-        entity_type: 'workflow',
-        entity_id: updated.id,
-        new_values: { workflow: itemToSave }
-      }]);
-    } catch {}
-
+    this.loadedAt = Date.now();
     window.dispatchEvent(new CustomEvent('workflow_config_updated', { detail: { workflowId: updated.id } }));
     return true;
   }

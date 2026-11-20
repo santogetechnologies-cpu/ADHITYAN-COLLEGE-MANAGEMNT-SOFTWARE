@@ -1,4 +1,4 @@
--- Smoke test for migrations 028-043. Synthetic data only; everything is rolled back.
+-- Smoke test for migrations 028-044. Synthetic data only; everything is rolled back.
 -- Run against a SCRATCH/STAGING database that has 001-015 + 028-037 applied (never production):
 --   psql "$STAGING_DB_URL" -v ON_ERROR_STOP=1 -f supabase/tests/smoke_028_037.sql
 -- Any failed assertion raises an exception and the script exits non-zero.
@@ -257,6 +257,31 @@ SELECT pg_temp.chk('second renewal allowed', (public.renew_library_book((SELECT 
 SELECT pg_temp.chk('third renewal refused (limit 2)', (public.renew_library_book((SELECT id FROM public.book_issues WHERE book_code='LIB-SMK' AND status='Issued' LIMIT 1))->>'error') LIKE '%maximum%');
 SELECT set_config('request.jwt.claim.sub','c0000000-0000-0000-0000-000000000001',true);   -- student
 SELECT pg_temp.chk('student cannot renew', (public.renew_library_book((SELECT id FROM public.book_issues WHERE book_code='LIB-SMK' LIMIT 1))->>'error') LIKE 'Not authorized%');
+RESET ROLE;
+
+-- ===================== 044 shared app settings =====================
+INSERT INTO auth.users(id,email) VALUES ('c0000000-0000-0000-0000-000000000008','smoke.admin@example.test');
+INSERT INTO public.profiles(id,email,name,role) VALUES ('c0000000-0000-0000-0000-000000000008','smoke.admin@example.test','Smoke Admin','admin');
+SET LOCAL ROLE authenticated;
+SELECT set_config('request.jwt.claim.sub','c0000000-0000-0000-0000-000000000008',true);   -- admin
+SELECT pg_temp.chk('admin saves a draft', (public.app_settings_draft_save('smoke_cfg','{"modules":[{"id":"a","enabled":true}],"roles":{"teacher":{"x":1}}}'::jsonb)) IS NOT NULL);
+SELECT pg_temp.chk('draft merge: objects merge, arrays replace', (public.app_settings_draft_merge('smoke_cfg','{"roles":{"student":{"y":2}},"modules":[{"id":"b","enabled":false}]}'::jsonb)) = '{"modules":[{"id":"b","enabled":false}],"roles":{"teacher":{"x":1},"student":{"y":2}}}'::jsonb);
+SELECT pg_temp.chk('publish gives version 1', (public.app_settings_publish('smoke_cfg','{"modules":[{"id":"b","enabled":false}],"v":1}'::jsonb,'first')->>'version')='1');
+SELECT pg_temp.chk('publish clears the draft', (SELECT count(*)=0 FROM public.app_setting_drafts WHERE key='smoke_cfg'));
+SELECT pg_temp.chk('second publish is version 2', (public.app_settings_publish('smoke_cfg','{"v":2}'::jsonb,'second')->>'version')='2');
+SELECT pg_temp.chk('rollback to 1 creates version 3 with the old value', (SELECT (r->>'version')='3' AND (r->>'rolled_back_to')='1' FROM (SELECT public.app_settings_rollback('smoke_cfg',1,'bad release') r) x));
+SELECT pg_temp.chk('live value is the rolled-back one', (SELECT (value->>'v')::int=1 AND version=3 FROM public.app_settings WHERE key='smoke_cfg'));
+SELECT pg_temp.chk('history keeps all three versions', (SELECT count(*)=3 FROM public.app_setting_versions WHERE key='smoke_cfg'));
+SELECT pg_temp.chk('rollback of an unknown version is refused', (public.app_settings_rollback('smoke_cfg',99,'x')->>'code')='NOT_FOUND');
+SELECT pg_temp.chk('release history cannot be edited', pg_temp.fails($q$UPDATE public.app_setting_versions SET summary='tamper' WHERE key='smoke_cfg'$q$));
+SELECT pg_temp.chk('release history cannot be deleted', pg_temp.fails($q$DELETE FROM public.app_setting_versions WHERE key='smoke_cfg'$q$));
+SELECT set_config('request.jwt.claim.sub','c0000000-0000-0000-0000-000000000001',true);   -- student
+SELECT pg_temp.chk('any signed-in user reads the live config', (SELECT count(*)=1 FROM public.app_settings WHERE key='smoke_cfg'));
+SELECT pg_temp.chk('student cannot publish', pg_temp.fails($q$SELECT public.app_settings_publish('smoke_cfg','{"v":9}'::jsonb,'hack')$q$));
+SELECT pg_temp.chk('student cannot save a draft', pg_temp.fails($q$SELECT public.app_settings_draft_save('smoke_cfg','{"v":9}'::jsonb)$q$));
+SELECT pg_temp.chk('student cannot roll back', pg_temp.fails($q$SELECT public.app_settings_rollback('smoke_cfg',1,'x')$q$));
+SELECT pg_temp.chk('student cannot write the table directly', pg_temp.fails($q$UPDATE public.app_settings SET value='{}'::jsonb$q$));
+SELECT pg_temp.chk('student cannot read drafts or release history', (SELECT count(*)=0 FROM public.app_setting_drafts) AND (SELECT count(*)=0 FROM public.app_setting_versions));
 RESET ROLE;
 
 SET LOCAL ROLE anon;

@@ -119,7 +119,7 @@ export function BackupRestoreSection({ config, onConfigReload }: BackupRestoreSe
         await onConfigReload();
         setStatusMessage({
           type: 'success',
-          text: 'System configuration restored successfully! The ERP is now running the restored state.'
+          text: 'Backup loaded as the shared DRAFT. Nothing has changed for users yet: review it and press Publish to make it live.'
         });
         setRestoreJsonInput('');
       } else {

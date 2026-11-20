@@ -22,6 +22,10 @@ class PermissionEnforcementService {
     if (typeof window !== 'undefined') {
       window.addEventListener('system_config_published', () => this.refreshConfig());
       window.addEventListener('role_config_updated', () => this.refreshConfig());
+      // A change published by an administrator on another device reaches everyone else: re-read the live
+      // configuration when the tab becomes visible again and once a minute while it is open.
+      document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') void this.refreshConfig(); });
+      window.setInterval(() => { if (document.visibilityState === 'visible') void this.refreshConfig(); }, 60_000);
     }
   }
 

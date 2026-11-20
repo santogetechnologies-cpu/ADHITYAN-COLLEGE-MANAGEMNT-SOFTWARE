@@ -18,7 +18,11 @@ See `01-Executive-Audit.md` for the full table with status. Quick index:
 | Frontend | `naac_coordinator` config said role `admin` (not used by the guards, but wrong) | Fixed |
 | Frontend | Receptionist had an empty menu | Fixed (Front Desk, Admissions, Student & Parent Accounts) |
 | Frontend | Finance manager / financier / accountant menu items pointed at `/admin/finance` and `/admin/accounts`, which only admin/principal may open (clicking bounced them) | Fixed: new `/finance` and `/accounts` routes; `node scripts/check-navigation.cjs` verifies all 21 roles |
-| Frontend | Control Center (roles, modules, workflows) and the visual form customizer are stored in each browser's `localStorage`: an admin's customization never reaches other users/devices | Open (next) |
+| Frontend | Control Center configuration lived in each browser's `localStorage`; the published copy was read from admin-only `audit_logs`, so non-admin roles loaded DEFAULTS (a module disabled by an admin stayed open to them) | Fixed (044 + `superAdminService`) |
+| Frontend | Release numbers came from an in-memory counter (v1.1.0 after every reload); rollback only searched that list; dashboards/pages/navigation/permissions/forms/workflows drafts were never published | Fixed |
+| Frontend | `saveMasterConfiguration` applied edits straight to the local "published" cache and to `institutional_settings` with no draft/publish step | Fixed (saves the shared draft; goes live on Publish) |
+| Frontend | Workflow definitions in `localStorage`; the editor ignored save failures and claimed "applied live" although nothing enforces workflows | Fixed (shared + honest message). Workflows remain configuration only |
+| Frontend | `visualCustomizationService` / `VisualCustomizerContext` still use `localStorage` (used by the student complaints form) | Open |
 
 ## Library (found in the module scan)
 | Bug | Status |

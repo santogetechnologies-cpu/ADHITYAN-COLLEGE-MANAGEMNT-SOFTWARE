@@ -67,7 +67,11 @@ export function WorkflowEngineView() {
   const handleToggleWorkflowActive = async (checked: boolean) => {
     if (!activeWorkflow) return;
     const updated = { ...activeWorkflow, isActive: checked };
-    await workflowEngineService.updateWorkflow(updated);
+    const saved = await workflowEngineService.updateWorkflow(updated);
+    if (!saved) {
+      toast.error(`Could not ${checked ? 'activate' : 'deactivate'} "${activeWorkflow.name}". Nothing was changed.`);
+      return;
+    }
     setWorkflows(prev => prev.map(w => w.id === activeWorkflow.id ? updated : w));
     toast.success(`Workflow "${activeWorkflow.name}" is now ${checked ? 'Active' : 'Deactivated'}`);
   };
@@ -118,8 +122,9 @@ export function WorkflowEngineView() {
     if (!activeWorkflow) return;
     setIsSaving(true);
     try {
-      await workflowEngineService.updateWorkflow(activeWorkflow);
-      toast.success(`🎉 Workflow "${activeWorkflow.name}" successfully updated & applied live!`);
+      const saved = await workflowEngineService.updateWorkflow(activeWorkflow);
+      if (!saved) throw new Error('The server did not accept the change (administrator access required).');
+      toast.success(`Workflow "${activeWorkflow.name}" saved. (Definitions are stored for all administrators; approval stages are not enforced by the application yet.)`);
     } catch (err: any) {
       toast.error(`Failed to save workflow: ${err.message || 'Unknown error'}`);
     } finally {

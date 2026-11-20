@@ -131,5 +131,6 @@ Legend: ✅ done & verified as stated · 🟡 written, not runnable here · ⬜ 
 | Tables / RPCs used by code vs migrated database | ✅ | only the intentionally excluded multi-college tables remain |
 | Library: issue / return / renew + librarian RLS | ✅ SQL (119 smoke checks), 🟡 UI | |
 | 127 buttons with no handler (static scan) | ⬜ triage | `docs/audit/10-Dead-Buttons.md`, `scripts/find-dead-buttons.cjs` |
-| Control Center / module / workflow / form customizations stored in each browser's `localStorage` (not shared) | ⬜ **next** | `multiCollegeService`, `superAdminService`, `workflowEngineService`, `visualCustomizationService` |
+| Control Center configuration (roles, modules, features, dashboards, pages, navigation, permissions, forms, workflows, global settings, theme): shared in the database with draft → publish → rollback and real version numbers | ✅ SQL (17 smoke checks), 🟡 UI | migration 044; `superAdminService`, `workflowEngineService` rewritten; permission service refreshes every minute |
+| `visualCustomizationService` (student complaints form fields) still per-browser; `multiCollegeService` (deprecated multi-college) still uses localStorage | ⬜ | |
 | Remaining dashboards (HR, hostel, placement, transport, store, exam, certificates, alumni, medical, sports, NAAC) | ⬜ | not yet traced end to end |
