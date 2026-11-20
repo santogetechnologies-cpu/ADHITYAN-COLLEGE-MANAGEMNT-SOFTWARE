@@ -6,12 +6,17 @@ import { Input } from '@/components/ui/input';
 import { ComprehensiveAdmissionDialog } from '@/components/admission/ComprehensiveAdmissionDialog';
 import { ApplicationDetailsDialog } from '@/components/admission/ApplicationDetailsDialog';
 import { FileText, User, Eye, Loader2, UserPlus, Search, Sparkles, CheckCircle2 } from 'lucide-react';
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { db } from '@/services/supabase/database';
 import { useToast } from '@/hooks/use-toast';
 import { useRealtimeSubscription } from '@/hooks/useRealtimeSubscription';
-import { studentParentAuthService, AdmissionConfirmationResult } from '@/services/studentParentAuthService';
-import { AdmissionSuccessDialog } from '@/components/admission/AdmissionSuccessDialog';
+import { actionsFor, PENDING_STATUSES, AWAITING_ENROLMENT, STATUS_STYLE, type AdmissionAction, type AdmissionStatus } from '@/lib/admissionWorkflow';
+import { Textarea } from '@/components/ui/textarea';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { AlertTriangle, Wallet } from 'lucide-react';
+import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { FeeReceiptModal } from '@/components/shared/FeeReceiptModal';
 
 export const ApplicationPortal = () => {
   const { toast } = useToast();
@@ -23,38 +28,45 @@ export const ApplicationPortal = () => {
 
   // Search & Status Filter
   const [searchQuery, setSearchQuery] = useState('');
-  const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'approved' | 'rejected'>('all');
-  const [quickApprovingId, setQuickApprovingId] = useState<string | null>(null);
-  const [confirmedResult, setConfirmedResult] = useState<AdmissionConfirmationResult | null>(null);
+  const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'approved' | 'enrolled' | 'rejected'>('all');
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  // reject / cancel need a reason before they run
+  const [reasonFor, setReasonFor] = useState<{ app: any; action: AdmissionAction } | null>(null);
+  const [reasonText, setReasonText] = useState('');
+  // admission deposit (counter payment) for an application
+  const [depositFor, setDepositFor] = useState<any>(null);
+  const [deposit, setDeposit] = useState({ amount: '', mode: 'Cash', reference: '' });
+  const [depositBusy, setDepositBusy] = useState(false);
+  const depositKeyRef = useRef<string>(crypto.randomUUID());
+  const [receipt, setReceipt] = useState<any>(null);
+  const [receiptOpen, setReceiptOpen] = useState(false);
 
   const loadApplications = useCallback(async () => {
     try {
       const data = await db.getAdmissionApplications();
-      if (data && data.length > 0) {
-        const mapped = data.map((d: any) => ({
-          id: d.id,
-          name: d.name,
-          email: d.email,
-          class: d.class_applied || d.class_name,
-          status: d.status,
-          date: d.created_at ? new Date(d.created_at).toISOString().split('T')[0] : '2024-03-10',
-          applicationId: d.application_no || `APP${d.id.slice(0, 6)}`,
-          phone: d.phone,
-          parentName: d.parent_name,
-          parentPhone: d.parent_phone,
-          address: d.address,
-          previousSchool: d.previous_school,
-          dateOfBirth: d.date_of_birth,
-          remarks: d.remarks,
-          studentId: d.student_id,
-          parentId: d.parent_id
-        }));
-        setApplications(mapped);
-      } else {
-        setApplications([]);
-      }
-    } catch (err) {
-      console.error('Failed to load applications:', err);
+      setApplications((data || []).map((d: any) => ({
+        id: d.id,
+        name: d.name,
+        email: d.email,
+        class: d.class_applied || d.class_name,
+        status: d.status,
+        date: d.submission_date || (d.created_at ? new Date(d.created_at).toISOString().split('T')[0] : '—'),
+        applicationId: d.application_no,
+        phone: d.phone,
+        parentName: d.parent_name,
+        parentPhone: d.parent_phone,
+        address: d.address,
+        previousSchool: d.previous_school,
+        dateOfBirth: d.date_of_birth,
+        remarks: d.remarks,
+        documents: d.documents,
+        studentId: d.status === 'Enrolled' ? d.student_id : undefined,
+        plannedStudentId: d.student_id,
+      })));
+      setLoadError(null);
+    } catch (err: any) {
+      setLoadError(err?.message || 'Could not load applications.');
     } finally {
       setLoading(false);
     }
@@ -71,65 +83,90 @@ export const ApplicationPortal = () => {
     onReconnect: loadApplications,
   });
 
-  const handleApplicationAdded = (newApplication: any) => {
-    setApplications(prev => [newApplication, ...prev]);
-  };
-
-  const handleQuickApprove = async (app: any) => {
-    setQuickApprovingId(app.id);
+  /** Runs one pipeline action. Resolves true only when the server accepted it. */
+  const runAction = async (app: any, action: AdmissionAction, remarks?: string): Promise<boolean> => {
+    setBusyId(String(app.id));
     try {
-      await db.updateAdmissionStatus(String(app.id), 'Approved', 'Approved by Academic Review');
-      setApplications(prev => prev.map(a => 
-        String(a.id) === String(app.id) 
-          ? { ...a, status: 'Approved' } 
-          : a
-      ));
-      toast({
-        title: "Admission Approved",
-        description: `Application for ${app.name} has been approved. Student portal login credentials can now be provisioned in Admin User Management.`,
-      });
-      loadApplications();
+      if (action.enroll) {
+        const r = await db.enrollAdmission(String(app.id), { department: app.class, class_name: app.class });
+        toast({
+          title: r.already_enrolled ? 'Already enrolled' : 'Student enrolled',
+          description: `${app.name} is student ${r.student_id}. Create the portal login in Admin User Management when ready.`,
+        });
+      } else if (action.to) {
+        await db.updateAdmissionStatus(String(app.id), action.to, remarks);
+        toast({ title: 'Status updated', description: `${app.name}: ${action.to}.` });
+      }
+      await loadApplications();
+      return true;
     } catch (err: any) {
-      toast({
-        title: "Approval Failed",
-        description: err.message || "Failed to approve admission.",
-        variant: "destructive",
-      });
+      toast({ title: `Could not ${action.label.toLowerCase()}`, description: err?.message || 'The server refused the change.', variant: 'destructive' });
+      await loadApplications();
+      return false;
     } finally {
-      setQuickApprovingId(null);
+      setBusyId(null);
     }
   };
 
-  const handleStatusUpdate = async (applicationId: any, status: string, remarks?: string) => {
-    try {
-      await db.updateAdmissionStatus(String(applicationId), status as any, remarks);
-      setApplications(prev => prev.map(app => 
-        String(app.id) === String(applicationId) 
-          ? { ...app, status, remarks }
-          : app
-      ));
-      toast({
-        title: "Status Updated",
-        description: `Application status changed to ${status}`,
-      });
-    } catch (err) {
-      toast({
-        title: "Error",
-        description: "Failed to update application status",
-        variant: "destructive"
-      });
+  const openDeposit = (app: any) => {
+    depositKeyRef.current = crypto.randomUUID();
+    setDeposit({ amount: '', mode: 'Cash', reference: '' });
+    setDepositFor(app);
+  };
+
+  const submitDeposit = async () => {
+    if (!depositFor || depositBusy) return;
+    const amount = Number(deposit.amount);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      toast({ title: 'Check the deposit', description: 'Enter an amount greater than zero.', variant: 'destructive' });
+      return;
     }
+    if (deposit.mode !== 'Cash' && deposit.reference.trim().length < 4) {
+      toast({ title: 'Reference required', description: 'Enter the transaction reference for a non-cash payment.', variant: 'destructive' });
+      return;
+    }
+    setDepositBusy(true);
+    try {
+      const r = await db.recordAdmissionDeposit({
+        applicationId: String(depositFor.id), amount, paymentMode: deposit.mode,
+        reference: deposit.reference.trim() || undefined, idempotencyKey: depositKeyRef.current,
+      });
+      toast({
+        title: r.duplicate ? 'Deposit already recorded' : 'Deposit recorded',
+        description: r.duplicate ? 'This payment was saved earlier; nothing was charged twice.' : `₹${amount.toLocaleString('en-IN')} received from ${depositFor.name}.`,
+      });
+      setDepositFor(null);
+      depositKeyRef.current = crypto.randomUUID();
+      if (r.receipt) { setReceipt(r.receipt); setReceiptOpen(true); }
+    } catch (err: any) {
+      // same key is kept: retrying after a timeout cannot double-charge
+      toast({ title: 'Deposit not recorded', description: err?.message || 'The server refused the deposit.', variant: 'destructive' });
+    } finally {
+      setDepositBusy(false);
+    }
+  };
+
+  const startAction = (app: any, action: AdmissionAction) => {
+    if (action.reasonRequired) {
+      setReasonText('');
+      setReasonFor({ app, action });
+      return;
+    }
+    if (action.confirm && !window.confirm(action.confirm)) return;
+    void runAction(app, action);
   };
 
   const filteredApplications = useMemo(() => {
     return applications.filter((app) => {
       // 1. Status filter
       if (statusFilter === 'pending') {
-        if (app.status !== 'Submitted' && app.status !== 'Under Review') return false;
+        if (!PENDING_STATUSES.includes(app.status)) return false;
       } else if (statusFilter === 'approved') {
-        if (app.status !== 'Approved') return false;
+        if (!AWAITING_ENROLMENT.includes(app.status)) return false;
+      } else if (statusFilter === 'enrolled') {
+        if (app.status !== 'Enrolled') return false;
       } else if (statusFilter === 'rejected') {
-        if (app.status !== 'Rejected') return false;
+        if (app.status !== 'Rejected' && app.status !== 'Cancelled') return false;
       }
 
       // 2. Search query
@@ -141,31 +178,19 @@ export const ApplicationPortal = () => {
         const matchesAppId = (app.applicationId || '').toLowerCase().includes(q);
         const matchesCourse = (app.class || '').toLowerCase().includes(q);
         const matchesParent = (app.parentName || '').toLowerCase().includes(q);
-        const matchesStudentId = (app.studentId || '').toLowerCase().includes(q);
-        const matchesParentId = (app.parentId || '').toLowerCase().includes(q);
-        return matchesName || matchesEmail || matchesPhone || matchesAppId || matchesCourse || matchesParent || matchesStudentId || matchesParentId;
+        const matchesStudentId = (app.plannedStudentId || '').toLowerCase().includes(q);
+        return matchesName || matchesEmail || matchesPhone || matchesAppId || matchesCourse || matchesParent || matchesStudentId;
       }
 
       return true;
     });
   }, [applications, statusFilter, searchQuery]);
 
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case 'Submitted':
-        return <Badge variant="secondary">Submitted</Badge>;
-      case 'Under Review':
-        return <Badge variant="default">Under Review</Badge>;
-      case 'Approved':
-        return <Badge variant="default" className="bg-success text-success-foreground">Approved</Badge>;
-      case 'Rejected':
-        return <Badge variant="destructive">Rejected</Badge>;
-      case 'Waitlisted':
-        return <Badge variant="outline">Waitlisted</Badge>;
-      default:
-        return <Badge variant="secondary">{status}</Badge>;
-    }
-  };
+  const getStatusBadge = (status: string) => (
+    <Badge variant="outline" className={STATUS_STYLE[status as AdmissionStatus] ?? STATUS_STYLE.Submitted}>{status}</Badge>
+  );
+
+  const count = (pred: (a: any) => boolean) => applications.filter(pred).length;
 
   return (
     <div className="space-y-6">
@@ -192,22 +217,22 @@ export const ApplicationPortal = () => {
         <Card>
           <CardContent className="p-6 text-center">
             <User className="h-8 w-8 mx-auto text-amber-500 mb-2" />
-            <p className="text-2xl font-bold">{applications.filter(a => a.status === 'Submitted' || a.status === 'Under Review').length}</p>
+            <p className="text-2xl font-bold">{count(a => PENDING_STATUSES.includes(a.status))}</p>
             <p className="text-sm text-muted-foreground">Pending Review</p>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="p-6 text-center">
             <CheckCircle2 className="h-8 w-8 mx-auto text-emerald-600 mb-2" />
-            <p className="text-2xl font-bold">{applications.filter(a => a.status === 'Approved').length}</p>
-            <p className="text-sm text-muted-foreground">Approved & Provisioned</p>
+            <p className="text-2xl font-bold">{count(a => AWAITING_ENROLMENT.includes(a.status))}</p>
+            <p className="text-sm text-muted-foreground">Approved, awaiting enrolment</p>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="p-6 text-center">
             <User className="h-8 w-8 mx-auto text-destructive mb-2" />
-            <p className="text-2xl font-bold">{applications.filter(a => a.status === 'Rejected').length}</p>
-            <p className="text-sm text-muted-foreground">Rejected</p>
+            <p className="text-2xl font-bold">{count(a => a.status === 'Enrolled')}</p>
+            <p className="text-sm text-muted-foreground">Enrolled students</p>
           </CardContent>
         </Card>
       </div>
@@ -245,7 +270,7 @@ export const ApplicationPortal = () => {
                   className="h-7 text-xs px-2.5"
                   onClick={() => setStatusFilter('pending')}
                 >
-                  Pending ({applications.filter(a => a.status === 'Submitted' || a.status === 'Under Review').length})
+                  Pending ({count(a => PENDING_STATUSES.includes(a.status))})
                 </Button>
                 <Button
                   type="button"
@@ -254,7 +279,16 @@ export const ApplicationPortal = () => {
                   className="h-7 text-xs px-2.5"
                   onClick={() => setStatusFilter('approved')}
                 >
-                  Approved ({applications.filter(a => a.status === 'Approved').length})
+                  Approved ({count(a => AWAITING_ENROLMENT.includes(a.status))})
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={statusFilter === 'enrolled' ? 'default' : 'ghost'}
+                  className="h-7 text-xs px-2.5"
+                  onClick={() => setStatusFilter('enrolled')}
+                >
+                  Enrolled ({count(a => a.status === 'Enrolled')})
                 </Button>
                 <Button
                   type="button"
@@ -263,7 +297,7 @@ export const ApplicationPortal = () => {
                   className="h-7 text-xs px-2.5"
                   onClick={() => setStatusFilter('rejected')}
                 >
-                  Rejected ({applications.filter(a => a.status === 'Rejected').length})
+                  Closed ({count(a => a.status === 'Rejected' || a.status === 'Cancelled')})
                 </Button>
               </div>
             </div>
@@ -279,7 +313,7 @@ export const ApplicationPortal = () => {
                 <TableHead>Parent Details</TableHead>
                 <TableHead>Date</TableHead>
                 <TableHead>Status</TableHead>
-                <TableHead>System IDs</TableHead>
+                <TableHead>Student ID</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
@@ -288,6 +322,13 @@ export const ApplicationPortal = () => {
                 <TableRow>
                   <TableCell colSpan={8} className="text-center py-6">
                     <Loader2 className="w-5 h-5 animate-spin mx-auto text-muted-foreground" />
+                  </TableCell>
+                </TableRow>
+              ) : loadError ? (
+                <TableRow>
+                  <TableCell colSpan={8} className="text-center py-8">
+                    <p className="text-sm text-destructive flex items-center justify-center gap-1.5"><AlertTriangle className="h-4 w-4" /> {loadError}</p>
+                    <Button size="sm" variant="outline" className="mt-3" onClick={() => { setLoading(true); void loadApplications(); }}>Retry</Button>
                   </TableCell>
                 </TableRow>
               ) : filteredApplications.length === 0 ? (
@@ -319,34 +360,38 @@ export const ApplicationPortal = () => {
                     <TableCell className="text-xs">{app.date}</TableCell>
                     <TableCell>{getStatusBadge(app.status)}</TableCell>
                     <TableCell>
-                      {app.studentId || app.parentId ? (
-                        <div className="text-[11px] font-mono space-y-0.5">
-                          {app.studentId && <p className="text-emerald-700 font-semibold">{app.studentId}</p>}
-                          {app.parentId && <p className="text-blue-700">{app.parentId}</p>}
-                        </div>
+                      {app.studentId ? (
+                        <p className="text-[11px] font-mono font-semibold text-emerald-700">{app.studentId}</p>
                       ) : (
-                        <span className="text-[11px] text-muted-foreground italic">Pending Approval</span>
+                        <p className="text-[11px] font-mono text-muted-foreground" title="Becomes the student ID on enrolment">
+                          {app.plannedStudentId || '—'} <span className="italic">(not enrolled)</span>
+                        </p>
                       )}
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end items-center gap-1.5">
-                        {(app.status === 'Submitted' || app.status === 'Under Review') && (
-                          <Button
-                            size="sm"
-                            className="h-8 text-xs bg-emerald-600 hover:bg-emerald-700 text-white flex items-center gap-1 shadow-sm"
-                            disabled={quickApprovingId === app.id}
-                            onClick={() => handleQuickApprove(app)}
-                          >
-                            {quickApprovingId === app.id ? (
-                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                            ) : (
-                              <CheckCircle2 className="h-3.5 w-3.5" />
-                            )}
-                            <span>Approve Admission</span>
+                        {(() => {
+                          const primary = actionsFor(app.status)[0];
+                          return primary ? (
+                            <Button
+                              size="sm"
+                              className="h-8 text-xs bg-emerald-600 hover:bg-emerald-700 text-white flex items-center gap-1 shadow-sm"
+                              disabled={busyId === String(app.id)}
+                              onClick={() => startAction(app, primary)}
+                            >
+                              {busyId === String(app.id) ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
+                              <span>{primary.label}</span>
+                            </Button>
+                          ) : null;
+                        })()}
+                        {app.status !== 'Rejected' && app.status !== 'Cancelled' && (
+                          <Button variant="outline" size="sm" className="h-8 text-xs flex items-center gap-1" onClick={() => openDeposit(app)}>
+                            <Wallet className="h-3.5 w-3.5" />
+                            <span>Deposit</span>
                           </Button>
                         )}
-                        <Button 
-                          variant="outline" 
+                        <Button
+                          variant="outline"
                           size="sm"
                           className="h-8 text-xs flex items-center gap-1"
                           onClick={() => {
@@ -371,7 +416,7 @@ export const ApplicationPortal = () => {
         application={selectedApplication}
         open={detailsDialogOpen}
         onOpenChange={setDetailsDialogOpen}
-        onStatusUpdate={handleStatusUpdate}
+        onAction={runAction}
       />
 
       <ComprehensiveAdmissionDialog
@@ -380,11 +425,70 @@ export const ApplicationPortal = () => {
         onSuccess={loadApplications}
       />
 
-      <AdmissionSuccessDialog
-        open={!!confirmedResult}
-        onOpenChange={(open) => !open && setConfirmedResult(null)}
-        result={confirmedResult}
-      />
+      <Dialog open={!!depositFor} onOpenChange={(o) => { if (!o && !depositBusy) setDepositFor(null); }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Collect admission deposit</DialogTitle>
+            <DialogDescription>{depositFor?.name} · {depositFor?.plannedStudentId}</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 text-sm">
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold">Amount (₹) *</Label>
+              <Input type="number" min="1" step="0.01" value={deposit.amount} onChange={(e) => setDeposit({ ...deposit, amount: e.target.value })} className="font-mono" />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold">Payment mode</Label>
+              <Select value={deposit.mode} onValueChange={(v) => setDeposit({ ...deposit, mode: v })}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Cash">Cash at counter</SelectItem>
+                  <SelectItem value="UPI">UPI</SelectItem>
+                  <SelectItem value="Card">Card</SelectItem>
+                  <SelectItem value="Bank_Transfer">Bank transfer</SelectItem>
+                  <SelectItem value="Cheque">Cheque / demand draft</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold">Transaction reference{deposit.mode !== 'Cash' ? ' *' : ' (optional)'}</Label>
+              <Input value={deposit.reference} onChange={(e) => setDeposit({ ...deposit, reference: e.target.value })} maxLength={64} placeholder="UPI ref, UTR, cheque no." />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDepositFor(null)} disabled={depositBusy}>Cancel</Button>
+            <Button onClick={submitDeposit} disabled={depositBusy} className="bg-emerald-600 hover:bg-emerald-700 text-white">
+              {depositBusy ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : null}
+              Record deposit & issue receipt
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <FeeReceiptModal receipt={receipt} open={receiptOpen} onOpenChange={setReceiptOpen} />
+
+      <Dialog open={!!reasonFor} onOpenChange={(o) => { if (!o) setReasonFor(null); }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>{reasonFor?.action.label}: {reasonFor?.app.name}</DialogTitle>
+            <DialogDescription>A reason is required and is saved in the application history.</DialogDescription>
+          </DialogHeader>
+          <Textarea value={reasonText} onChange={(e) => setReasonText(e.target.value)} rows={3} placeholder="Reason" maxLength={500} />
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setReasonFor(null)}>Back</Button>
+            <Button
+              variant="destructive"
+              disabled={!reasonText.trim() || busyId !== null}
+              onClick={async () => {
+                if (!reasonFor) return;
+                const ok = await runAction(reasonFor.app, reasonFor.action, reasonText.trim());
+                if (ok) setReasonFor(null);
+              }}
+            >
+              {reasonFor?.action.label}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

@@ -30,6 +30,13 @@ export const ALLOWED_ROLES = [
   'placement_officer'
 ];
 
+/** Random initial password. Nobody ever types it: first sign-in goes through the e-mailed activation code. */
+function strongRandomPassword(): string {
+  const bytes = new Uint8Array(18);
+  crypto.getRandomValues(bytes);
+  return btoa(String.fromCharCode(...bytes)).replace(/[+/=]/g, 'x') + 'aA1!';
+}
+
 export async function handleAdminUserOperation(token: string, body: any): Promise<{ status: number; body: any }> {
   if (!token) {
     return { status: 401, body: { error: 'Missing authorization token.', code: 'UNAUTHORIZED' } };
@@ -108,6 +115,7 @@ export async function handleAdminUserOperation(token: string, body: any): Promis
     'create_admission_application',
     'update_admission_status',
     'enroll_admission',
+    'record_admission_deposit',
     'resolve_login_id',
     'check_student_id_availability',
     'list_unprovisioned_approved_students',
@@ -606,6 +614,22 @@ export async function handleAdminUserOperation(token: string, body: any): Promis
         return { status: 200, body: data };
       }
 
+      case 'record_admission_deposit': {
+        const d = body.deposit ?? {};
+        const isUuidStr = (u?: unknown) => typeof u === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(u);
+        const amount = Number(d.amount);
+        if (!isUuidStr(d.application_id) || !Number.isFinite(amount) || amount <= 0) {
+          return { status: 400, body: { error: 'deposit.application_id (uuid) and a positive deposit.amount are required.', code: 'VALIDATION_ERROR' } };
+        }
+        const { data, error } = await supabaseAdmin.rpc('record_admission_deposit', {
+          p_application_id: d.application_id, p_amount: amount, p_payment_mode: String(d.payment_mode ?? ''),
+          p_reference: d.transaction_reference ?? null, p_idempotency_key: String(d.idempotency_key ?? ''), p_actor: callerUser.id,
+        });
+        if (error) return { status: 500, body: { error: 'The deposit could not be recorded.', code: 'DEPOSIT_FAILED' } };
+        if (!data?.success) return { status: data?.code === 'NOT_FOUND' ? 404 : 400, body: { error: data?.error ?? 'Deposit rejected.', code: data?.code } };
+        return { status: 200, body: data };
+      }
+
       case 'enroll_admission': {
         const { id, department, class_name } = body;
         if (!id) return { status: 400, body: { error: 'id is required.', code: 'VALIDATION_ERROR' } };
@@ -945,7 +969,7 @@ export async function handleAdminUserOperation(token: string, body: any): Promis
           if (!resolvedParentUserId && parentNameCandidate.trim()) {
             const genParentLoginId = await generateUniqueParentId(supabaseAdmin);
             const parentAuthEmail = parentEmailCandidate.trim() || `${genParentLoginId.toLowerCase()}@parent.adithyan.edu.in`;
-            const parentPass = `Adithyan@${new Date().getFullYear()}`;
+            const parentPass = strongRandomPassword();
 
             const { data: pAuth, error: pAuthErr } = await supabaseAdmin.auth.admin.createUser({
               email: parentAuthEmail,
@@ -2553,11 +2577,18 @@ export async function handleAdminUserOperation(token: string, body: any): Promis
 
         let studentUserId = existingStudentProfile?.id;
         let studentId = existingStudentProfile?.roll_number;
+        // The institution's manually entered student id (set when the application was registered)
+        let preassignedStudentId: string | null = null;
+        if (!studentUserId && application_id) {
+          const { data: appRow } = await supabaseAdmin.from('admission_applications')
+            .select('application_number').eq('id', application_id).maybeSingle();
+          preassignedStudentId = appRow?.application_number || null;
+        }
 
         if (!studentUserId) {
-          // Generate unique permanent Student ID
-          studentId = await generateUniqueStudentId(supabaseAdmin);
-          const initialStudentPassword = `Adithyan@${new Date().getFullYear()}`;
+          // Use the application's student id when there is one; otherwise generate
+          studentId = preassignedStudentId || await generateUniqueStudentId(supabaseAdmin);
+          const initialStudentPassword = strongRandomPassword();
 
           // Create Student account in Supabase Auth
           const { data: studentAuth, error: studentAuthErr } = await supabaseAdmin.auth.admin.createUser({
@@ -2696,7 +2727,7 @@ export async function handleAdminUserOperation(token: string, body: any): Promis
         if (!parentUserId) {
           isNewParent = true;
           parentLoginId = await generateUniqueParentId(supabaseAdmin);
-          const initialParentPassword = `Adithyan@${new Date().getFullYear()}`;
+          const initialParentPassword = strongRandomPassword();
 
           let parentAuthEmail = cleanParentEmail;
           if (!parentAuthEmail) {
@@ -2775,47 +2806,15 @@ export async function handleAdminUserOperation(token: string, body: any): Promis
           updated_at: new Date().toISOString()
         }, { onConflict: 'parent_id,student_id' });
 
-        // 4. Update application status if application_id provided
+        // 4. Approve + enrol the application with the same functions the admissions screen uses:
+        //    ends as 'Enrolled' and linked to the permanent student record (idempotent on retry).
         if (application_id) {
-          try {
-            await supabaseAdmin.from('admission_applications').update({
-              status: 'Approved',
-              remarks: `Admission confirmed. Student ID: ${studentId}, Parent ID: ${parentLoginId}`,
-              updated_at: new Date().toISOString()
-            }).eq('id', application_id);
-          } catch (e) { }
-
-          try {
-            await supabaseAdmin.from('admission_merit_lists').update({
-              status: 'Approved',
-              updated_at: new Date().toISOString()
-            }).eq('id', application_id);
-          } catch (e) { }
-
-          try {
-            const { data: docs } = await supabaseAdmin
-              .from('admission_document_verifications')
-              .select('*')
-              .eq('document_type', 'APPLICATION_METADATA');
-
-            for (const d of (docs || [])) {
-              if (d.document_url && (d.document_url.includes(application_id) || d.student_name === cleanStudentName)) {
-                try {
-                  const meta = JSON.parse(d.document_url);
-                  meta.status = 'Approved';
-                  meta.student_id = studentId;
-                  meta.parent_id = parentLoginId;
-                  meta.approved_at = new Date().toISOString();
-                  meta.remarks = `Admission approved. Student ID: ${studentId}, Parent ID: ${parentLoginId}`;
-                  await supabaseAdmin.from('admission_document_verifications').update({
-                    document_url: JSON.stringify(meta),
-                    status: 'Verified',
-                    updated_at: new Date().toISOString()
-                  }).eq('id', d.id);
-                } catch (pe) { }
-              }
-            }
-          } catch (e) { }
+          await supabaseAdmin.from('admission_applications')
+            .update({ status: 'Approved', updated_at: new Date().toISOString() })
+            .eq('id', application_id).in('status', ['Submitted', 'Under Review', 'Waitlisted', 'Offered']);
+          await supabaseAdmin.rpc('admission_enroll', {
+            p_application_id: application_id, p_actor: callerUser.id, p_department: cleanDepartment, p_class_name: cleanClass,
+          });
         }
 
         // 5. Initial Payment & Official Fee Receipt Generation

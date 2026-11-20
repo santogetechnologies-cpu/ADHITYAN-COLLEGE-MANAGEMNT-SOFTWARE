@@ -72,3 +72,16 @@ Legend: ✅ done & verified as stated · 🟡 written, not runnable here · ⬜ 
 | API: `create_admission_application` (no JSON hack, no fake 85 score, duplicate-id checks), `update_admission_status`, new `enroll_admission` — edge fn + dev backend | 🟡 | tsc clean, 27 gate cases pass; DB-touching branches not run |
 | **Step 3 (next):** admissions workspace UI (pipeline, Enroll button, real errors), client `db.updateAdmissionStatus` still swallows errors and writes directly, entrance-test & merit tabs rebuilt on applications, form's fake defaults (`|| 85`, `|| 88`) | ⬜ | |
 | Legacy `confirm_admission` (non-transactional, creates login + parent + fee in ~10 writes) | ⬜ | to be reworked after step 3 |
+
+## Module 2 — Admissions → student (step 3a: screens, verified by build/type-check only)
+| Item | Status | Notes |
+|------|--------|-------|
+| Pipeline rules in one place (`src/lib/admissionWorkflow.ts`, mirrors 037) | 🟡 | |
+| Applications page: status-aware primary action, Enroll button, reasons for reject/cancel, filter chips incl. Enrolled, honest counts, real load-error + Retry (no fake date) | 🟡 | |
+| Review dialog: only valid actions, waits for the server, stays open on refusal (was: success toast before the save, then close) | 🟡 | |
+| Client service: reads `admission_applications` only; create/status/enroll go through the API and **throw the server's message** (was: swallowed errors, silent fallback to direct inserts that skipped the duplicate-id check) | 🟡 | |
+| Admission form: no invented marks (`\|\| 85/88`), deposit via server function with real receipt (was browser-built receipt, random number, shown even if the save failed), valid payment modes, reference required for non-cash | 🟡 | migration 038 |
+| "Deposit" button on applications to retry/collect a deposit | 🟡 | |
+| Predictable shared initial password removed (3 places) | ✅ code, 🟡 untested against auth | |
+| `confirm_admission` aligned: uses application's student id, finishes via `admission_enroll` | 🟡 | still long and not transactional (auth user creation cannot be rolled back by SQL) |
+| **Step 3b (next):** Entrance-test tab (per-applicant scheduling/results) and Merit list tab (server-side ranking from marks + entrance score, seats, publish → approve/waitlist) | ⬜ | |

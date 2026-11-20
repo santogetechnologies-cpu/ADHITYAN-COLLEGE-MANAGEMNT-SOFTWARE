@@ -84,6 +84,8 @@ export function ComprehensiveAdmissionDialog({
   const { collegeCourses: coursesList } = useCollegeCourses();
   const [activeTab, setActiveTab] = useState('student');
   const [submitting, setSubmitting] = useState(false);
+  // one key per deposit attempt: a retry returns the same receipt instead of charging twice
+  const depositKeyRef = useRef<string>(crypto.randomUUID());
 
   // Preview Dialog State
   const [previewDoc, setPreviewDoc] = useState<{ name: string; url: string; type: string } | null>(null);
@@ -144,7 +146,7 @@ export function ComprehensiveAdmissionDialog({
     paymentMethod: 'Cash',
     transactionReference: '',
     remarks: '',
-    generateReceipt: false,
+    generateReceipt: true,
   });
 
   // 5. Individual Document Uploads State
@@ -357,10 +359,22 @@ export function ComprehensiveAdmissionDialog({
       return;
     }
 
+    const depositCheck = Number(feeData.depositAmount) || 0;
+    if (depositCheck < 0 || (feeData.depositAmount.trim() !== '' && !Number.isFinite(Number(feeData.depositAmount)))) {
+      toast({ title: 'Check the deposit', description: 'Enter a valid deposit amount or leave it blank.', variant: 'destructive' });
+      setActiveTab('fee');
+      return;
+    }
+    if (depositCheck > 0 && feeData.paymentMethod !== 'Cash' && feeData.transactionReference.trim().length < 4) {
+      toast({ title: 'Reference required', description: 'Enter the transaction reference for a non-cash deposit.', variant: 'destructive' });
+      setActiveTab('fee');
+      return;
+    }
+
     setSubmitting(true);
 
     try {
-      const depositAmount = Number(feeData.depositAmount) || 0;
+      const depositAmount = depositCheck;
       const selectedCourse = coursesList.find(c => c.name === academicData.courseName) || coursesList[0] || OFFICIAL_COURSES[0];
 
       // Payload strictly submitted as "Pending"
@@ -394,8 +408,9 @@ export function ComprehensiveAdmissionDialog({
         admission_batch: academicData.admissionBatch,
         qualifying_board: academicData.qualifyingBoard,
         passing_year: academicData.passingYear,
-        qualifying_marks: Number(academicData.qualifyingScore) || 85,
-        science_score: Number(academicData.scienceScore) || 88,
+        // blank stays blank: no invented marks
+        qualifying_marks: academicData.qualifyingScore.trim() === '' ? undefined : Number(academicData.qualifyingScore),
+        science_score: academicData.scienceScore.trim() === '' ? undefined : Number(academicData.scienceScore),
         merit_category: academicData.meritCategory,
         eligibility_verified: academicData.eligibilityVerified,
 
@@ -419,71 +434,42 @@ export function ComprehensiveAdmissionDialog({
           remarks: feeData.remarks
         },
 
-        status: 'Pending',
+        status: 'Submitted',
         remarks: `Manual Student ID: ${cleanStudentId}. Registered via Admission Form.`,
         custom_fields: customFields
       };
 
-      const result = await db.createAdmissionApplication(applicationPayload);
+      const application: any = await db.createAdmissionApplication(applicationPayload);
 
-      // Optional Receipt Generation
-      let generatedReceipt: FeeReceipt | null = null;
-      if (depositAmount > 0 && feeData.generateReceipt) {
-        const receiptNo = `REC-${new Date().getFullYear()}-${Math.floor(10000 + Math.random() * 90000)}`;
-        const qrToken = `VERIF-${receiptNo}-${Date.now()}`;
-        generatedReceipt = {
-          id: crypto.randomUUID(),
-          receipt_number: receiptNo,
-          student_name: studentData.name.trim(),
-          roll_number: cleanStudentId,
-          department: selectedCourse.name,
-          academic_year: academicData.academicYear,
-          semester: 'Semester 1',
-          fee_type: 'Admission Counter Deposit',
-          gross_amount: depositAmount,
-          discount_applied: 0,
-          discount_reason: '',
-          amount_paid: depositAmount,
-          balance_remaining: 0,
-          payment_date: new Date().toISOString().split('T')[0],
-          payment_mode: feeData.paymentMethod,
-          transaction_reference: feeData.transactionReference.trim() || `TXN-REC-${Date.now().toString().slice(-6)}`,
-          remarks: feeData.remarks || 'Admission application initial deposit',
-          qr_verification_token: qrToken,
-          created_at: new Date().toISOString()
-        } as any;
-
+      // Optional counter deposit: saved by the server together with its receipt (never fabricated in the browser)
+      let depositReceipt: any = null;
+      let depositError: string | null = null;
+      if (depositAmount > 0) {
         try {
-          await supabase.from('fee_receipts').insert({
-            receipt_number: receiptNo,
-            student_name: studentData.name.trim(),
-            roll_number: cleanStudentId,
-            department: selectedCourse.name,
-            academic_year: academicData.academicYear,
-            semester: 'Semester 1',
-            fee_type: 'Admission Counter Deposit',
-            gross_amount: depositAmount,
-            discount_applied: 0,
-            discount_reason: '',
-            amount_paid: depositAmount,
-            balance_remaining: 0,
-            payment_date: new Date().toISOString().split('T')[0],
-            payment_mode: feeData.paymentMethod,
-            transaction_reference: feeData.transactionReference.trim() || `TXN-REC-${Date.now().toString().slice(-6)}`,
-            remarks: feeData.remarks || 'Admission application initial deposit',
-            qr_verification_token: qrToken,
-            created_at: new Date().toISOString()
+          const dep = await db.recordAdmissionDeposit({
+            applicationId: application.id,
+            amount: depositAmount,
+            paymentMode: feeData.paymentMethod,
+            reference: feeData.transactionReference.trim() || undefined,
+            idempotencyKey: depositKeyRef.current,
           });
-        } catch (re) {}
+          depositReceipt = dep.receipt ?? null;
+          depositKeyRef.current = crypto.randomUUID();
+        } catch (depErr: any) {
+          depositError = depErr?.message || 'The deposit could not be recorded.';
+        }
       }
 
       toast({
-        title: "Application Submitted for Approval",
-        description: `Application with Student ID "${cleanStudentId}" registered as Pending. Admin / Principal can review and approve it. Login accounts can be provisioned in Admin User Management after approval.`,
+        title: depositError ? 'Application saved, deposit NOT recorded' : 'Application submitted for review',
+        description: depositError
+          ? `Student ID "${cleanStudentId}" is registered, but the ₹${depositAmount.toLocaleString('en-IN')} deposit was not saved (${depositError}). Use "Collect deposit" on the application to record it.`
+          : `Student ID "${cleanStudentId}" is registered and awaiting review.${depositReceipt ? ' Deposit receipt ' + depositReceipt.receipt_number + ' issued.' : ''}`,
+        variant: depositError ? 'destructive' : 'default',
       });
 
-      if (generatedReceipt) {
-        setReceiptData(generatedReceipt);
+      if (depositReceipt && feeData.generateReceipt) {
+        setReceiptData(depositReceipt as any);
         setReceiptModalOpen(true);
       }
 
@@ -1083,7 +1069,7 @@ export function ComprehensiveAdmissionDialog({
                         <SelectContent>
                           <SelectItem value="Cash">Cash at Counter</SelectItem>
                           <SelectItem value="UPI">UPI / QR Code</SelectItem>
-                          <SelectItem value="Bank Transfer">Bank Transfer / NEFT</SelectItem>
+                          <SelectItem value="Bank_Transfer">Bank Transfer / NEFT</SelectItem>
                           <SelectItem value="Card">POS Card</SelectItem>
                         </SelectContent>
                       </Select>
@@ -1107,7 +1093,7 @@ export function ComprehensiveAdmissionDialog({
                       onCheckedChange={(c) => setFeeData({ ...feeData, generateReceipt: !!c })}
                     />
                     <label htmlFor="gen-receipt" className="text-xs text-muted-foreground cursor-pointer">
-                      Automatically generate printable counter fee receipt upon submission
+                      Open the printable deposit receipt after submission
                     </label>
                   </div>
                 </div>
@@ -1119,7 +1105,7 @@ export function ComprehensiveAdmissionDialog({
                     Important Notice: Admission Approval & User Accounts
                   </p>
                   <p className="text-[11px] text-amber-800 dark:text-amber-300">
-                    Submitting this form records the candidate application as <strong>Pending</strong>. It does <strong>NOT</strong> create Student or Parent login accounts. Once approved by the Admin or Principal in the Application Portal, portal login accounts are provisioned via Admin User Management.
+                    Submitting this form registers the application for review. It does <strong>NOT</strong> create Student or Parent login accounts. After approval and enrolment in the Application Portal, portal login accounts are created in Admin User Management.
                   </p>
                 </div>
 

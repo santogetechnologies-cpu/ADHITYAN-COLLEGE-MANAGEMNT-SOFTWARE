@@ -353,7 +353,7 @@ export default function PrincipalDashboard() {
         },
       });
 
-      await db.updateAdmissionStatus(app.id, 'Approved', `Sanctioned by Principal. Student ID: ${result.student.student_id}, Parent ID: ${result.parent.parent_id}`);
+      // confirm_admission approves + enrols the application itself; no second status write needed
       toast({
         title: "Admission Sanctioned & Provisioned",
         description: `Student ID: ${result.student.student_id} • Parent ID: ${result.parent.parent_id}`,

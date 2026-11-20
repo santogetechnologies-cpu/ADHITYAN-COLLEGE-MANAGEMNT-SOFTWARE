@@ -25,6 +25,7 @@ back-fills of NULLs and a de-duplication of `super_admin_releases` rows with the
 | 034_auth_rate_limits.sql | `auth_rate_limits`, `check_rate_limit()` (service_role only) | — |
 | 035_record_fee_payment.sql | transactional, idempotent `record_fee_payment()` + receipts (service_role only) | 028 |
 | 037_admissions_lifecycle.sql | **closes RLS on `admission_document_verifications` / `admission_merit_lists`** (were open to the public key), typed application columns + backfill from the JSON workaround (originals kept), wider status set, `admission_set_status()` (validated transitions + audit), `admission_enroll()` (transactional, idempotent student record), student↔profile adoption | 028, 036 |
+| 038_admission_deposit.sql | `record_admission_deposit()`: admission deposit + receipt + ledger row in one transaction, idempotent | 037 |
 | 036_reconcile_legacy_columns.sql | `timetables.session_type`, `exam_schedules.day_of_week`, `student_attendance.*`, reception columns | 029 |
 
 **Behaviour changes to expect after 032:** buckets `documents`, `attachments`, `student_documents`, `staff_documents`
@@ -38,7 +39,7 @@ Not carried over on purpose: multi-college tables (`colleges`, `college_*`, `pla
 ```bash
 psql "$STAGING_DB_URL" -v ON_ERROR_STOP=1 -f supabase/tests/smoke_028_037.sql   # synthetic data, rolls back
 ```
-All lines must read PASS (33 checks). Edge-function checks: `scripts/test-edge-gate.sh` (type-check + 27 authorization/validation cases; needs no database). Then in the SQL editor: `select count(*) from public.profiles where role is null;` (must be 0).
+All lines must read PASS (39 checks). Edge-function checks: `scripts/test-edge-gate.sh` (type-check + authorization/validation cases; needs no database). Then in the SQL editor: `select count(*) from public.profiles where role is null;` (must be 0).
 
 ### Rollback
 Each file is one transaction, so a failure leaves nothing half-applied. To undo a *successful* run use the backup/PITR from
@@ -72,6 +73,14 @@ curl -s -X POST "$SUPABASE_URL/functions/v1/admin-api" -H "Authorization: Bearer
 curl -s -X POST "$SUPABASE_URL/functions/v1/admin-api" -H 'Content-Type: application/json' -d '{}'                                                               # expect 401
 ```
 Also confirm a user who runs `supabase.auth.updateUser({ data: { role: 'admin' } })` is still refused.
+
+### Behaviour changes from the admissions work (037/038 + app)
+- New student/parent accounts created by `confirm_admission` and parent provisioning no longer use the shared
+  password `Adithyan@<year>`; they get a random password and must activate through the e-mailed code
+  (the old default was guessable by anyone knowing a student's id/e-mail).
+- `confirm_admission` now takes the student id from the application (the manually entered one) and ends the application
+  as **Enrolled** (linked to the student record) instead of leaving it "Approved".
+- Applications: Submitted → Under Review → Approved → (Offered) → Enrolled; Approve can no longer skip review.
 
 ## 3. Known gaps after this deployment
 See `docs/audit/01-Executive-Audit.md` ("High / medium") and `19-Implementation-Tracker.md`.

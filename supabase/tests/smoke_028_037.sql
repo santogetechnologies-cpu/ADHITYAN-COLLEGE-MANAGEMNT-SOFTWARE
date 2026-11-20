@@ -1,4 +1,4 @@
--- Smoke test for migrations 028-037. Synthetic data only; everything is rolled back.
+-- Smoke test for migrations 028-038. Synthetic data only; everything is rolled back.
 -- Run against a SCRATCH/STAGING database that has 001-015 + 028-037 applied (never production):
 --   psql "$STAGING_DB_URL" -v ON_ERROR_STOP=1 -f supabase/tests/smoke_028_037.sql
 -- Any failed assertion raises an exception and the script exits non-zero.
@@ -74,6 +74,20 @@ SELECT pg_temp.chk('status changes audited', (SELECT count(*) FROM public.audit_
 -- portal account provisioned later adopts the existing student record (no unique violation)
 INSERT INTO public.profiles(id,email,name,role,student_id) VALUES ('c0000000-0000-0000-0000-000000000006','smoke.newstu@example.test','Smoke Applicant','student','SMK-ADM-001');
 SELECT pg_temp.chk('later login adopts the enrolled record', (SELECT user_id='c0000000-0000-0000-0000-000000000006' FROM public.students WHERE student_id='SMK-ADM-001') AND (SELECT count(*) FROM public.students WHERE student_id='SMK-ADM-001')=1);
+
+-- ===================== 038 admission deposit =====================
+INSERT INTO public.admission_applications(id,application_number,applicant_name,email,phone,class_name,parent_name,parent_phone,status)
+ VALUES ('c2000000-0000-0000-0000-000000000002','SMK-ADM-002','Deposit Applicant','dep@example.test','900','B.Sc MLT','P','901','Submitted'),
+        ('c2000000-0000-0000-0000-000000000003','SMK-ADM-003','Closed Applicant','closed@example.test','900','B.Sc MLT','P','901','Rejected');
+SELECT pg_temp.chk('deposit recorded with receipt', (public.record_admission_deposit('c2000000-0000-0000-0000-000000000002',2500,'Cash',NULL,'smoke-dep-0001','c0000000-0000-0000-0000-000000000005')->>'success')='true');
+SELECT pg_temp.chk('deposit retry is duplicate', (public.record_admission_deposit('c2000000-0000-0000-0000-000000000002',2500,'Cash',NULL,'smoke-dep-0001','c0000000-0000-0000-0000-000000000005')->>'duplicate')='true');
+SELECT pg_temp.chk('deposit stored once with receipt + ledger', (SELECT count(*) FROM public.admission_fees WHERE application_id='c2000000-0000-0000-0000-000000000002')=1
+   AND (SELECT count(*) FROM public.fee_receipts WHERE roll_number='SMK-ADM-002' AND fee_type='Admission Deposit')=1
+   AND (SELECT count(*) FROM public.finance_transactions WHERE type='Admission Deposit' AND description LIKE '%SMK-ADM-002%')=1);
+SELECT pg_temp.chk('deposit refused for rejected application', (public.record_admission_deposit('c2000000-0000-0000-0000-000000000003',100,'Cash',NULL,'smoke-dep-0002','c0000000-0000-0000-0000-000000000005')->>'code')='APPLICATION_CLOSED');
+SELECT pg_temp.chk('deposit rejects bad amount / mode', (public.record_admission_deposit('c2000000-0000-0000-0000-000000000002',0,'Cash',NULL,'smoke-dep-0003','c0000000-0000-0000-0000-000000000005')->>'code')='INVALID_AMOUNT'
+   AND (public.record_admission_deposit('c2000000-0000-0000-0000-000000000002',10,'Barter',NULL,'smoke-dep-0004','c0000000-0000-0000-0000-000000000005')->>'code')='INVALID_MODE');
+SELECT pg_temp.chk('authenticated cannot call record_admission_deposit', has_function_privilege('authenticated','public.record_admission_deposit(uuid,numeric,text,text,text,uuid)','EXECUTE')=false);
 
 SET LOCAL ROLE anon;
 SELECT pg_temp.chk('anon cannot read admission documents', (SELECT count(*) FROM information_schema.role_table_grants WHERE grantee='anon' AND table_name IN ('admission_document_verifications','admission_merit_lists'))=0);

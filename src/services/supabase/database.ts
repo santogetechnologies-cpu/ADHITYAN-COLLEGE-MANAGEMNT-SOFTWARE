@@ -46,6 +46,29 @@ async function getAdminClient() {
   return createClient(url, adminKey, { auth: { autoRefreshToken: false, persistSession: false } });
 }
 
+/** POST to the admin API with the signed-in user's token; throws Error(serverMessage) with `.code` on failure. */
+async function callAdminApi(action: string, payload: Record<string, unknown> = {}): Promise<any> {
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session?.access_token) {
+    throw Object.assign(new Error('Your session has expired. Please sign in again.'), { code: 'SESSION_EXPIRED' });
+  }
+  let response: Response;
+  try {
+    response = await fetch(apiUrl('/api/admin/users'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+      body: JSON.stringify({ action, ...payload }),
+    });
+  } catch {
+    throw Object.assign(new Error('Could not reach the server. Check your connection and try again.'), { code: 'NETWORK' });
+  }
+  const json = await response.json().catch(() => ({} as any));
+  if (!response.ok || json.success === false) {
+    throw Object.assign(new Error(json.error || `Request failed (${response.status}).`), { code: json.code, allowed: json.allowed });
+  }
+  return json;
+}
+
 export const db = {
   // ---------------------------------------------------------------------------
   // PROFILES & USERS
@@ -2003,279 +2026,50 @@ export const db = {
   // ---------------------------------------------------------------------------
   // ADMISSIONS
   // ---------------------------------------------------------------------------
+  /** Admission applications (single source: public.admission_applications). */
   async getAdmissionApplications(): Promise<T.AdmissionApplication[]> {
-    try {
-      const results: T.AdmissionApplication[] = [];
-      const seenIds = new Set<string>();
-
-      // 1. Fetch from admission_applications
-      try {
-        const { data: directApps } = await supabase
-          .from('admission_applications')
-          .select('*')
-          .order('created_at', { ascending: false });
-        
-        if (directApps && directApps.length > 0) {
-          for (const d of directApps) {
-            results.push(d);
-            seenIds.add(d.id);
-          }
-        }
-      } catch (err) {}
-
-      // 2. Fetch from admission_document_verifications (APPLICATION_METADATA) & admission_merit_lists
-      try {
-        const { data: docList } = await supabase
-          .from('admission_document_verifications')
-          .select('*')
-          .eq('document_type', 'APPLICATION_METADATA')
-          .order('created_at', { ascending: false });
-
-        if (docList && docList.length > 0) {
-          for (const d of docList) {
-            if (d.document_url) {
-              try {
-                const meta = JSON.parse(d.document_url);
-                const appId = meta.id || d.id;
-                if (!seenIds.has(appId)) {
-                  seenIds.add(appId);
-                  results.push({
-                    id: appId,
-                    application_number: meta.application_number || meta.application_no || `APP-${d.id.slice(0, 6)}`,
-                    application_no: meta.application_number || meta.application_no || `APP-${d.id.slice(0, 6)}`,
-                    applicant_name: meta.applicant_name || meta.name || d.student_name,
-                    name: meta.applicant_name || meta.name || d.student_name,
-                    email: meta.email || '',
-                    phone: meta.phone || '',
-                    class_name: meta.class_name || meta.class_applied || 'Paramedical Sciences',
-                    class_applied: meta.class_name || meta.class_applied || 'Paramedical Sciences',
-                    parent_name: meta.parent_name || 'Guardian',
-                    parent_phone: meta.parent_phone || '',
-                    status: (meta.status || 'Submitted') as any,
-                    submission_date: meta.submission_date || d.submission_date || new Date().toISOString().split('T')[0],
-                    remarks: meta.remarks || '',
-                    documents: meta.documents || [],
-                    created_at: meta.created_at || d.created_at,
-                    student_id: meta.student_id,
-                    parent_id: meta.parent_id
-                  } as any);
-                }
-              } catch (parseErr) {}
-            }
-          }
-        }
-      } catch (err) {}
-
-      // 3. Also include existing merit list candidates who are Selected or Admitted
-      try {
-        const { data: meritList } = await supabase
-          .from('admission_merit_lists')
-          .select('*')
-          .order('created_at', { ascending: false });
-
-        if (meritList && meritList.length > 0) {
-          for (const m of meritList) {
-            if (!seenIds.has(m.id)) {
-              seenIds.add(m.id);
-              results.push({
-                id: m.id,
-                application_number: `APP-2026-${m.rank?.toString().padStart(4, '0') || m.id.slice(0, 4)}`,
-                application_no: `APP-2026-${m.rank?.toString().padStart(4, '0') || m.id.slice(0, 4)}`,
-                applicant_name: m.student_name,
-                name: m.student_name,
-                email: `${m.student_name.toLowerCase().replace(/[^a-z0-9]/g, '.')}@adithyan.edu.in`,
-                phone: '9840' + Math.floor(100000 + Math.random() * 900000),
-                class_name: m.course_name,
-                class_applied: m.course_name,
-                parent_name: `Parent of ${m.student_name}`,
-                parent_phone: '9840' + Math.floor(100000 + Math.random() * 900000),
-                status: (m.status === 'Admitted' ? 'Approved' : m.status === 'Selected' ? 'Under Review' : 'Submitted') as any,
-                submission_date: m.created_at ? m.created_at.split('T')[0] : '2026-11-09',
-                remarks: `Merit score: ${m.merit_score}% | Rank: ${m.rank} (${m.category || 'General'})`,
-                documents: [],
-                created_at: m.created_at
-              } as any);
-            }
-          }
-        }
-      } catch (err) {}
-
-      return results;
-    } catch (err) {
-      console.warn('getAdmissionApplications warning:', err);
-      return [];
-    }
+    const { data, error } = await supabase
+      .from('admission_applications')
+      .select('*')
+      .order('created_at', { ascending: false });
+    if (error) throw new Error(`Could not load applications: ${error.message}`);
+    return (data || []).map((d: any) => ({
+      ...d,
+      name: d.applicant_name,
+      application_no: d.application_number,
+      class_applied: d.class_name,
+      // the institution's manually entered student id; it becomes students.student_id on enrolment
+      student_id: d.application_number,
+      parent_id: undefined,
+    })) as any;
   },
 
-  async createAdmissionApplication(app: any): Promise<T.AdmissionApplication | null> {
-    try {
-      // Try backend endpoint first if session is available (handles RLS permissions cleanly)
-      try {
-        const { data: { session } } = await supabase.auth.getSession();
-        const token = session?.access_token;
-        if (token && typeof fetch !== 'undefined') {
-          const res = await fetch(apiUrl('/api/admin/users'), {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              Authorization: `Bearer ${token}`
-            },
-            body: JSON.stringify({
-              action: 'create_admission_application',
-              application: app
-            })
-          });
-          if (res.ok) {
-            const json = await res.json();
-            if (json.success && json.application) {
-              return json.application;
-            }
-          }
-        }
-      } catch (apiErr) {}
-
-      const studentName = app.name || app.applicant_name || 'Applicant';
-      const courseName = app.class_applied || app.class_name || 'Paramedical Sciences';
-      const appNo = app.application_no || app.application_number || `APP-2026-${Math.floor(1000 + Math.random() * 9000)}`;
-
-      // 1. Create merit record
-      const { data: merit } = await supabase.from('admission_merit_lists').insert({
-        student_name: studentName,
-        course_name: courseName,
-        merit_score: Number(app.qualifying_marks || app.qualifyingScore || 85),
-        rank: 1,
-        category: app.merit_category || 'Institutional Merit',
-        status: app.status || 'Submitted',
-        academic_year: '2026-2027'
-      }).select().single();
-
-      const newId = merit?.id || crypto.randomUUID();
-
-      // 2. Create metadata record in admission_document_verifications
-      const meta = {
-        ...app,
-        id: newId,
-        application_id: newId,
-        application_no: appNo,
-        application_number: appNo,
-        name: studentName,
-        applicant_name: studentName,
-        class_name: courseName,
-        class_applied: courseName,
-        status: app.status || 'Submitted',
-        created_at: new Date().toISOString()
-      };
-
-      await supabase.from('admission_document_verifications').insert({
-        student_name: studentName,
-        document_type: 'APPLICATION_METADATA',
-        document_url: JSON.stringify(meta),
-        status: 'Pending',
-        submission_date: new Date().toISOString().split('T')[0]
-      });
-
-      // 3. Best-effort insert into admission_applications
-      try {
-        await supabase.from('admission_applications').insert({
-          id: newId,
-          application_number: appNo,
-          applicant_name: studentName,
-          email: app.email,
-          phone: app.phone || '',
-          class_name: courseName,
-          parent_name: app.parent_name || 'Guardian',
-          parent_phone: app.parent_phone || '',
-          status: app.status || 'Submitted',
-          submission_date: new Date().toISOString().split('T')[0],
-          remarks: app.remarks || ''
-        });
-      } catch (e) {}
-
-      return meta as any;
-    } catch (err) {
-      console.error('createAdmissionApplication error:', err);
-      return null;
-    }
+  async createAdmissionApplication(app: any): Promise<T.AdmissionApplication> {
+    const json = await callAdminApi('create_admission_application', { application: app });
+    return json.application;
   },
 
-  async updateAdmissionStatus(id: string, status: T.AdmissionApplication['status'], remarks?: string): Promise<boolean> {
-    try {
-      // Try backend endpoint first if session is available
-      try {
-        const { data: { session } } = await supabase.auth.getSession();
-        const token = session?.access_token;
-        if (token && typeof fetch !== 'undefined') {
-          const res = await fetch(apiUrl('/api/admin/users'), {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              Authorization: `Bearer ${token}`
-            },
-            body: JSON.stringify({
-              action: 'update_admission_status',
-              id,
-              status,
-              remarks
-            })
-          });
-          if (res.ok) {
-            const json = await res.json();
-            if (json.success) return true;
-          }
-        }
-      } catch (apiErr) {}
+  /** Moves an application through the admission pipeline. Throws the server's message when refused. */
+  async updateAdmissionStatus(id: string, status: T.AdmissionApplication['status'] | string, remarks?: string): Promise<boolean> {
+    await callAdminApi('update_admission_status', { id, status, remarks });
+    return true;
+  },
 
-      // 1. Update admission_merit_lists
-      try {
-        await supabase
-          .from('admission_merit_lists')
-          .update({
-            status: status === 'Approved' ? 'Admitted' : status,
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', id);
-      } catch (e) {}
+  /** Admission deposit: payment + receipt + ledger saved atomically by the server. Retrying with the same key never double-charges. */
+  async recordAdmissionDeposit(params: {
+    applicationId: string; amount: number; paymentMode: string; reference?: string; idempotencyKey: string;
+  }): Promise<{ duplicate: boolean; receipt?: any }> {
+    return await callAdminApi('record_admission_deposit', { deposit: {
+      application_id: params.applicationId, amount: params.amount, payment_mode: params.paymentMode,
+      transaction_reference: params.reference || null, idempotency_key: params.idempotencyKey,
+    } });
+  },
 
-      // 2. Update admission_document_verifications metadata
-      try {
-        const { data: docs } = await supabase
-          .from('admission_document_verifications')
-          .select('*')
-          .eq('document_type', 'APPLICATION_METADATA');
-
-        for (const d of (docs || [])) {
-          if (d.document_url && (d.document_url.includes(id) || d.id === id)) {
-            try {
-              const meta = JSON.parse(d.document_url);
-              meta.status = status;
-              if (remarks) meta.remarks = remarks;
-              meta.updated_at = new Date().toISOString();
-              await supabase
-                .from('admission_document_verifications')
-                .update({
-                  document_url: JSON.stringify(meta),
-                  status: status === 'Approved' ? 'Verified' : 'Pending',
-                  updated_at: new Date().toISOString()
-                })
-                .eq('id', d.id);
-            } catch (pe) {}
-          }
-        }
-      } catch (e) {}
-
-      // 3. Best-effort update admission_applications
-      try {
-        await supabase
-          .from('admission_applications')
-          .update({ status, remarks })
-          .eq('id', id);
-      } catch (e) {}
-
-      return true;
-    } catch (err) {
-      console.error('updateAdmissionStatus error:', err);
-      return false;
-    }
+  /** Enrols an Approved/Offered applicant: creates (or links) the permanent student record. Idempotent. */
+  async enrollAdmission(id: string, opts: { department?: string; class_name?: string } = {}): Promise<{
+    student_id: string; student_record_id: string; already_enrolled: boolean; linked_existing?: boolean;
+  }> {
+    return await callAdminApi('enroll_admission', { id, ...opts });
   },
 
   async getPendingAdmissionsCount(): Promise<number> {
