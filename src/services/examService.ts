@@ -28,6 +28,7 @@ export interface ExamItem {
   /** results visible to students and parents */
   is_published?: boolean;
   timetable_published?: boolean;
+  hall_ticket_published?: boolean;
 }
 
 export interface ExamScheduleItem {
@@ -79,6 +80,13 @@ function rpcFailure(data: any, fallback: string): Error {
   return Object.assign(new Error((data?.error || fallback) + detail), { code: data?.code, errors: data?.errors });
 }
 
+export interface HallTicketRow {
+  id: string; exam_id: string | null; student_id: string; student_name: string; register_number: string; class_name: string; department: string;
+  exam_title: string | null; academic_year: string | null; semester: string | null; hall_number: string | null; seat_number: string | null; exam_center: string | null;
+  attendance_pct: number | null; has_fee_dues: boolean; is_detained: boolean; detention_reason: string | null; status: string;
+  qr_code_token: string; coe_signature_hash: string | null; issued_date: string | null; override_reason: string | null;
+}
+
 export const examService = {
   async listExams(): Promise<ExamItem[]> {
     try {
@@ -97,6 +105,7 @@ export const examService = {
         status: e.status,
         is_published: e.results_published === true,
         timetable_published: e.timetable_published === true,
+        hall_ticket_published: e.hall_ticket_published === true,
       }));
     } catch (error) {
       throw handleSupabaseError(error, 'Failed to fetch examinations');
@@ -228,6 +237,36 @@ export const examService = {
       if (error?.code && !error?.details) throw error;
       throw handleSupabaseError(error, `Failed to ${isPublished ? 'publish' : 'withdraw'} examination results`);
     }
+  },
+
+  // ---- Hall tickets (migration 046) ----
+  async listHallTickets(examId: string): Promise<HallTicketRow[]> {
+    try {
+      const { data, error } = await supabase.from('hall_tickets').select('*').eq('exam_id', examId).order('class_name').order('student_name');
+      if (error) throw error;
+      return (data || []) as unknown as HallTicketRow[];
+    } catch (error) {
+      throw handleSupabaseError(error, 'Failed to fetch hall tickets');
+    }
+  },
+
+  async generateHallTickets(examId: string, className?: string): Promise<{ issued: number; withheld: number; kept_released: number; withheld_list: Array<{ student: string; class: string; reason: string }>; rules: { min_attendance: number; fee_clearance_required: boolean } }> {
+    const { data, error } = await (supabase as any).rpc('exam_generate_hall_tickets', { p_exam_id: examId, p_class_name: className ?? null });
+    if (error) throw handleSupabaseError(error, 'Failed to generate hall tickets');
+    if (!data?.success) throw rpcFailure(data, 'Failed to generate hall tickets');
+    return data;
+  },
+
+  async releaseHallTicket(ticketId: string, reason: string): Promise<void> {
+    const { data, error } = await (supabase as any).rpc('exam_release_hall_ticket', { p_ticket_id: ticketId, p_reason: reason });
+    if (error) throw handleSupabaseError(error, 'Failed to release the hall ticket');
+    if (!data?.success) throw rpcFailure(data, 'Failed to release the hall ticket');
+  },
+
+  async setHallTicketsVisible(examId: string, visible: boolean): Promise<void> {
+    const { data, error } = await (supabase as any).rpc('exam_set_hall_tickets_visible', { p_exam_id: examId, p_visible: visible });
+    if (error) throw handleSupabaseError(error, 'Failed to update hall ticket visibility');
+    if (!data?.success) throw rpcFailure(data, 'Failed to update hall ticket visibility');
   },
 
   async getAnalytics(examId?: string): Promise<ExamAnalyticsSummary> {

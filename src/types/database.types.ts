@@ -1047,6 +1047,10 @@ export interface HallTicket {
   issued_date: string;
   coe_signature_hash: string;
   created_at?: string;
+  exam_id?: string | null;
+  exam_title?: string | null;
+  status?: string;
+  override_reason?: string | null;
 }
 
 export interface LibraryCirculation {

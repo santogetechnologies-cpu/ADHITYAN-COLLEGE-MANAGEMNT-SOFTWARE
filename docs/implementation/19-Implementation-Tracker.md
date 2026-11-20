@@ -142,5 +142,5 @@ Legend: ✅ done & verified as stated · 🟡 written, not runnable here · ⬜ 
 | Marks entry: all-or-nothing validation, server-side grade and pass/fail, absent, upsert, audit of changed marks | ✅ SQL, 🟡 UI | |
 | Publish / withdraw (reason required), analytics from real data | ✅ SQL, 🟡 UI | |
 | Create examination + papers with clash check; publish timetable; progress board | 🟡 | build + type-check |
-| Hall tickets: eligibility from attendance/fees, bulk generation, student download | ⬜ next | `HallTicketGeneration` still the old single-ticket path |
+| Hall tickets: eligibility from attendance/fees, bulk generation, audited release, publish to students, verification | ✅ SQL (17 checks, 179 total), 🟡 UI | migration 046; `HallTicketGeneration` rewritten; student view shows only issued tickets |
 | Exam registration, seating/invigilation, revaluation, supplementary exams, grade sheets/transcripts, GPA/CGPA, configurable grading scales | ⬜ | master prompt §22–24 |

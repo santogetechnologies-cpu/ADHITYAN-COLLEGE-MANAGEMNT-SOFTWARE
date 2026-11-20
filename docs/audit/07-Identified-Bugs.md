@@ -50,4 +50,5 @@ See `01-Executive-Audit.md` for the full table with status. Quick index:
 | "Workflows" tab invented online exams from the row index, counted every student as a participant, offered Monitor Live / End Exam for an engine that does not exist | Replaced by a real progress board |
 | "Grading" screen grouped by a non-existent `exam_schedule_id` (all counts 0), guessed MCQ vs subjective from names, could not enter marks for a student without a result | Replaced by Marks entry (roster, validation, grades, locks after publish) |
 | Result pass mark hard-coded at 35 in analytics; grades computed in the browser | Fixed: pass mark from the paper (or the institution's pass %), grades on the server |
-| Hall tickets: bulk generation with attendance / fee eligibility, `HallTicketGeneration` typings | Open |
+| Hall tickets were created with invented defaults (hall B-302, seat 14-B, 88% attendance, 'Semester 4', a fake COE signature) and `issueHallTicket` swallowed errors; student screen invented an exam and matched tickets by fuzzy name | Fixed (046, rewritten screens) |
+| `record_fee_payment` / `record_admission_deposit` failed where pgcrypto lives in the `extensions` schema | Fixed (search_path) |

@@ -1,4 +1,4 @@
--- Smoke test for migrations 028-045. Synthetic data only; everything is rolled back.
+-- Smoke test for migrations 028-046. Synthetic data only; everything is rolled back.
 -- Run against a SCRATCH/STAGING database that has 001-015 + 028-037 applied (never production):
 --   psql "$STAGING_DB_URL" -v ON_ERROR_STOP=1 -f supabase/tests/smoke_028_037.sql
 -- Any failed assertion raises an exception and the script exits non-zero.
@@ -357,6 +357,57 @@ INSERT INTO public.exams(id,name,term,academic_year,start_date,end_date,status) 
 SET LOCAL ROLE authenticated;
 SELECT set_config('request.jwt.claim.sub','c0000000-0000-0000-0000-00000000000a',true);
 SELECT pg_temp.chk('publish refuses an exam with no marks', (public.exam_publish_results('c9000000-0000-0000-0000-000000000002',true)->>'code')='NO_RESULTS');
+RESET ROLE;
+
+-- ===================== 046 hall tickets =====================
+INSERT INTO auth.users(id,email) VALUES ('c0000000-0000-0000-0000-00000000000e','smoke.sd@example.test');
+INSERT INTO public.profiles(id,email,name,role,class_name,student_id) VALUES ('c0000000-0000-0000-0000-00000000000e','smoke.sd@example.test','Exam Student D','student','ClassT','HT-D');
+INSERT INTO public.student_attendance_records(student_id,student_name,roll_number,status) VALUES
+ ('c0000000-0000-0000-0000-00000000000b','Exam Student A','A','present'),('c0000000-0000-0000-0000-00000000000b','Exam Student A','A','present'),
+ ('c0000000-0000-0000-0000-00000000000b','Exam Student A','A','absent'),('c0000000-0000-0000-0000-00000000000b','Exam Student A','A','absent'),
+ ('c0000000-0000-0000-0000-00000000000e','Exam Student D','D','present'),('c0000000-0000-0000-0000-00000000000e','Exam Student D','D','present'),
+ ('c0000000-0000-0000-0000-00000000000e','Exam Student D','D','late'),('c0000000-0000-0000-0000-00000000000e','Exam Student D','D','absent');
+SET LOCAL ROLE authenticated;
+SELECT set_config('request.jwt.claim.sub','c0000000-0000-0000-0000-000000000009',true);   -- teacher
+SELECT pg_temp.chk('teacher cannot generate hall tickets', (public.exam_generate_hall_tickets('c9000000-0000-0000-0000-000000000001')->>'code')='FORBIDDEN');
+SELECT set_config('request.jwt.claim.sub','c0000000-0000-0000-0000-00000000000a',true);   -- coe
+SELECT pg_temp.chk('an exam with no papers for the class is refused', (public.exam_generate_hall_tickets('c9000000-0000-0000-0000-000000000001','Nope')->>'code')='NO_PAPERS');
+SELECT pg_temp.chk('generate: A (50% attendance) withheld, D (75%) issued', (SELECT (r->>'issued')::int=1 AND (r->>'withheld')::int=1 AND r->'withheld_list'->0->>'student'='Exam Student A' FROM (SELECT public.exam_generate_hall_tickets('c9000000-0000-0000-0000-000000000001') r) x));
+RESET ROLE;
+SELECT pg_temp.chk('tickets carry no fabricated venue, seat, signature or attendance', (SELECT bool_and(exam_center IS NULL AND seat_number IS NULL AND semester IS NOT NULL OR semester IS NULL) AND bool_and(attendance_pct IN (50, 75)) FROM public.hall_tickets WHERE exam_id='c9000000-0000-0000-0000-000000000001')
+   AND (SELECT hall_number='H1' AND length(coe_signature_hash)=64 FROM public.hall_tickets WHERE student_id='c0000000-0000-0000-0000-00000000000e' AND exam_id='c9000000-0000-0000-0000-000000000001'));
+SET LOCAL ROLE authenticated;
+SELECT set_config('request.jwt.claim.sub','c0000000-0000-0000-0000-00000000000a',true);
+SELECT pg_temp.chk('regenerating does not duplicate tickets', (public.exam_generate_hall_tickets('c9000000-0000-0000-0000-000000000001')->>'success')='true');
+RESET ROLE;
+SELECT pg_temp.chk('one ticket per student, with the real reason', (SELECT count(*)=2 FROM public.hall_tickets WHERE exam_id='c9000000-0000-0000-0000-000000000001')
+   AND (SELECT status='Withheld' AND is_detained AND detention_reason LIKE '%50%' AND attendance_pct=50 FROM public.hall_tickets WHERE student_id='c0000000-0000-0000-0000-00000000000b' AND exam_id='c9000000-0000-0000-0000-000000000001')
+   AND (SELECT status='Issued' AND attendance_pct=75 AND qr_code_token LIKE 'HT-%' FROM public.hall_tickets WHERE student_id='c0000000-0000-0000-0000-00000000000e' AND exam_id='c9000000-0000-0000-0000-000000000001'));
+-- fee clearance rule (off by default)
+UPDATE public.institutional_settings SET exam_requires_fee_clearance = TRUE;
+INSERT INTO public.student_fees(student_id,student_name,class_name,total_due,paid_amount,due_date,status) VALUES ('c0000000-0000-0000-0000-00000000000e','Exam Student D','ClassT',500,0,CURRENT_DATE-5,'overdue');
+SET LOCAL ROLE authenticated;
+SELECT set_config('request.jwt.claim.sub','c0000000-0000-0000-0000-00000000000a',true);
+SELECT pg_temp.chk('fee clearance on: overdue fees now withhold D too', (public.exam_generate_hall_tickets('c9000000-0000-0000-0000-000000000001')->>'withheld')='2');
+SELECT pg_temp.chk('release needs a reason', (public.exam_release_hall_ticket((SELECT id FROM public.hall_tickets WHERE student_id='c0000000-0000-0000-0000-00000000000e' AND exam_id='c9000000-0000-0000-0000-000000000001'),' ')->>'code')='REASON_REQUIRED');
+SELECT pg_temp.chk('COE releases D with a reason', (public.exam_release_hall_ticket((SELECT id FROM public.hall_tickets WHERE student_id='c0000000-0000-0000-0000-00000000000e' AND exam_id='c9000000-0000-0000-0000-000000000001'),'Fee instalment agreed with accounts')->>'success')='true');
+SELECT pg_temp.chk('a released ticket is not re-withheld by regeneration', (public.exam_generate_hall_tickets('c9000000-0000-0000-0000-000000000001')->>'kept_released')='1');
+RESET ROLE;
+SELECT pg_temp.chk('released ticket stays Issued and records who/why', (SELECT status='Issued' AND NOT is_detained AND override_reason LIKE 'Fee instalment%' AND overridden_by IS NOT NULL FROM public.hall_tickets WHERE student_id='c0000000-0000-0000-0000-00000000000e' AND exam_id='c9000000-0000-0000-0000-000000000001'));
+UPDATE public.institutional_settings SET exam_requires_fee_clearance = FALSE;
+-- visibility to students
+SET LOCAL ROLE authenticated;
+SELECT set_config('request.jwt.claim.sub','c0000000-0000-0000-0000-00000000000e',true);   -- student D
+SELECT pg_temp.chk('student sees no ticket before they are published', (SELECT count(*)=0 FROM public.hall_tickets));
+SELECT set_config('request.jwt.claim.sub','c0000000-0000-0000-0000-00000000000a',true);
+SELECT pg_temp.chk('COE publishes the tickets', (public.exam_set_hall_tickets_visible('c9000000-0000-0000-0000-000000000001',true)->>'success')='true');
+SELECT set_config('request.jwt.claim.sub','c0000000-0000-0000-0000-00000000000e',true);
+SELECT pg_temp.chk('student sees only their own ticket after publication', (SELECT count(*)=1 FROM public.hall_tickets));
+SELECT set_config('request.jwt.claim.sub','c0000000-0000-0000-0000-00000000000a',true);
+SELECT pg_temp.chk('invigilator verifies a ticket by its token', (SELECT (v->>'valid')::boolean AND v->>'student'='Exam Student D' FROM (SELECT public.exam_verify_hall_ticket((SELECT qr_code_token FROM public.hall_tickets WHERE student_id='c0000000-0000-0000-0000-00000000000e')) v) x));
+SELECT pg_temp.chk('a withheld ticket verifies as invalid', (SELECT NOT (v->>'valid')::boolean FROM (SELECT public.exam_verify_hall_ticket((SELECT qr_code_token FROM public.hall_tickets WHERE student_id='c0000000-0000-0000-0000-00000000000b')) v) x));
+SELECT set_config('request.jwt.claim.sub','c0000000-0000-0000-0000-00000000000e',true);
+SELECT pg_temp.chk('students cannot verify or publish', (public.exam_verify_hall_ticket('x')->>'valid')='false' AND (public.exam_set_hall_tickets_visible('c9000000-0000-0000-0000-000000000001',false)->>'code')='FORBIDDEN');
 RESET ROLE;
 
 SET LOCAL ROLE anon;
