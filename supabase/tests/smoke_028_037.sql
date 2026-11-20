@@ -548,6 +548,29 @@ SELECT set_config('request.jwt.claim.sub','c0000000-0000-0000-0000-0000000000a3'
 SELECT pg_temp.chk('staff member sees their own payslip only', (SELECT count(*)=1 FROM public.staff_payroll_items) AND (SELECT count(*)=0 FROM public.staff_payroll_runs));
 RESET ROLE;
 
+-- ---- 054 transport ----
+INSERT INTO auth.users(id,email) VALUES ('c0000000-0000-0000-0000-0000000000b1','tr.driver1@example.test'),('c0000000-0000-0000-0000-0000000000b2','tr.driver2@example.test');
+INSERT INTO public.profiles(id,email,name,role) VALUES ('c0000000-0000-0000-0000-0000000000b1','tr.driver1@example.test','Driver One','transport_driver'),('c0000000-0000-0000-0000-0000000000b2','tr.driver2@example.test','Driver Two','transport_driver');
+INSERT INTO public.transport_vehicles (id, vehicle_number, route_name, driver_id, driver_name, capacity, occupied_seats) VALUES
+ ('c9100000-0000-0000-0000-000000000001','TN-01-A','Route A','c0000000-0000-0000-0000-0000000000b1','Driver One',40,10),
+ ('c9100000-0000-0000-0000-000000000002','TN-02-B','Route B','c0000000-0000-0000-0000-0000000000b2','Driver Two',40,5);
+INSERT INTO public.student_transport_logs (vehicle_id, student_id, student_name, stop_name) VALUES ('c9100000-0000-0000-0000-000000000001','c0000000-0000-0000-0000-000000000001','Smoke Rider','Stop 1');
+SET LOCAL ROLE authenticated;
+SELECT set_config('request.jwt.claim.sub','c0000000-0000-0000-0000-0000000000b2',true);   -- driver two
+SELECT pg_temp.chk('a driver sees only their own vehicle and its riders', (SELECT count(*)=1 FROM public.transport_vehicles) AND (SELECT count(*)=0 FROM public.student_transport_logs));
+UPDATE public.transport_vehicles SET current_location='Gate', route_name='Hijacked', driver_name='X', vehicle_number='ZZ' WHERE id='c9100000-0000-0000-0000-000000000002';
+UPDATE public.transport_vehicles SET current_location='stolen' WHERE id='c9100000-0000-0000-0000-000000000001';
+RESET ROLE;
+SELECT pg_temp.chk('driver can report location but not rename route/driver/number', (SELECT current_location='Gate' AND route_name='Route B' AND driver_name='Driver Two' AND vehicle_number='TN-02-B' FROM public.transport_vehicles WHERE id='c9100000-0000-0000-0000-000000000002'));
+SELECT pg_temp.chk('a driver cannot touch another driver''s bus', (SELECT current_location IS DISTINCT FROM 'stolen' FROM public.transport_vehicles WHERE id='c9100000-0000-0000-0000-000000000001'));
+SET LOCAL ROLE authenticated;
+SELECT set_config('request.jwt.claim.sub','c0000000-0000-0000-0000-000000000001',true);   -- the rider (student)
+SELECT pg_temp.chk('a rider sees their own bus and nobody else''s', (SELECT count(*)=1 AND bool_and(vehicle_number='TN-01-A') FROM public.transport_vehicles));
+SELECT set_config('request.jwt.claim.sub','c0000000-0000-0000-0000-0000000000b1',true);   -- driver one
+SELECT pg_temp.chk('driver sees their riders', (SELECT count(*)=1 FROM public.student_transport_logs));
+RESET ROLE;
+SELECT pg_temp.chk('seats cannot exceed capacity', pg_temp.fails($q$UPDATE public.transport_vehicles SET occupied_seats=99 WHERE id='c9100000-0000-0000-0000-000000000001'$q$));
+
 SELECT name, CASE WHEN ok THEN 'PASS' ELSE 'FAIL' END AS result FROM _r ORDER BY ok, name;
 DO $$ BEGIN
   IF EXISTS (SELECT 1 FROM _r WHERE NOT ok) THEN RAISE EXCEPTION 'SMOKE TEST FAILED'; END IF;

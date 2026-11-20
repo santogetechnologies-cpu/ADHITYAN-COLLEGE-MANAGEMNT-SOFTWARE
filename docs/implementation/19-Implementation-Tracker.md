@@ -204,3 +204,10 @@ Legend: ✅ done & verified as stated · 🟡 written, not runnable here · ⬜ 
 | Payroll screen rebuilt on the server functions; bank advice built from real account data (was one hard-coded account/IFSC for everyone); payslip header from institution settings, no invented PAN/UAN/bank/reference; HR dashboard KPIs real (invented 89 faculty, 42 staff, ₹48.6 L, 3 on leave removed); TDS and other deductions per employee | 🟡 UI | build |
 | Statutory rates (EPF/ESI/PT) are institution-specific and are NOT assumed: payroll refuses to run until HR sets them | ⚠️ action | HR must enter rules once |
 | Leave balances deduct on approval; payroll for state-specific professional-tax slabs; Form 16 / statutory returns | ⬜ | |
+
+## Module — Transport (migration 054)
+| Item | Status | Evidence |
+|------|--------|----------|
+| Driver scoped to own vehicle; riders/parents see own bus only; guard trigger on vehicle edits | ✅ SQL | 6 smoke checks (235 total) |
+| Driver dashboard: no fallback to "first bus" (a driver with no assignment saw and edited someone else's), GPS failure no longer fakes a live location ("simulator"), invented speed 32 km/h / ETA 15 min / 12 riders / 3 trips removed, manifest prints, "Notify parents" no longer claims an SMS was sent (sends in-app notices to waiting riders), reports export CSV | 🟡 UI | build |
+| Route/stop/fleet administration screen for admin; student-to-route allocation linked to fees | ⬜ | |
