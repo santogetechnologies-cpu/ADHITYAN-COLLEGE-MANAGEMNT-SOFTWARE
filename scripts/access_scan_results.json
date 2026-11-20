@@ -1,0 +1,801 @@
+{
+  "allowedRolesMatches": [
+    {
+      "file": "src/App.tsx",
+      "line": 97,
+      "snippet": "<ProtectedRoute allowedRoles={['principal', 'admin']}>",
+      "hasAdmin": true
+    },
+    {
+      "file": "src/App.tsx",
+      "line": 105,
+      "snippet": "<ProtectedRoute allowedRoles={['teacher', 'hod', 'admin']}>",
+      "hasAdmin": true
+    },
+    {
+      "file": "src/App.tsx",
+      "line": 117,
+      "snippet": "<ProtectedRoute allowedRoles={['parent', 'admin']}>",
+      "hasAdmin": true
+    },
+    {
+      "file": "src/App.tsx",
+      "line": 127,
+      "snippet": "<ProtectedRoute allowedRoles={['student', 'parent', 'admin', 'teacher']}>",
+      "hasAdmin": true
+    },
+    {
+      "file": "src/App.tsx",
+      "line": 135,
+      "snippet": "<ProtectedRoute allowedRoles={['student', 'parent', 'transport_driver', 'driver', 'admin']}>",
+      "hasAdmin": true
+    },
+    {
+      "file": "src/App.tsx",
+      "line": 143,
+      "snippet": "<ProtectedRoute allowedRoles={['student', 'teacher', 'admin', 'principal']}>",
+      "hasAdmin": true
+    },
+    {
+      "file": "src/App.tsx",
+      "line": 169,
+      "snippet": "<ProtectedRoute allowedRoles={['teacher', 'hod', 'admin']}>",
+      "hasAdmin": true
+    },
+    {
+      "file": "src/App.tsx",
+      "line": 177,
+      "snippet": "<ProtectedRoute allowedRoles={['teacher', 'hod', 'admin']}>",
+      "hasAdmin": true
+    },
+    {
+      "file": "src/App.tsx",
+      "line": 185,
+      "snippet": "<ProtectedRoute allowedRoles={['teacher', 'hod', 'admin', 'principal']}>",
+      "hasAdmin": true
+    },
+    {
+      "file": "src/App.tsx",
+      "line": 193,
+      "snippet": "<ProtectedRoute allowedRoles={['teacher', 'hod', 'admin', 'principal']}>",
+      "hasAdmin": true
+    },
+    {
+      "file": "src/App.tsx",
+      "line": 203,
+      "snippet": "<ProtectedRoute allowedRoles={['admin', 'principal', 'teacher', 'student', 'coe']}>",
+      "hasAdmin": true
+    },
+    {
+      "file": "src/App.tsx",
+      "line": 211,
+      "snippet": "<ProtectedRoute allowedRoles={['admin', 'principal', 'teacher', 'student', 'librarian']}>",
+      "hasAdmin": true
+    },
+    {
+      "file": "src/App.tsx",
+      "line": 219,
+      "snippet": "<ProtectedRoute allowedRoles={['admin', 'principal', 'receptionist']}>",
+      "hasAdmin": true
+    },
+    {
+      "file": "src/App.tsx",
+      "line": 227,
+      "snippet": "<ProtectedRoute allowedRoles={['admin', 'principal']}>",
+      "hasAdmin": true
+    },
+    {
+      "file": "src/App.tsx",
+      "line": 235,
+      "snippet": "<ProtectedRoute allowedRoles={['admin', 'principal']}>",
+      "hasAdmin": true
+    },
+    {
+      "file": "src/App.tsx",
+      "line": 243,
+      "snippet": "<ProtectedRoute allowedRoles={['admin', 'principal']}>",
+      "hasAdmin": true
+    },
+    {
+      "file": "src/App.tsx",
+      "line": 251,
+      "snippet": "<ProtectedRoute allowedRoles={['admin', 'principal', 'teacher']}>",
+      "hasAdmin": true
+    },
+    {
+      "file": "src/App.tsx",
+      "line": 259,
+      "snippet": "<ProtectedRoute allowedRoles={['admin', 'principal', 'teacher']}>",
+      "hasAdmin": true
+    },
+    {
+      "file": "src/App.tsx",
+      "line": 269,
+      "snippet": "<ProtectedRoute allowedRoles={['admin', 'principal']}>",
+      "hasAdmin": true
+    },
+    {
+      "file": "src/App.tsx",
+      "line": 279,
+      "snippet": "<Route path=\"users\" element={<ProtectedRoute allowedRoles={['admin']}><UserManagement /></ProtectedRoute>} />",
+      "hasAdmin": true
+    },
+    {
+      "file": "src/App.tsx",
+      "line": 292,
+      "snippet": "<Route path=\"settings\" element={<ProtectedRoute allowedRoles={['admin']}><AdminSettings /></ProtectedRoute>} />",
+      "hasAdmin": true
+    },
+    {
+      "file": "src/App.tsx",
+      "line": 293,
+      "snippet": "<Route path=\"account-provisioning\" element={<ProtectedRoute allowedRoles={['admin', 'principal', 'receptionist']}><AccountProvisioningWorkspace /></ProtectedRoute>} />",
+      "hasAdmin": true
+    },
+    {
+      "file": "src/App.tsx",
+      "line": 300,
+      "snippet": "<ProtectedRoute allowedRoles={['admin', 'principal', 'receptionist']}>",
+      "hasAdmin": true
+    },
+    {
+      "file": "src/App.tsx",
+      "line": 310,
+      "snippet": "<ProtectedRoute allowedRoles={['admin', 'principal', 'naac_coordinator']}>",
+      "hasAdmin": true
+    },
+    {
+      "file": "src/components/admin/AdminLayout.tsx",
+      "line": 8,
+      "snippet": "<ManagementRoute allowedRoles={['admin', 'principal', 'financier', 'accountant', 'storekeeper', 'driver', 'naac_coordinator', 'receptionist', 'store_manager', 'finance_manager', 'transport_driver']}>",
+      "hasAdmin": true
+    },
+    {
+      "file": "src/components/guards/AdminRoute.tsx",
+      "line": 5,
+      "snippet": "return <ProtectedRoute allowedRoles={['admin', 'principal', 'naac_coordinator']}>{children}</ProtectedRoute>;",
+      "hasAdmin": true
+    },
+    {
+      "file": "src/components/guards/ManagementRoute.tsx",
+      "line": 7,
+      "snippet": "allowedRoles={[",
+      "hasAdmin": false
+    },
+    {
+      "file": "src/components/guards/ProtectedRoute.tsx",
+      "line": 9,
+      "snippet": "allowedRoles?: UserRole[];",
+      "hasAdmin": false
+    },
+    {
+      "file": "src/components/guards/ProtectedRoute.tsx",
+      "line": 12,
+      "snippet": "export function ProtectedRoute({ children, allowedRoles }: ProtectedRouteProps) {",
+      "hasAdmin": false
+    },
+    {
+      "file": "src/components/guards/ProtectedRoute.tsx",
+      "line": 36,
+      "snippet": "if (allowedRoles && allowedRoles.length > 0 && !allowedRoles.includes(user.role)) {",
+      "hasAdmin": false
+    },
+    {
+      "file": "src/server/__tests__/verify_student_navigation_and_back_button.test.ts",
+      "line": 81,
+      "snippet": "function simulateRouteGuard(path: string, allowedRoles?: string[], userRole: string = 'student') {",
+      "hasAdmin": false
+    },
+    {
+      "file": "src/server/__tests__/verify_student_navigation_and_back_button.test.ts",
+      "line": 89,
+      "snippet": "if (allowedRoles && allowedRoles.length > 0 && !allowedRoles.includes(userRole)) {",
+      "hasAdmin": false
+    }
+  ],
+  "roleChecks": [
+    {
+      "file": "src/components/admin/AdminExecutiveNavbar.tsx",
+      "line": 90,
+      "snippet": "if (user.role === 'admin') return true;"
+    },
+    {
+      "file": "src/components/admin/AdminOverview.tsx",
+      "line": 98,
+      "snippet": "const activeStudents = profiles.filter(p => p.role === 'student' && (p.status === 'active' || !p.status)).length;"
+    },
+    {
+      "file": "src/components/admin/AdminOverview.tsx",
+      "line": 99,
+      "snippet": "const parentAccounts = profiles.filter(p => p.role === 'parent').length;"
+    },
+    {
+      "file": "src/components/admin/AdminOverview.tsx",
+      "line": 100,
+      "snippet": "const teachers = profiles.filter(p => p.role === 'teacher').length;"
+    },
+    {
+      "file": "src/components/admin/DepartmentOversight.tsx",
+      "line": 55,
+      "snippet": "const teachers = profiles.filter((p) => p.role === 'teacher');"
+    },
+    {
+      "file": "src/components/admin/DepartmentOversight.tsx",
+      "line": 56,
+      "snippet": "const students = profiles.filter((p) => p.role === 'student');"
+    },
+    {
+      "file": "src/components/admin/DepartmentOversight.tsx",
+      "line": 67,
+      "snippet": "(p: Profile) => p.role === 'hod' && p.department?.toLowerCase() === dept.name.toLowerCase()"
+    },
+    {
+      "file": "src/components/admin/FeedbackSystem.tsx",
+      "line": 69,
+      "snippet": "const defaultTeachers = profiles.filter(p => p.role === 'teacher');"
+    },
+    {
+      "file": "src/components/admin/navigation/AdminCommandPalette.tsx",
+      "line": 54,
+      "snippet": "if (user.role === 'admin') return true;"
+    },
+    {
+      "file": "src/components/admin/navigation/AdminMegaMenu.tsx",
+      "line": 63,
+      "snippet": "if (user.role === 'admin') return true;"
+    },
+    {
+      "file": "src/components/admin/navigation/AdminQuickCreateMenu.tsx",
+      "line": 30,
+      "snippet": "if (user.role === 'admin') return true;"
+    },
+    {
+      "file": "src/components/admin/TeacherAssignments.tsx",
+      "line": 93,
+      "snippet": "const teacherProfiles = profiles.filter(p => p.role === 'teacher');"
+    },
+    {
+      "file": "src/components/admin/TeacherAssignments.tsx",
+      "line": 449,
+      "snippet": "{cls.role === 'class_teacher' ? ("
+    },
+    {
+      "file": "src/components/admin/TeacherAssignments.tsx",
+      "line": 460,
+      "snippet": "<Badge variant={cls.role === 'class_teacher' ? 'default' : 'secondary'} className=\"text-xs\">"
+    },
+    {
+      "file": "src/components/admin/TeacherAssignments.tsx",
+      "line": 461,
+      "snippet": "{cls.role === 'class_teacher' ? 'Class Teacher' : 'Subject'}"
+    },
+    {
+      "file": "src/components/admin/TimetableManagement.tsx",
+      "line": 138,
+      "snippet": ".filter(p => p.role === 'teacher')"
+    },
+    {
+      "file": "src/components/admin/TimetableManagement.tsx",
+      "line": 406,
+      "snippet": "(p.role === 'student' && p.department === selectedCourse) ||"
+    },
+    {
+      "file": "src/components/admin/TimetableManagement.tsx",
+      "line": 407,
+      "snippet": "p.role === 'teacher' ||"
+    },
+    {
+      "file": "src/components/admin/TimetableManagement.tsx",
+      "line": 408,
+      "snippet": "p.role === 'admin' ||"
+    },
+    {
+      "file": "src/components/admin/TimetableManagement.tsx",
+      "line": 409,
+      "snippet": "p.role === 'principal'"
+    },
+    {
+      "file": "src/components/admin/UserManagement.tsx",
+      "line": 210,
+      "snippet": "const enrolledStudents = useMemo(() => users.filter(u => u.role === 'student'), [users]);"
+    },
+    {
+      "file": "src/components/admin/UserManagement.tsx",
+      "line": 211,
+      "snippet": "const parentAccounts = useMemo(() => users.filter(u => u.role === 'parent'), [users]);"
+    },
+    {
+      "file": "src/components/admin/UserManagement.tsx",
+      "line": 452,
+      "snippet": "const isTeacher = staffFormData.role === 'teacher';"
+    },
+    {
+      "file": "src/components/admin/UserManagement.tsx",
+      "line": 505,
+      "snippet": "if (selectedUser.role === 'teacher') {"
+    },
+    {
+      "file": "src/components/admin/UserManagement.tsx",
+      "line": 1259,
+      "snippet": "{staff.role === 'teacher' ? ("
+    },
+    {
+      "file": "src/components/admin/UserManagement.tsx",
+      "line": 1308,
+      "snippet": "{staff.role === 'teacher' && ("
+    },
+    {
+      "file": "src/components/admin/UserManagement.tsx",
+      "line": 1670,
+      "snippet": "<DialogContent className={`${staffFormData.role === 'teacher' ? 'max-w-2xl' : 'max-w-md'} p-6 max-h-[92vh] overflow-y-auto`}>"
+    },
+    {
+      "file": "src/components/admin/UserManagement.tsx",
+      "line": 1749,
+      "snippet": "{staffFormData.role === 'teacher' && ("
+    },
+    {
+      "file": "src/components/admin/UserManagement.tsx",
+      "line": 1781,
+      "snippet": "<DialogContent className={`${selectedUser?.role === 'teacher' ? 'max-w-2xl' : 'max-w-md'} p-6 max-h-[92vh] overflow-y-auto`}>"
+    },
+    {
+      "file": "src/components/admin/UserManagement.tsx",
+      "line": 1810,
+      "snippet": "{selectedUser.role === 'student' && ("
+    },
+    {
+      "file": "src/components/admin/UserManagement.tsx",
+      "line": 1833,
+      "snippet": "{selectedUser.role === 'teacher' && ("
+    },
+    {
+      "file": "src/components/alumni/MentorshipMatchingDialog.tsx",
+      "line": 215,
+      "snippet": "const menteeList = (students || []).filter(s => s.role === 'student').map(s => ({"
+    },
+    {
+      "file": "src/components/auth/FirstLoginDialog.tsx",
+      "line": 160,
+      "snippet": "const dest = loggedUser.role === 'parent' ? '/dashboard/parent' : '/dashboard/student';"
+    },
+    {
+      "file": "src/components/auth/FirstLoginDialog.tsx",
+      "line": 253,
+      "snippet": "{challengeData.role === 'parent' ? <Users className=\"w-4 h-4 text-purple-600\" /> : <GraduationCap className=\"w-4 h-4 text-blue-600\" />}"
+    },
+    {
+      "file": "src/components/chat/AILearningChat.tsx",
+      "line": 42,
+      "snippet": "type: h.role === 'user' ? 'user' : 'ai',"
+    },
+    {
+      "file": "src/components/dashboards/AdminDashboard.tsx",
+      "line": 103,
+      "snippet": "const activeStudents = profiles.filter(p => p.role === 'student' && (p.status === 'active' || !p.status)).length;"
+    },
+    {
+      "file": "src/components/dashboards/AdminDashboard.tsx",
+      "line": 104,
+      "snippet": "const parentAccounts = profiles.filter(p => p.role === 'parent').length;"
+    },
+    {
+      "file": "src/components/dashboards/AdminDashboard.tsx",
+      "line": 105,
+      "snippet": "const teachers = profiles.filter(p => p.role === 'teacher').length;"
+    },
+    {
+      "file": "src/components/dashboards/PrincipalDashboard.tsx",
+      "line": 198,
+      "snippet": "const studentProfiles = useMemo(() => profiles.filter(p => p.role === 'student'), [profiles]);"
+    },
+    {
+      "file": "src/components/dashboards/PrincipalDashboard.tsx",
+      "line": 199,
+      "snippet": "const facultyProfiles = useMemo(() => profiles.filter(p => p.role === 'teacher' || p.role === 'hod'), [profiles]);"
+    },
+    {
+      "file": "src/components/dashboards/PrincipalDashboard.tsx",
+      "line": 200,
+      "snippet": "const principalProfile = useMemo(() => profiles.find(p => p.role === 'principal') || null, [profiles]);"
+    },
+    {
+      "file": "src/components/exam/ExamDetailsDialog.tsx",
+      "line": 44,
+      "snippet": "const stuProfiles = (profiles || []).filter(p => p.role === 'student');"
+    },
+    {
+      "file": "src/components/exam/ExamWorkflows.tsx",
+      "line": 39,
+      "snippet": "const studentCount = (profiles || []).filter(p => p.role === 'student').length;"
+    },
+    {
+      "file": "src/components/library/BookIssueDialog.tsx",
+      "line": 59,
+      "snippet": "setAvailableStudents((profiles || []).filter(p => p.role === 'student'));"
+    },
+    {
+      "file": "src/components/LoginForm.tsx",
+      "line": 66,
+      "snippet": "if (role === 'student') {"
+    },
+    {
+      "file": "src/components/LoginForm.tsx",
+      "line": 72,
+      "snippet": "if (role === 'parent') {"
+    },
+    {
+      "file": "src/components/LoginForm.tsx",
+      "line": 92,
+      "snippet": "if (role === 'student') {"
+    },
+    {
+      "file": "src/components/LoginForm.tsx",
+      "line": 101,
+      "snippet": "} else if (role === 'parent') {"
+    },
+    {
+      "file": "src/components/LoginForm.tsx",
+      "line": 126,
+      "snippet": "const hintText = (role === 'student' || role === 'parent')"
+    },
+    {
+      "file": "src/components/LoginForm.tsx",
+      "line": 373,
+      "snippet": "{(role === 'student' || role === 'parent') && ("
+    },
+    {
+      "file": "src/components/medical/InfirmaryVisitDialog.tsx",
+      "line": 181,
+      "snippet": "patientType: match.role === 'student' ? 'student' : 'staff',"
+    },
+    {
+      "file": "src/components/store/CartDialog.tsx",
+      "line": 106,
+      "snippet": "const managers = (await db.getAllProfiles()).filter(p => p.role === 'store_manager' || p.role === 'storekeeper' || p.role === 'admin');"
+    },
+    {
+      "file": "src/config/roles.ts",
+      "line": 267,
+      "snippet": "if (role === 'admin') return true; // Admins have global access"
+    },
+    {
+      "file": "src/context/NAACContext.tsx",
+      "line": 65,
+      "snippet": "role: (user?.role === 'admin' ? 'admin' : user?.role === 'teacher' ? 'faculty' : 'naac_coordinator'),"
+    },
+    {
+      "file": "src/pages/admin/AdminAnalytics.tsx",
+      "line": 40,
+      "snippet": "if (p.role === 'student') dist.student++;"
+    },
+    {
+      "file": "src/pages/admin/AdminAnalytics.tsx",
+      "line": 41,
+      "snippet": "else if (p.role === 'teacher') dist.teacher++;"
+    },
+    {
+      "file": "src/pages/admin/AdminAnalytics.tsx",
+      "line": 42,
+      "snippet": "else if (p.role === 'parent') dist.parent++;"
+    },
+    {
+      "file": "src/pages/admin/AdminReports.tsx",
+      "line": 42,
+      "snippet": "const studentCount = (profiles || []).filter((p: any) => p.role === 'student').length;"
+    },
+    {
+      "file": "src/pages/admin/AdminReports.tsx",
+      "line": 65,
+      "snippet": "let students = (profiles || []).filter((p: any) => p.role === 'student');"
+    },
+    {
+      "file": "src/pages/Dashboard.tsx",
+      "line": 68,
+      "snippet": "if (user.role === 'naac_coordinator') {"
+    },
+    {
+      "file": "src/pages/Dashboard.tsx",
+      "line": 74,
+      "snippet": "if (user.role === 'admin') {"
+    },
+    {
+      "file": "src/pages/Dashboard.tsx",
+      "line": 98,
+      "snippet": "const isPreviewMode = user.role === 'admin' && searchParams.get('preview') === 'true' && !!routeRole;"
+    },
+    {
+      "file": "src/pages/Index.tsx",
+      "line": 16,
+      "snippet": "if (user.role === 'admin') {"
+    },
+    {
+      "file": "src/pages/MessageTeacher.tsx",
+      "line": 63,
+      "snippet": "if (user.role === 'parent') {"
+    },
+    {
+      "file": "src/pages/MessageTeacher.tsx",
+      "line": 80,
+      "snippet": "if (user?.role === 'parent' && selectedChildId) {"
+    },
+    {
+      "file": "src/pages/MessageTeacher.tsx",
+      "line": 86,
+      "snippet": "const teacherProfiles = allProfiles.filter(p => p.role === 'teacher');"
+    },
+    {
+      "file": "src/pages/MessageTeacher.tsx",
+      "line": 261,
+      "snippet": "{user?.role === 'parent' && linkedChildren.length > 1 && ("
+    },
+    {
+      "file": "src/pages/MessageTeacher.tsx",
+      "line": 289,
+      "snippet": "{user?.role === 'parent'"
+    },
+    {
+      "file": "src/pages/ReportConcern.tsx",
+      "line": 45,
+      "snippet": "if (user.role === 'parent') {"
+    },
+    {
+      "file": "src/pages/ReportConcern.tsx",
+      "line": 125,
+      "snippet": ": (user?.role === 'parent' ? (selectedChildId || undefined) : user?.id);"
+    },
+    {
+      "file": "src/pages/ReportConcern.tsx",
+      "line": 129,
+      "snippet": ": (user?.name || (user?.role === 'parent' ? 'Parent' : 'Student'));"
+    },
+    {
+      "file": "src/pages/ReportConcern.tsx",
+      "line": 147,
+      "snippet": "const admins = (await db.getAllProfiles()).filter(p => p.role === 'principal' || p.role === 'admin');"
+    },
+    {
+      "file": "src/pages/ReportConcern.tsx",
+      "line": 261,
+      "snippet": "{user?.role === 'parent' && linkedChildren.length > 0 && !isAnonymous && ("
+    },
+    {
+      "file": "src/pages/teachers/CreateAssignment.tsx",
+      "line": 140,
+      "snippet": "const students = (await db.getAllProfiles()).filter(p => p.role === 'student');"
+    },
+    {
+      "file": "src/pages/TrackSchoolBus.tsx",
+      "line": 42,
+      "snippet": "if (user.role === 'parent') {"
+    },
+    {
+      "file": "src/pages/TrackSchoolBus.tsx",
+      "line": 78,
+      "snippet": "if (user.role === 'parent') {"
+    },
+    {
+      "file": "src/pages/TrackSchoolBus.tsx",
+      "line": 148,
+      "snippet": "const activeStudentName = user?.role === 'parent'"
+    },
+    {
+      "file": "src/pages/TrackSchoolBus.tsx",
+      "line": 206,
+      "snippet": "{user?.role === 'parent' && linkedChildren.length > 1 && ("
+    },
+    {
+      "file": "src/pages/ViewAchievements.tsx",
+      "line": 50,
+      "snippet": "if (user.role === 'parent') {"
+    },
+    {
+      "file": "src/pages/ViewAchievements.tsx",
+      "line": 70,
+      "snippet": "if (user.role === 'parent') {"
+    },
+    {
+      "file": "src/pages/ViewAchievements.tsx",
+      "line": 150,
+      "snippet": "const activeStudentName = user?.role === 'parent'"
+    },
+    {
+      "file": "src/pages/ViewAchievements.tsx",
+      "line": 186,
+      "snippet": "{user?.role === 'parent' && linkedChildren.length > 1 && ("
+    },
+    {
+      "file": "src/server/adminBackend.ts",
+      "line": 1687,
+      "snippet": "if (existingParent && existingParent.role === 'parent') {"
+    },
+    {
+      "file": "src/server/adminBackend.ts",
+      "line": 1880,
+      "snippet": "if (newUser.role === 'admin' && callerRole !== 'admin') {"
+    },
+    {
+      "file": "src/server/adminBackend.ts",
+      "line": 1910,
+      "snippet": "const teacherDept = newUser.role === 'teacher' ? (newUser.department || 'Paramedical Faculty') : (newUser.department || '');"
+    },
+    {
+      "file": "src/server/adminBackend.ts",
+      "line": 1990,
+      "snippet": "if (newUser.role === 'student') {"
+    },
+    {
+      "file": "src/server/adminBackend.ts",
+      "line": 2041,
+      "snippet": "const isModifyingPrivilegedRole = targetRole === 'admin' || updates.role === 'admin';"
+    },
+    {
+      "file": "src/server/adminBackend.ts",
+      "line": 2047,
+      "snippet": "if (targetUser.user.user_metadata?.role === 'admin' && updates.role && updates.role !== 'admin') {"
+    },
+    {
+      "file": "src/server/adminBackend.ts",
+      "line": 2049,
+      "snippet": "const adminCount = allUsers.users.filter((u: any) => u.user_metadata?.role === 'admin').length;"
+    },
+    {
+      "file": "src/server/adminBackend.ts",
+      "line": 2207,
+      "snippet": "if (targetUser.user.user_metadata?.role === 'admin' && !active) {"
+    },
+    {
+      "file": "src/server/adminBackend.ts",
+      "line": 2210,
+      "snippet": "u.user_metadata?.role === 'admin' &&"
+    },
+    {
+      "file": "src/server/adminBackend.ts",
+      "line": 2274,
+      "snippet": "if (target?.user_metadata?.role === 'admin') {"
+    },
+    {
+      "file": "src/server/adminBackend.ts",
+      "line": 2275,
+      "snippet": "const adminCount = allUsers.users.filter((u: any) => u.user_metadata?.role === 'admin').length;"
+    },
+    {
+      "file": "src/server/__tests__/verify_all_erp_roles_and_supabase_connectivity.test.ts",
+      "line": 35,
+      "snippet": "assert(!!adminProfile && adminProfile.role === 'admin', 'Admin: Protected administrator profile active');"
+    },
+    {
+      "file": "src/server/__tests__/verify_clean_database_state.test.ts",
+      "line": 34,
+      "snippet": "assert(adminUser?.user_metadata?.role === 'admin', `Preserved Auth User role is \"admin\" (Found: ${adminUser?.user_metadata?.role})`);"
+    },
+    {
+      "file": "src/server/__tests__/verify_clean_database_state.test.ts",
+      "line": 44,
+      "snippet": "assert(adminProfile?.role === 'admin', `Preserved Profile role is \"admin\"`);"
+    },
+    {
+      "file": "src/server/__tests__/verify_finance_portal_complete_workflow.test.ts",
+      "line": 65,
+      "snippet": "assert(fmProfile?.role === 'finance_manager', 'Profile role is strictly verified as \"finance_manager\"');"
+    },
+    {
+      "file": "src/server/__tests__/verify_finance_portal_complete_workflow.test.ts",
+      "line": 73,
+      "snippet": "assert(accProfile?.role === 'accountant', 'Accountant profile verified as \"accountant\"');"
+    },
+    {
+      "file": "src/server/__tests__/verify_parent_portal_complete_workflow.test.ts",
+      "line": 105,
+      "snippet": "assert(Boolean(parentProfile && parentProfile.role === 'parent'), 'Parent profile verified in database with role \"parent\"');"
+    },
+    {
+      "file": "src/server/__tests__/verify_principal_portal_complete_workflow.test.ts",
+      "line": 138,
+      "snippet": "const students = profiles.filter(p => p.role === 'student');"
+    },
+    {
+      "file": "src/server/__tests__/verify_principal_portal_complete_workflow.test.ts",
+      "line": 139,
+      "snippet": "const teachers = profiles.filter(p => p.role === 'teacher');"
+    },
+    {
+      "file": "src/server/__tests__/verify_receptionist_portal_complete_workflow.test.ts",
+      "line": 54,
+      "snippet": "assert(recProfile?.role === 'receptionist', 'Profile role is strictly verified as \"receptionist\"');"
+    },
+    {
+      "file": "src/server/__tests__/verify_staff_teacher_class_assignment.test.ts",
+      "line": 176,
+      "snippet": "assert(teacherProfile?.role === 'teacher', `Teacher profile role is \"teacher\" (Found: ${teacherProfile?.role})`);"
+    },
+    {
+      "file": "src/server/__tests__/verify_store_portal_complete_workflow.test.ts",
+      "line": 45,
+      "snippet": "assert(storeMgrProfile.role === 'store_manager', 'Profile role is strictly verified as \"store_manager\"');"
+    },
+    {
+      "file": "src/server/__tests__/verify_store_portal_complete_workflow.test.ts",
+      "line": 56,
+      "snippet": "assert(storekeeperProfile.role === 'storekeeper', 'Profile role is strictly verified as \"storekeeper\"');"
+    },
+    {
+      "file": "src/server/__tests__/verify_student_portal_complete_workflow.test.ts",
+      "line": 85,
+      "snippet": "assert(profile?.role === 'student', 'Profile role is strictly \"student\"');"
+    },
+    {
+      "file": "src/server/__tests__/verify_teacher_portal_complete_workflow.test.ts",
+      "line": 31,
+      "snippet": "assert(!!teacher && teacher.role === 'teacher', 'Teacher account exists with role \"teacher\"');"
+    },
+    {
+      "file": "src/server/__tests__/verify_teacher_portal_complete_workflow.test.ts",
+      "line": 34,
+      "snippet": "assert(!!student && student.role === 'student', 'Student account exists with role \"student\"');"
+    },
+    {
+      "file": "src/server/__tests__/verify_transport_portal_complete_workflow.test.ts",
+      "line": 44,
+      "snippet": "assert(driverProfile.role === 'transport_driver', 'Profile role is strictly verified as \"transport_driver\"');"
+    },
+    {
+      "file": "src/services/supabase/database.ts",
+      "line": 273,
+      "snippet": "const activeStudents = profList.filter(p => p.role === 'student').length;"
+    },
+    {
+      "file": "src/services/supabase/database.ts",
+      "line": 274,
+      "snippet": "const parentAccounts = profList.filter(p => p.role === 'parent').length;"
+    },
+    {
+      "file": "src/services/supabase/database.ts",
+      "line": 275,
+      "snippet": "const totalTeachers = profList.filter(p => p.role === 'teacher').length;"
+    },
+    {
+      "file": "src/services/workflowEngineService.ts",
+      "line": 284,
+      "snippet": "if (role === 'admin') return true;"
+    }
+  ],
+  "adminMissingChecks": [
+    {
+      "file": "src/components/guards/ManagementRoute.tsx",
+      "line": 7,
+      "snippet": "allowedRoles={[",
+      "reason": "allowedRoles does not include admin"
+    },
+    {
+      "file": "src/components/guards/ProtectedRoute.tsx",
+      "line": 9,
+      "snippet": "allowedRoles?: UserRole[];",
+      "reason": "allowedRoles does not include admin"
+    },
+    {
+      "file": "src/components/guards/ProtectedRoute.tsx",
+      "line": 12,
+      "snippet": "export function ProtectedRoute({ children, allowedRoles }: ProtectedRouteProps) {",
+      "reason": "allowedRoles does not include admin"
+    },
+    {
+      "file": "src/components/guards/ProtectedRoute.tsx",
+      "line": 36,
+      "snippet": "if (allowedRoles && allowedRoles.length > 0 && !allowedRoles.includes(user.role)) {",
+      "reason": "allowedRoles does not include admin"
+    },
+    {
+      "file": "src/server/__tests__/verify_student_navigation_and_back_button.test.ts",
+      "line": 81,
+      "snippet": "function simulateRouteGuard(path: string, allowedRoles?: string[], userRole: string = 'student') {",
+      "reason": "allowedRoles does not include admin"
+    },
+    {
+      "file": "src/server/__tests__/verify_student_navigation_and_back_button.test.ts",
+      "line": 89,
+      "snippet": "if (allowedRoles && allowedRoles.length > 0 && !allowedRoles.includes(userRole)) {",
+      "reason": "allowedRoles does not include admin"
+    }
+  ]
+}
