@@ -185,8 +185,8 @@ export default function LibrarianDashboard() {
               <span className="text-xs font-medium uppercase tracking-wider">Total Cataloged Volumes</span>
               <BookOpen className="w-4 h-4 text-primary" />
             </div>
-            <div className="text-2xl font-black text-slate-900">45,820</div>
-            <span className="text-[11px] text-emerald-600 font-medium">100% Barcode Indexed</span>
+            <div className="text-2xl font-black text-slate-900">{books.reduce((s, b: any) => s + Number(b.total_copies ?? b.copies ?? 1), 0)}</div>
+            <span className="text-[11px] text-slate-500">{books.length} titles</span>
           </CardContent>
         </Card>
 

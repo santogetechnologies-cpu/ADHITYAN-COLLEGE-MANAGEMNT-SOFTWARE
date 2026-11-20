@@ -128,7 +128,8 @@ export function StudentDashboard() {
       // 1. Overall grade % from verified examination results
       if (results && results.length > 0) {
         const totalPct = results.reduce((acc, r) => {
-          const max = Number(r.max_marks) || 100;
+          const max = Number(r.max_marks);
+          if (!max) return acc;
           const obtained = Number(r.marks_obtained) || 0;
           return acc + (obtained / max) * 100;
         }, 0);
@@ -137,7 +138,8 @@ export function StudentDashboard() {
         // Subject-wise bar breakdown
         const subjectMap: Record<string, number> = {};
         results.forEach(r => {
-          const max = Number(r.max_marks) || 100;
+          const max = Number(r.max_marks);
+          if (!max) return acc;
           const obtained = Number(r.marks_obtained) || 0;
           subjectMap[r.subject] = Math.round((obtained / max) * 100);
         });

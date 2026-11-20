@@ -187,21 +187,21 @@ export const BookTracking = () => {
         <Card>
           <CardContent className="p-6 text-center">
             <User className="h-8 w-8 mx-auto text-success mb-2" />
-            <p className="text-2xl font-bold">{activeIssuedCount || 342}</p>
+            <p className="text-2xl font-bold">{activeIssuedCount}</p>
             <p className="text-sm text-muted-foreground">Books Issued</p>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="p-6 text-center">
             <Clock className="h-8 w-8 mx-auto text-warning mb-2" />
-            <p className="text-2xl font-bold">{overdueCount || 23}</p>
+            <p className="text-2xl font-bold">{overdueCount}</p>
             <p className="text-sm text-muted-foreground">Overdue</p>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="p-6 text-center">
             <CheckCircle className="h-8 w-8 mx-auto text-success mb-2" />
-            <p className="text-2xl font-bold">{returnedCount || 156}</p>
+            <p className="text-2xl font-bold">{returnedCount}</p>
             <p className="text-sm text-muted-foreground">Returned Today</p>
           </CardContent>
         </Card>

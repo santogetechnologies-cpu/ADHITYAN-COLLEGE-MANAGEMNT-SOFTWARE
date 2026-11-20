@@ -112,7 +112,7 @@ export default function AdminAnalytics() {
             <Users className="h-4 w-4 text-blue-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{totalAccounts || 14}</div>
+            <div className="text-2xl font-bold">{totalAccounts}</div>
             <p className="text-xs text-muted-foreground">Enrolled user identities</p>
           </CardContent>
         </Card>
