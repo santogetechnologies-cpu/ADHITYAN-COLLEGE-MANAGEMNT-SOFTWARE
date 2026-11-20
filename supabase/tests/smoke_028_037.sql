@@ -478,6 +478,20 @@ SELECT pg_temp.chk('student cannot read NAAC metrics or progress', (SELECT count
 SELECT pg_temp.chk('no direct writes to progress', has_table_privilege('authenticated','public.naac_criterion_progress','UPDATE')=false);
 RESET ROLE;
 
+-- ---- 051 discipline ----
+SET LOCAL ROLE authenticated;
+SELECT set_config('request.jwt.claim.sub','c0000000-0000-0000-0000-000000000009',true);   -- teacher
+INSERT INTO public.disciplinary_incidents (student_name, roll_no, class_name, incident, severity, reported_by, incident_date, status) VALUES ('Smoke Pupil','D-1','ClassA','Smoke incident','Minor','Smoke Teacher',CURRENT_DATE,'Pending Review');
+SELECT pg_temp.chk('teacher sees the incident they reported', (SELECT count(*)=1 FROM public.disciplinary_incidents));
+SELECT pg_temp.chk('teacher cannot self-resolve', (public.discipline_update((SELECT id FROM public.disciplinary_incidents LIMIT 1),'Resolved','done')->>'code')='FORBIDDEN');
+SELECT pg_temp.chk('teacher cannot insert an already-resolved incident', pg_temp.fails($q$INSERT INTO public.disciplinary_incidents (student_name,incident,severity,reported_by,incident_date,status,action_taken) VALUES ('x','y','Minor','z',CURRENT_DATE,'Resolved','pre-decided')$q$));
+SELECT set_config('request.jwt.claim.sub','c0000000-0000-0000-0000-000000000001',true);   -- student
+SELECT pg_temp.chk('student sees no incidents', (SELECT count(*)=0 FROM public.disciplinary_incidents));
+SELECT set_config('request.jwt.claim.sub','c0000000-0000-0000-0000-000000000008',true);   -- admin
+SELECT pg_temp.chk('admin sees incidents and needs an action to resolve', (SELECT count(*)>=1 FROM public.disciplinary_incidents) AND (public.discipline_update((SELECT id FROM public.disciplinary_incidents LIMIT 1),'Resolved')->>'code')='ACTION_REQUIRED');
+SELECT pg_temp.chk('admin resolves with an action', (public.discipline_update((SELECT id FROM public.disciplinary_incidents LIMIT 1),'Resolved','Warning issued')->>'status')='Resolved');
+RESET ROLE;
+
 SELECT name, CASE WHEN ok THEN 'PASS' ELSE 'FAIL' END AS result FROM _r ORDER BY ok, name;
 DO $$ BEGIN
   IF EXISTS (SELECT 1 FROM _r WHERE NOT ok) THEN RAISE EXCEPTION 'SMOKE TEST FAILED'; END IF;

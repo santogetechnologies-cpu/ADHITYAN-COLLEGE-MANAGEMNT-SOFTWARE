@@ -38,6 +38,7 @@ back-fills of NULLs and a de-duplication of `super_admin_releases` rows with the
 | 048_certificates.sql | **SECURITY/INTEGRITY: certificates were created from the browser (typed name, made-up number) and showed as created even when saving failed.** Now `certificate_issue`, `certificate_request` (student), `certificate_decide` (reject needs a reason), public `certificate_verify`; server-generated number + hash; no direct writes; audited | 047 |
 | 049_medical.sql | **PRIVACY: teachers could read every student's health record — now owner/admin/principal only**; infirmary log limited to admin/principal/hostel warden; new `medical_emergency_contacts` and `wellness_alerts` tables; unique student ID per health record | 048 |
 | 050_naac.sql | **PRIVACY: NAAC evidence readable by every signed-in user (students, parents) and deletable by teachers — now staff-only, delete by coordinator/principal/admin**; new `naac_metrics`; progress % computed by trigger (no hand-typed %); evidence files go to a new PRIVATE bucket `naac-evidence` (signed links) instead of only saving the file name | 049 |
+| 051_discipline.sql | **PRIVACY/INTEGRITY: every teacher could read all disciplinary incidents and resolve any of them** — now reporters see only their own; principal/admin decide through audited `discipline_update` (a resolution needs the action taken); no direct update/delete | 050 |
 | 036_reconcile_legacy_columns.sql | `timetables.session_type`, `exam_schedules.day_of_week`, `student_attendance.*`, reception columns | 029 |
 
 **Behaviour changes to expect after 032:** buckets `documents`, `attachments`, `student_documents`, `staff_documents`
@@ -51,7 +52,7 @@ Not carried over on purpose: multi-college tables (`colleges`, `college_*`, `pla
 ```bash
 psql "$STAGING_DB_URL" -v ON_ERROR_STOP=1 -f supabase/tests/smoke_028_037.sql   # synthetic data, rolls back
 ```
-All lines must read PASS (202 checks). Edge-function checks: `scripts/test-edge-gate.sh` (type-check + authorization/validation cases; needs no database). Then in the SQL editor: `select count(*) from public.profiles where role is null;` (must be 0).
+All lines must read PASS (208 checks). Edge-function checks: `scripts/test-edge-gate.sh` (type-check + authorization/validation cases; needs no database). Then in the SQL editor: `select count(*) from public.profiles where role is null;` (must be 0).
 
 ### Rollback
 Each file is one transaction, so a failure leaves nothing half-applied. To undo a *successful* run use the backup/PITR from

@@ -175,3 +175,9 @@ Legend: ✅ done & verified as stated · 🟡 written, not runnable here · ⬜ 
 | Item | Status | Evidence |
 |------|--------|----------|
 | Events and teams: add/edit/delete/status persisted in the database; participation by sport from real rows; export | 🟡 UI | build; dead buttons 25 → ~21 |
+
+## Module — Discipline (migration 051)
+| Item | Status | Evidence |
+|------|--------|----------|
+| Own-reports-only visibility, principal/admin decisions with audit, resolve needs an action | ✅ SQL | 6 smoke checks (208 total) |
+| Screen: failed reports/resolutions now show the error instead of success; fake defaults (ST001, B.VOC MLT class) removed; Edit button → "Start investigation"; unused service that wrote a non-existent column deleted | 🟡 UI | build |
