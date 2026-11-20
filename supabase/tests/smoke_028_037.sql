@@ -691,6 +691,24 @@ SELECT pg_temp.chk('a decided application cannot be decided again', (public.staf
 RESET ROLE;
 SELECT pg_temp.chk('quota untouched by the refused request and LOP', (SELECT casual_leave_taken=2 FROM public.staff_leave_balances WHERE user_id='c0000000-0000-0000-0000-0000000000a3' AND academic_year='2026-2027'));
 
+-- ---- 063 scholarships ----
+INSERT INTO public.student_fees(id,student_id,student_name,class_name,total_due,paid_amount,due_date,status,original_amount) VALUES ('c9600000-0000-0000-0000-000000000001','c0000000-0000-0000-0000-0000000000c1','Place Student','ClassA',1000,0,CURRENT_DATE+30,'pending',1000);
+INSERT INTO public.scholarship_applications (id, student_id, student_name, roll_number, department, scholarship_name, academic_year, requested_amount, status)
+ VALUES ('c9700000-0000-0000-0000-000000000001','c0000000-0000-0000-0000-0000000000c1','Place Student','PL-1','Nursing','Smoke Aid','2026-27',400,'Submitted'),
+        ('c9700000-0000-0000-0000-000000000002','c0000000-0000-0000-0000-0000000000c1','Place Student','PL-1','Nursing','Smoke Aid','2026-27',400,'Submitted');
+SET LOCAL ROLE authenticated;
+SELECT set_config('request.jwt.claim.sub','c0000000-0000-0000-0000-0000000000c1',true);   -- the student
+UPDATE public.scholarship_applications SET sanctioned_amount=999, requested_amount=450 WHERE id='c9700000-0000-0000-0000-000000000001';
+SELECT pg_temp.chk('a student cannot decide their own scholarship', (public.scholarship_decide('c9700000-0000-0000-0000-000000000001','Approve',400)->>'code')='FORBIDDEN');
+SELECT set_config('request.jwt.claim.sub','c0000000-0000-0000-0000-000000000008',true);   -- admin
+SELECT pg_temp.chk('a student cannot self-sanction an amount', (SELECT sanctioned_amount IS DISTINCT FROM 999 AND requested_amount=450 FROM public.scholarship_applications WHERE id='c9700000-0000-0000-0000-000000000001'));
+SELECT pg_temp.chk('approval needs an amount', (public.scholarship_decide('c9700000-0000-0000-0000-000000000001','Approve')->>'code')='INVALID_AMOUNT');
+SELECT pg_temp.chk('amount above the balance is refused', (public.scholarship_decide('c9700000-0000-0000-0000-000000000001','Approve',5000)->>'code')='EXCEEDS_BALANCE');
+SELECT pg_temp.chk('approval applies the concession through the fee ledger', (public.scholarship_decide('c9700000-0000-0000-0000-000000000001','Approve',400)->>'status')='Approved');
+SELECT pg_temp.chk('rejecting needs a reason', (public.scholarship_decide('c9700000-0000-0000-0000-000000000002','Reject')->>'code')='REASON_REQUIRED');
+RESET ROLE;
+SELECT pg_temp.chk('fee balance reduced, waived tracked, adjustment recorded', (SELECT total_due=600 AND waived_amount=400 FROM public.student_fees WHERE id='c9600000-0000-0000-0000-000000000001') AND (SELECT count(*)=1 FROM public.fee_adjustments WHERE student_fee_id='c9600000-0000-0000-0000-000000000001' AND kind='concession' AND amount=400));
+
 SELECT name, CASE WHEN ok THEN 'PASS' ELSE 'FAIL' END AS result FROM _r ORDER BY ok, name;
 DO $$ BEGIN
   IF EXISTS (SELECT 1 FROM _r WHERE NOT ok) THEN RAISE EXCEPTION 'SMOKE TEST FAILED'; END IF;

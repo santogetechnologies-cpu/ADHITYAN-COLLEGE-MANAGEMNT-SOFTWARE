@@ -4735,89 +4735,24 @@ export const db = {
     }
   },
 
-  async updateScholarshipStatus(id: string, status: string, sanctionedAmount?: number, approvedBy?: string): Promise<boolean> {
-    try {
-      const isUuid = approvedBy && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(approvedBy);
-      const updates = {
-        status,
-        sanctioned_amount: sanctionedAmount !== undefined ? sanctionedAmount : undefined,
-        approved_by: isUuid ? approvedBy : null,
-        updated_at: new Date().toISOString()
-      };
-      const admin = await getAdminClient();
-      const targetClient = admin || supabase;
-      let { data, error } = await targetClient.from('scholarship_applications').update(updates).eq('id', id).select();
-      if (error && admin && targetClient !== admin) {
-        const res = await admin.from('scholarship_applications').update(updates).eq('id', id).select();
-        if (!res.error) data = res.data;
-      }
-
-      // If approved with sanctioned amount, apply concession to student_fees
-      if (status === 'Approved' && sanctionedAmount && sanctionedAmount > 0) {
-        const { data: appData } = await targetClient
-          .from('scholarship_applications')
-          .select('*')
-          .eq('id', id)
-          .single();
-
-        if (appData?.student_id) {
-          const fees = await this.getStudentFees(appData.student_id);
-          if (fees && fees.length > 0) {
-            const fee = fees[0];
-            const currentDue = Number(fee.total_due || 0);
-            const concession = Math.min(currentDue, Number(sanctionedAmount));
-            const newDue = Math.max(0, currentDue - concession);
-            const newStatus = newDue === 0 ? 'paid' : fee.status;
-
-            await targetClient
-              .from('student_fees')
-              .update({
-                total_due: newDue,
-                status: newStatus
-              })
-              .eq('id', fee.id);
-          }
-
-          // Record in finance_transactions
-          await targetClient.from('finance_transactions').insert({
-            type: 'Scholarship / Concession',
-            amount: Number(sanctionedAmount),
-            department: 'Academic Accounts',
-            description: `Scholarship waiver of ₹${sanctionedAmount} approved for ${appData.student_name} (${appData.scholarship_name})`,
-            status: 'Approved',
-            date: new Date().toISOString().split('T')[0]
-          });
-
-          // Notify student
-          await this.createNotification({
-            user_id: appData.student_id,
-            title: 'Scholarship Concession Sanctioned',
-            message: `Congratulations! Your scholarship concession of ₹${Number(sanctionedAmount).toLocaleString('en-IN')} for ${appData.scholarship_name} has been approved and applied to your fee ledger.`,
-            type: 'success',
-            priority: 'high',
-            is_read: false
-          });
-
-          // Notify linked parents
-          const parentIds = await this.getParentsForStudent(appData.student_id);
-          for (const pid of parentIds) {
-            await this.createNotification({
-              user_id: pid,
-              title: 'Ward Scholarship Concession Approved',
-              message: `A fee concession of ₹${Number(sanctionedAmount).toLocaleString('en-IN')} for ${appData.scholarship_name} has been applied to ${appData.student_name}'s academic account.`,
-              type: 'success',
-              priority: 'high',
-              is_read: false
-            });
-          }
-        }
-      }
-
-      return true;
-    } catch (err) {
-      console.error('updateScholarshipStatus error:', err);
-      return false;
+  /** Scholarship decisions run on the server: the concession is applied through the fee ledger (audited, waived amount tracked). */
+  async updateScholarshipStatus(id: string, status: string, sanctionedAmount?: number, _approvedBy?: string, reason?: string, studentFeeId?: string): Promise<boolean> {
+    const sb: any = supabase;
+    const decision = String(status).toLowerCase().startsWith('reject') ? 'Reject' : 'Approve';
+    const { data, error } = await sb.rpc('scholarship_decide', { p_id: id, p_decision: decision, p_amount: sanctionedAmount ?? null, p_student_fee_id: studentFeeId ?? null, p_reason: reason ?? null });
+    if (error) throw new Error(error.message);
+    if (!data?.success) throw new Error(data?.error || 'The scholarship could not be updated.');
+    // tell the student (best effort; the money has already moved)
+    const { data: app } = await sb.from('scholarship_applications').select('student_id, scholarship_name').eq('id', id).maybeSingle();
+    if (app?.student_id) {
+      await this.createNotification({
+        user_id: app.student_id,
+        title: decision === 'Approve' ? 'Scholarship concession sanctioned' : 'Scholarship application declined',
+        message: decision === 'Approve' ? `₹${Number(sanctionedAmount).toLocaleString('en-IN')} for ${app.scholarship_name ?? 'your scholarship'} has been applied to your fees.` : `Your application for ${app.scholarship_name ?? 'the scholarship'} was not approved.${reason ? ` Reason: ${reason}` : ''}`,
+        type: decision === 'Approve' ? 'success' : 'info', priority: 'high', is_read: false
+      } as any);
     }
+    return true;
   },
 
   async getFeeReceipts(studentId?: string, rollNumber?: string): Promise<T.FeeReceipt[]> {

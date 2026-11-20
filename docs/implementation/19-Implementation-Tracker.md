@@ -258,3 +258,9 @@ Legend: ✅ done & verified as stated · 🟡 written, not runnable here · ⬜ 
 |------|--------|----------|
 | Decision function (no self-approval, reason on reject, ledger-checked quota), days-fit-dates constraint | ✅ SQL | 8 smoke checks (282 total) |
 | HR leave manager: failed approvals used to be shown as done (local state set regardless); now real result + reload; rejection asks for a reason; recording leave validates days against dates | 🟡 UI | build |
+
+## Scholarships (063) and principal approvals
+| Item | Status | Evidence |
+|------|--------|----------|
+| Server-side scholarship decision through the fee ledger; student cannot self-sanction | ✅ SQL | 7 smoke checks (289 total) |
+| Principal dashboard: scholarship approval/decline uses it (decline needs a reason); "approve admission" no longer calls the legacy non-atomic `confirm_admission` (which also invented the programme 'Paramedical Sciences' and class "Year 1") — it approves via the lifecycle and points to Admission Management for offer/enrolment | 🟡 UI | build |

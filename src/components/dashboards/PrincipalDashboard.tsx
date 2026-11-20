@@ -310,7 +310,9 @@ export default function PrincipalDashboard() {
   const handleRejectScholarship = async (id: string) => {
     setActionLoadingId(id);
     try {
-      const ok = await db.updateScholarshipStatus(id, 'Rejected', 0, principalProfile?.id);
+      const reason = window.prompt('Reason for declining this scholarship (required):');
+      if (!reason || reason.trim().length < 3) { setActionLoadingId(null); return; }
+      const ok = await db.updateScholarshipStatus(id, 'Rejected', 0, principalProfile?.id, reason.trim());
       if (ok) {
         setScholarships(prev => prev.map(s => s.id === id ? { ...s, status: 'Rejected' } : s));
         toast({
@@ -333,36 +335,18 @@ export default function PrincipalDashboard() {
   const handleApproveAdmission = async (app: AdmissionApplication) => {
     setActionLoadingId(app.id);
     try {
-      const prog = app.class_name || app.class_applied || 'Paramedical Sciences';
-      const result = await studentParentAuthService.confirmAdmission({
-        application_id: app.id,
-        student: {
-          name: app.applicant_name || app.name || 'Student',
-          email: app.email,
-          phone: app.phone,
-          department: prog,
-          class_name: `${prog} - Year 1`,
-          date_of_birth: app.date_of_birth,
-          address: app.address,
-          previous_school: app.previous_school,
-        },
-        parent: {
-          name: app.parent_name || 'Parent of ' + (app.applicant_name || app.name),
-          phone: app.parent_phone || app.phone,
-          relationship: 'Parent',
-        },
-      });
-
-      // confirm_admission approves + enrols the application itself; no second status write needed
+      // Approval is one step of the admission lifecycle. The offer, deposit and enrolment (which creates the student record and
+      // login) are done in Admission Management, where seats, quota and documents are checked.
+      await db.updateAdmissionStatus(app.id, 'Approved', 'Approved by Principal');
       toast({
-        title: "Admission Sanctioned & Provisioned",
-        description: `Student ID: ${result.student.student_id} • Parent ID: ${result.parent.parent_id}`,
+        title: "Application approved",
+        description: "Continue with the offer and enrolment in Admission Management.",
       });
       await loadData();
     } catch (err: any) {
       toast({
-        title: "Sanction Failed",
-        description: err.message || "Failed to sanction admission.",
+        title: "Approval failed",
+        description: err.message || "Could not approve the application.",
         variant: "destructive",
       });
     } finally {
