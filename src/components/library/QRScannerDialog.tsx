@@ -45,27 +45,17 @@ export const QRScannerDialog = ({ open, onOpenChange, onCodeScanned, mode }: QRS
     setIsScanning(false);
   };
 
-  const simulateQRScan = () => {
-    // Simulate QR code detection
-    setTimeout(() => {
-      const sampleCodes = {
-        book: ['BK001', 'BK002', 'BK003', 'BK004'],
-        student: ['ST001', 'ST002', 'ST003', 'ST004']
-      };
-      
-      const type = Math.random() > 0.5 ? 'book' : 'student';
-      const codes = sampleCodes[type];
-      const code = codes[Math.floor(Math.random() * codes.length)];
-      
-      setScanResult({ code, type });
-      stopScanning();
-    }, 2000);
+  const handleDetectCode = async (code: string) => {
+    const trimmed = code.trim();
+    if (!trimmed) return;
+    const isBook = trimmed.toUpperCase().startsWith('BK') || trimmed.includes('-');
+    setScanResult({ code: trimmed, type: isBook ? 'book' : 'student' });
+    stopScanning();
   };
 
   const handleManualSubmit = () => {
     if (manualInput.trim()) {
-      const type = manualInput.toUpperCase().startsWith('BK') ? 'book' : 'student';
-      setScanResult({ code: manualInput.trim(), type });
+      handleDetectCode(manualInput.trim());
     }
   };
 
@@ -134,12 +124,9 @@ export const QRScannerDialog = ({ open, onOpenChange, onCodeScanned, mode }: QRS
                     className="w-full h-48 bg-black rounded"
                   />
                   <div className="flex gap-2">
-                    <Button onClick={simulateQRScan} className="flex-1">
-                      <Scan className="h-4 w-4 mr-2" />
-                      Simulate Scan
-                    </Button>
-                    <Button variant="outline" onClick={stopScanning}>
-                      <X className="h-4 w-4" />
+                    <Button variant="outline" onClick={stopScanning} className="w-full">
+                      <X className="h-4 w-4 mr-2" />
+                      Close Camera
                     </Button>
                   </div>
                 </div>

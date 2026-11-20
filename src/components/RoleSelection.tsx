@@ -1,246 +1,470 @@
+import { useState, useEffect, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Skeleton } from '@/components/ui/skeleton';
 import { UserRole } from '@/context/AuthContext';
-import { GraduationCap, Heart, BookOpen, Shield, Users, BarChart3, MessageCircle, Calendar, Phone, Package, CreditCard, Bus } from 'lucide-react';
+import { db } from '@/services/supabase/database';
+import { useRealtimeSubscription } from '@/hooks/useRealtimeSubscription';
+import { 
+  GraduationCap, 
+  Heart, 
+  BookOpen, 
+  Shield, 
+  Users, 
+  Calendar, 
+  Phone, 
+  Package, 
+  CreditCard, 
+  Bus,
+  Building2,
+  Briefcase,
+  Library,
+  Home,
+  Award,
+  LogIn,
+  CheckCircle2
+} from 'lucide-react';
+
 interface RoleSelectionProps {
-  onSelectRole: (role: UserRole) => void;
+  onSelectRole: (role?: UserRole) => void;
 }
-const roles = [{
-  id: 'student' as UserRole,
-  title: 'Student Portal',
-  description: 'Access your personalized learning dashboard, AI mentor, assignments, and more',
-  icon: GraduationCap,
-  features: ['AI-Powered Learning', 'Assignment Tracking', 'Health Check-ins', 'Peer Communities'],
-  color: 'bg-gradient-primary'
-}, {
-  id: 'parent' as UserRole,
-  title: 'Parent Dashboard',
-  description: 'Monitor your child\'s academic progress, attendance, and overall wellbeing',
-  icon: Heart,
-  features: ['Progress Monitoring', 'Health Insights', 'Teacher Communication', 'Fee Management'],
-  color: 'bg-gradient-secondary'
-}, {
-  id: 'teacher' as UserRole,
-  title: 'Teacher Hub',
-  description: 'Manage classes, create content, track student progress, and engage with parents',
-  icon: BookOpen,
-  features: ['Class Management', 'AI Lesson Plans', 'Student Analytics', 'Content Creation'],
-  color: 'bg-gradient-accent'
-}, {
-  id: 'admin' as UserRole,
-  title: 'Admin Console',
-  description: 'Comprehensive institution management with analytics and administrative tools',
-  icon: Shield,
-  features: ['Institution Analytics', 'Staff Management', 'System Administration', 'Reports & Insights'],
-  color: 'bg-gradient-hero'
-}];
-const additionalRoles = [{
-  id: 'receptionist' as UserRole,
-  title: 'Receptionist',
-  description: 'Front office & visitor management',
-  icon: Phone,
-  features: ['Visitor Check-in', 'Appointment Booking', 'Enquiry Tracker', 'Notice Distribution'],
-  color: 'bg-blue-500'
-}, {
-  id: 'store_manager' as UserRole,
-  title: 'Store Manager',
-  description: 'Inventory & asset management',
-  icon: Package,
-  features: ['Stock Management', 'Low Stock Alerts', 'Book Distribution', 'Vendor Management'],
-  color: 'bg-green-500'
-}, {
-  id: 'finance_manager' as UserRole,
-  title: 'Finance Manager',
-  description: 'Financial oversight & fee management',
-  icon: CreditCard,
-  features: ['Fee Collection', 'Payment Gateway', 'Payroll Management', 'Budget Reports'],
-  color: 'bg-yellow-500'
-}, {
-  id: 'transport_driver' as UserRole,
-  title: 'Transport Driver',
-  description: 'Student transport & safety',
-  icon: Bus,
-  features: ['Route Management', 'GPS Tracking', 'Student Check-in', 'Vehicle Maintenance'],
-  color: 'bg-purple-500'
-}];
-const stats = [{
-  icon: Users,
-  value: '500+',
-  label: 'Active Students'
-}, {
-  icon: BookOpen,
-  value: '35+',
-  label: 'Courses Available'
-}, {
-  icon: BarChart3,
-  value: '95%',
-  label: 'Success Rate'
-}, {
-  icon: MessageCircle,
-  value: '24/7',
-  label: 'AI Support'
-}];
-export function RoleSelection({
-  onSelectRole
-}: RoleSelectionProps) {
-  return <div className="min-h-screen bg-background">
+
+export interface PortalRoleCard {
+  id: UserRole;
+  title: string;
+  category: 'academic' | 'management' | 'services';
+  description: string;
+  icon: any;
+  features: string[];
+  color: string;
+}
+
+export const ALL_13_PORTALS: PortalRoleCard[] = [
+  // 1. Academic & Student Portals
+  {
+    id: 'student',
+    title: 'Student Portal',
+    category: 'academic',
+    description: 'Personalized course hub, assignments, schedules & exam tracking',
+    icon: GraduationCap,
+    features: ['Vocational Modules', 'Lab Worksheets', 'Exam Timetables', 'Attendance'],
+    color: 'bg-blue-600'
+  },
+  {
+    id: 'parent',
+    title: 'Parent Portal',
+    category: 'academic',
+    description: 'Academic progress, attendance telemetry, fees & faculty contact',
+    icon: Heart,
+    features: ['Academic Monitoring', 'Fee Payment Status', 'Direct Messaging', 'Attendance Alerts'],
+    color: 'bg-rose-500'
+  },
+  {
+    id: 'teacher',
+    title: 'Faculty & Teacher Hub',
+    category: 'academic',
+    description: 'Batch management, curriculum lectures, lab practicals & grading',
+    icon: BookOpen,
+    features: ['Lecture Planning', 'Student Attendance', 'Lab Practicals', 'Gradebook'],
+    color: 'bg-emerald-600'
+  },
+  {
+    id: 'principal',
+    title: 'Principal / Dean Portal',
+    category: 'academic',
+    description: 'Institutional leadership, academic audit, faculty overview & NAAC',
+    icon: Building2,
+    features: ['Curriculum Audit', 'Faculty Workload', 'Academic Approvals', 'Institution Insights'],
+    color: 'bg-indigo-600'
+  },
+
+  // 2. Administrative & Operations Portals
+  {
+    id: 'admin',
+    title: 'Administrator Console',
+    category: 'management',
+    description: 'Central ERP management, RBAC provisioning & system telemetry',
+    icon: Shield,
+    features: ['Full User Provisioning', 'Database Telemetry', 'Timetable Desk', 'Department Oversight'],
+    color: 'bg-purple-600'
+  },
+  {
+    id: 'finance_manager',
+    title: 'Finance Manager',
+    category: 'management',
+    description: 'Fee collection desk, institutional accounting, balance sheets & payroll',
+    icon: CreditCard,
+    features: ['Fee Ledgers', 'Receipt Generation', 'Income Audits', 'Vendor Payments'],
+    color: 'bg-amber-600'
+  },
+  {
+    id: 'hr_manager',
+    title: 'HR Manager',
+    category: 'management',
+    description: 'Faculty hiring, biometric attendance, staff leave & payroll management',
+    icon: Briefcase,
+    features: ['Staff Profiles', 'Leave Processing', 'Salary Disbursal', 'Workforce Records'],
+    color: 'bg-teal-600'
+  },
+  {
+    id: 'receptionist',
+    title: 'Receptionist Desk',
+    category: 'management',
+    description: 'Front office visitor logs, gate passes, enquiries & student check-ins',
+    icon: Phone,
+    features: ['Visitor Check-In', 'Campus Enquiries', 'Appointment Desk', 'Front Office'],
+    color: 'bg-cyan-600'
+  },
+
+  // 3. Campus Services & Facilities Portals
+  {
+    id: 'librarian',
+    title: 'Chief Librarian',
+    category: 'services',
+    description: 'Medical textbooks, cataloging, book checkout & digital library repository',
+    icon: Library,
+    features: ['Digital Catalog', 'Book Checkouts', 'Fine Tracking', 'e-Journals'],
+    color: 'bg-blue-700'
+  },
+  {
+    id: 'hostel_warden',
+    title: 'Hostel Warden',
+    category: 'services',
+    description: 'Student hostel room allocation, mess management & night roll call',
+    icon: Home,
+    features: ['Room Allotment', 'Mess Attendance', 'Gate Leave Passes', 'Hostel Incidents'],
+    color: 'bg-orange-600'
+  },
+  {
+    id: 'placement_officer',
+    title: 'Placement Officer',
+    category: 'services',
+    description: 'Hospital tie-ups, corporate internships, student drives & placement stats',
+    icon: Award,
+    features: ['Hospital Postings', 'Recruitment Drives', 'Student Resumes', 'Placement Records'],
+    color: 'bg-yellow-600'
+  },
+  {
+    id: 'store_manager',
+    title: 'Store Manager',
+    category: 'services',
+    description: 'Lab inventory, medical equipment, uniforms & stock replenishment',
+    icon: Package,
+    features: ['Stock Ledger', 'Low Stock Alerts', 'Requisition Approval', 'Uniform Issuance'],
+    color: 'bg-emerald-700'
+  },
+  {
+    id: 'transport_driver',
+    title: 'Transport Driver',
+    category: 'services',
+    description: 'Bus fleet GPS navigation, route stops, safety logs & vehicle health',
+    icon: Bus,
+    features: ['GPS Route Board', 'Trip Check-In', 'Student Boarding', 'Maintenance Log'],
+    color: 'bg-violet-600'
+  }
+];
+
+export function RoleSelection({ onSelectRole }: RoleSelectionProps) {
+  const [statsLoading, setStatsLoading] = useState(true);
+  const [dbStats, setDbStats] = useState({
+    totalRegisteredUsers: 13,
+    activeStudents: 0,
+    totalTeachers: 0,
+    coursesCount: 9
+  });
+
+  const loadLiveStats = useCallback(async () => {
+    try {
+      const stats = await db.getSystemOverviewStats();
+      setDbStats({
+        totalRegisteredUsers: stats.totalRegisteredUsers || 13,
+        activeStudents: stats.activeStudents || 0,
+        totalTeachers: stats.totalTeachers || 0,
+        coursesCount: 9
+      });
+    } catch (err) {
+      console.warn('Could not load home page live stats:', err);
+    } finally {
+      setStatsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadLiveStats();
+  }, [loadLiveStats]);
+
+  // Real-time synchronization: automatically updates registered count if new user is added or removed
+  useRealtimeSubscription({ table: 'profiles', onChange: loadLiveStats, onReconnect: loadLiveStats });
+
+  const statsItems = [
+    {
+      icon: Users,
+      value: dbStats.totalRegisteredUsers.toString(),
+      label: 'Registered Accounts',
+      subtext: 'Across all 13 institutional portals'
+    },
+    {
+      icon: GraduationCap,
+      value: dbStats.activeStudents > 0 ? dbStats.activeStudents.toString() : 'Active',
+      label: 'Enrolled Students',
+      subtext: 'Medical & Vocational degree cohorts'
+    },
+    {
+      icon: BookOpen,
+      value: `${dbStats.coursesCount} Courses`,
+      label: 'Accredited Programs',
+      subtext: 'B.VOC & Professional Diplomas'
+    },
+    {
+      icon: Shield,
+      value: '13 Portals',
+      label: 'Role-Based Access',
+      subtext: '100% RBAC security verified'
+    }
+  ];
+
+  return (
+    <div className="min-h-screen bg-background">
       {/* Header */}
-      <header className="border-b bg-card shadow-sm">
-        <div className="container mx-auto px-4 py-4">
+      <header className="border-b bg-card/80 backdrop-blur sticky top-0 z-50 shadow-sm">
+        <div className="container mx-auto px-4 py-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-3">
-              <div className="w-10 h-10 rounded-lg flex items-center justify-center p-1">
-                <img src="/lovable-uploads/8ea95178-bb37-43e2-ae4d-595e31707954.png" alt="Adhithyan Institute Logo" className="w-full h-full object-contain" />
+              <div className="w-10 h-10 rounded-lg flex items-center justify-center p-1 bg-primary/10">
+                <img 
+                  src="/lovable-uploads/8ea95178-bb37-43e2-ae4d-595e31707954.png" 
+                  alt="Adithyan College Logo" 
+                  className="w-full h-full object-contain" 
+                />
               </div>
               <div>
-                <h1 className="text-xl font-bold text-foreground">Adhithyan</h1>
-                <p className="text-xs text-muted-foreground">AI&MCP Edu System</p>
+                <h1 className="text-lg font-bold text-foreground tracking-tight leading-none">
+                  Adithyan College
+                </h1>
+                <p className="text-[11px] text-muted-foreground">College Management ERP & LMS</p>
               </div>
             </div>
-            <div className="flex items-center space-x-2">
-              <Calendar className="w-4 h-4 text-muted-foreground" />
-              <span className="text-sm text-muted-foreground">
-                {new Date().toLocaleDateString('en-US', {
-                weekday: 'long',
-                year: 'numeric',
-                month: 'long',
-                day: 'numeric'
-              })}
-              </span>
+
+            <div className="flex items-center gap-3">
+              <div className="hidden sm:flex items-center space-x-1.5 text-xs text-muted-foreground border px-2.5 py-1 rounded-full">
+                <Calendar className="w-3.5 h-3.5" />
+                <span>
+                  {new Date().toLocaleDateString('en-US', {
+                    weekday: 'short',
+                    month: 'short',
+                    day: 'numeric',
+                    year: 'numeric'
+                  })}
+                </span>
+              </div>
+              <Button 
+                onClick={() => onSelectRole()} 
+                size="sm"
+                className="bg-primary hover:bg-primary/90 text-primary-foreground shadow-sm"
+              >
+                <LogIn className="w-4 h-4 mr-1.5" />
+                Universal Sign In
+              </Button>
             </div>
           </div>
         </div>
       </header>
 
       {/* Hero Section */}
-      <section className="bg-gradient-hero text-primary-foreground py-16 relative overflow-hidden">
-        {/* Animated background elements */}
-        <div className="absolute inset-0 opacity-10">
-          <div className="absolute top-20 left-10 w-32 h-32 border border-white/20 rounded-full animate-pulse"></div>
-          <div className="absolute top-40 right-20 w-24 h-24 border border-white/20 rounded-full animate-pulse" style={{animationDelay: '1s'}}></div>
-          <div className="absolute bottom-20 left-1/4 w-16 h-16 border border-white/20 rounded-full animate-pulse" style={{animationDelay: '2s'}}></div>
-          <div className="absolute top-1/3 right-1/3 w-20 h-20 border border-white/20 rounded-full animate-pulse" style={{animationDelay: '0.5s'}}></div>
-        </div>
-        
-        <div className="container mx-auto px-4 text-center relative z-10">
-          <h1 className="text-4xl md:text-6xl font-bold mb-6 animate-fade-in">
-            <span className="inline-block hover-scale">The Future of</span>
-            <span className="block bg-gradient-accent bg-clip-text text-transparent animate-fade-in hover-scale" style={{animationDelay: '0.3s'}}>
-              Educational Excellence
-            </span>
-          </h1>
-          <p className="text-xl md:text-2xl mb-8 opacity-90 max-w-3xl mx-auto animate-fade-in" style={{animationDelay: '0.6s'}}>
-            Empowering students, parents, teachers, and administrators with AI-driven learning, 
-            wellness tracking, and comprehensive analytics.
-          </p>
-          
-          {/* Stats */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-6 max-w-4xl mx-auto mb-12">
-            {stats.map((stat, index) => <div key={index} className="text-center animate-fade-in hover-scale group" style={{animationDelay: `${0.9 + index * 0.1}s`}}>
-                <div className="w-12 h-12 mx-auto mb-2 bg-white/20 rounded-full flex items-center justify-center transition-all duration-300 group-hover:bg-white/30 group-hover:scale-110">
-                  <stat.icon className="w-6 h-6 transition-transform duration-300 group-hover:scale-110" />
-                </div>
-                <div className="text-2xl font-bold transition-transform duration-300 group-hover:scale-105">{stat.value}</div>
-                <div className="text-sm opacity-80">{stat.label}</div>
-              </div>)}
+      <section className="bg-gradient-hero text-primary-foreground py-14 px-4 relative overflow-hidden">
+        <div className="container mx-auto text-center relative z-10 max-w-4xl">
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 text-xs font-medium mb-4 backdrop-blur border border-white/20">
+            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+            <span>Role-Based Access Control • All 13 Institutional Portals Live</span>
           </div>
-        </div>
-        
-        {/* Floating particles */}
-        <div className="absolute inset-0 pointer-events-none">
-          <div className="absolute top-1/4 left-1/6 w-2 h-2 bg-white/30 rounded-full animate-pulse" style={{animationDelay: '3s'}}></div>
-          <div className="absolute top-3/4 right-1/5 w-1 h-1 bg-white/40 rounded-full animate-pulse" style={{animationDelay: '4s'}}></div>
-          <div className="absolute top-1/2 left-3/4 w-1.5 h-1.5 bg-white/20 rounded-full animate-pulse" style={{animationDelay: '2.5s'}}></div>
+
+          <h1 className="text-3xl md:text-5xl font-extrabold mb-4 tracking-tight leading-tight">
+            Institutional Management System
+          </h1>
+          <p className="text-base md:text-xl mb-8 opacity-90 max-w-2xl mx-auto font-light">
+            Integrated academic administration, clinical rotation schedules, automated fee ledgers, and role-secured dashboards.
+          </p>
+
+          <div className="flex flex-wrap justify-center gap-3 mb-10">
+            <Button 
+              size="lg" 
+              onClick={() => onSelectRole()}
+              className="bg-white text-primary hover:bg-white/90 font-semibold shadow-md"
+            >
+              <LogIn className="w-4 h-4 mr-2" />
+              Sign In to Your Account
+            </Button>
+          </div>
+
+          {/* Dynamic Real-time Database Stats */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 max-w-4xl mx-auto pt-2 border-t border-white/20">
+            {statsItems.map((stat, index) => (
+              <div key={index} className="text-center p-3 rounded-lg bg-white/5 backdrop-blur border border-white/10">
+                <div className="w-9 h-9 mx-auto mb-1.5 bg-white/20 rounded-full flex items-center justify-center">
+                  <stat.icon className="w-5 h-5 text-white" />
+                </div>
+                {statsLoading ? (
+                  <Skeleton className="h-6 w-16 mx-auto mb-1 bg-white/20" />
+                ) : (
+                  <div className="text-2xl font-bold tracking-tight">{stat.value}</div>
+                )}
+                <div className="text-xs font-semibold">{stat.label}</div>
+                <div className="text-[10px] opacity-75 mt-0.5 line-clamp-1">{stat.subtext}</div>
+              </div>
+            ))}
+          </div>
         </div>
       </section>
 
-      {/* Role Selection */}
-      <section className="py-16 px-4">
-        <div className="container mx-auto">
-          <div className="text-center mb-12">
-            <h2 className="text-3xl md:text-4xl font-bold mb-4">Choose Your Portal</h2>
-            <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-              Select your role to access your personalized dashboard with tailored features and tools.
-            </p>
+      {/* Role Selection Grid - All 13 User Roles */}
+      <section className="py-12 px-4 max-w-6xl mx-auto space-y-10">
+        <div className="text-center space-y-2">
+          <h2 className="text-2xl md:text-3xl font-bold tracking-tight">Access Institutional Portals</h2>
+          <p className="text-sm text-muted-foreground max-w-xl mx-auto">
+            Select your assigned institutional role to sign in directly to your role-specific dashboard
+          </p>
+        </div>
+
+        {/* Category 1: Academic & Instruction */}
+        <div className="space-y-4">
+          <div className="flex items-center gap-2 border-b pb-2">
+            <GraduationCap className="w-5 h-5 text-primary" />
+            <h3 className="font-bold text-base tracking-tight">Academic & Student Portals</h3>
           </div>
-          
-          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6 max-w-6xl mx-auto">
-            {roles.map(role => {
-            const IconComponent = role.icon;
-            return <Card key={role.id} className="relative overflow-hidden hover:shadow-xl transition-smooth cursor-pointer group transform hover:scale-105 animate-fade-in" onClick={() => onSelectRole(role.id)}>
-                  <div className={`absolute inset-0 ${role.color} opacity-5 group-hover:opacity-10 transition-smooth`} />
-                  <CardHeader className="text-center pb-4">
-                    <div className={`w-16 h-16 mx-auto mb-4 ${role.color} rounded-full flex items-center justify-center shadow-lg`}>
-                      <IconComponent className="w-8 h-8 text-primary-foreground" />
+          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            {ALL_13_PORTALS.filter(p => p.category === 'academic').map(portal => {
+              const Icon = portal.icon;
+              return (
+                <Card 
+                  key={portal.id} 
+                  className="hover:shadow-md hover:border-primary/50 transition-all cursor-pointer flex flex-col justify-between group"
+                  onClick={() => onSelectRole(portal.id)}
+                >
+                  <CardHeader className="p-4 pb-2">
+                    <div className={`w-10 h-10 rounded-lg ${portal.color} flex items-center justify-center mb-2 shadow-sm text-white`}>
+                      <Icon className="w-5 h-5" />
                     </div>
-                    <CardTitle className="text-xl">{role.title}</CardTitle>
-                    <CardDescription className="text-sm">
-                      {role.description}
+                    <CardTitle className="text-base font-bold group-hover:text-primary transition-colors">
+                      {portal.title}
+                    </CardTitle>
+                    <CardDescription className="text-xs line-clamp-2 mt-1">
+                      {portal.description}
                     </CardDescription>
                   </CardHeader>
-                  <CardContent className="space-y-3">
-                    <ul className="space-y-2">
-                      {role.features.map((feature, index) => <li key={index} className="text-sm flex items-center">
-                          <div className="w-1.5 h-1.5 bg-primary rounded-full mr-2" />
-                          {feature}
-                        </li>)}
-                    </ul>
-                    <Button variant="outline" className="w-full mt-4 group-hover:bg-primary group-hover:text-primary-foreground">
+                  <CardContent className="p-4 pt-2 space-y-3">
+                    <div className="space-y-1">
+                      {portal.features.slice(0, 3).map((f, i) => (
+                        <div key={i} className="text-[11px] text-muted-foreground flex items-center gap-1.5">
+                          <span className="w-1.5 h-1.5 rounded-full bg-primary/60 shrink-0" />
+                          <span className="truncate">{f}</span>
+                        </div>
+                      ))}
+                    </div>
+                    <Button variant="outline" size="sm" className="w-full text-xs group-hover:bg-primary group-hover:text-primary-foreground">
                       Access Portal
                     </Button>
                   </CardContent>
-                </Card>;
-          })}
-          </div>
-          
-          {/* Additional Specialized Roles */}
-          <div className="mt-16">
-            <div className="text-center mb-8">
-              <h3 className="text-2xl font-bold mb-2">Specialized Staff Portals</h3>
-              <p className="text-muted-foreground">
-                Role-specific dashboards for specialized administrative functions
-              </p>
-            </div>
-            
-            <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4 max-w-4xl mx-auto">
-              {additionalRoles.map(role => {
-              const IconComponent = role.icon;
-              return <Card key={role.id} className="relative overflow-hidden hover:shadow-lg transition-smooth cursor-pointer group transform hover:scale-105 bg-card/50 animate-fade-in" onClick={() => onSelectRole(role.id)}>
-                    <CardHeader className="text-center pb-3">
-                      <div className={`w-12 h-12 mx-auto mb-3 ${role.color} rounded-lg flex items-center justify-center shadow-sm`}>
-                        <IconComponent className="w-6 h-6 text-white" />
-                      </div>
-                      <CardTitle className="text-lg">{role.title}</CardTitle>
-                      <CardDescription className="text-xs">
-                        {role.description}
-                      </CardDescription>
-                    </CardHeader>
-                    <CardContent className="space-y-2">
-                      <ul className="space-y-1">
-                        {role.features.slice(0, 2).map((feature, index) => <li key={index} className="text-xs flex items-center">
-                            <div className="w-1 h-1 bg-muted-foreground rounded-full mr-2" />
-                            {feature}
-                          </li>)}
-                      </ul>
-                      <Button variant="outline" size="sm" className="w-full mt-3 text-xs group-hover:bg-primary group-hover:text-primary-foreground">
-                        Demo Login
-                      </Button>
-                    </CardContent>
-                  </Card>;
+                </Card>
+              );
             })}
-            </div>
+          </div>
+        </div>
+
+        {/* Category 2: Management & Institutional Operations */}
+        <div className="space-y-4">
+          <div className="flex items-center gap-2 border-b pb-2">
+            <Shield className="w-5 h-5 text-primary" />
+            <h3 className="font-bold text-base tracking-tight">Administrative & Operations Portals</h3>
+          </div>
+          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            {ALL_13_PORTALS.filter(p => p.category === 'management').map(portal => {
+              const Icon = portal.icon;
+              return (
+                <Card 
+                  key={portal.id} 
+                  className="hover:shadow-md hover:border-primary/50 transition-all cursor-pointer flex flex-col justify-between group"
+                  onClick={() => onSelectRole(portal.id)}
+                >
+                  <CardHeader className="p-4 pb-2">
+                    <div className={`w-10 h-10 rounded-lg ${portal.color} flex items-center justify-center mb-2 shadow-sm text-white`}>
+                      <Icon className="w-5 h-5" />
+                    </div>
+                    <CardTitle className="text-base font-bold group-hover:text-primary transition-colors">
+                      {portal.title}
+                    </CardTitle>
+                    <CardDescription className="text-xs line-clamp-2 mt-1">
+                      {portal.description}
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="p-4 pt-2 space-y-3">
+                    <div className="space-y-1">
+                      {portal.features.slice(0, 3).map((f, i) => (
+                        <div key={i} className="text-[11px] text-muted-foreground flex items-center gap-1.5">
+                          <span className="w-1.5 h-1.5 rounded-full bg-primary/60 shrink-0" />
+                          <span className="truncate">{f}</span>
+                        </div>
+                      ))}
+                    </div>
+                    <Button variant="outline" size="sm" className="w-full text-xs group-hover:bg-primary group-hover:text-primary-foreground">
+                      Access Portal
+                    </Button>
+                  </CardContent>
+                </Card>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Category 3: Campus Facilities & Student Services */}
+        <div className="space-y-4">
+          <div className="flex items-center gap-2 border-b pb-2">
+            <Building2 className="w-5 h-5 text-primary" />
+            <h3 className="font-bold text-base tracking-tight">Campus Services & Facilities Portals</h3>
+          </div>
+          <div className="grid sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+            {ALL_13_PORTALS.filter(p => p.category === 'services').map(portal => {
+              const Icon = portal.icon;
+              return (
+                <Card 
+                  key={portal.id} 
+                  className="hover:shadow-md hover:border-primary/50 transition-all cursor-pointer flex flex-col justify-between group"
+                  onClick={() => onSelectRole(portal.id)}
+                >
+                  <CardHeader className="p-3.5 pb-2">
+                    <div className={`w-9 h-9 rounded-lg ${portal.color} flex items-center justify-center mb-2 shadow-sm text-white`}>
+                      <Icon className="w-4 h-4" />
+                    </div>
+                    <CardTitle className="text-sm font-bold group-hover:text-primary transition-colors">
+                      {portal.title}
+                    </CardTitle>
+                    <CardDescription className="text-[11px] line-clamp-2 mt-0.5">
+                      {portal.description}
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="p-3.5 pt-1 space-y-2.5">
+                    <div className="space-y-1">
+                      {portal.features.slice(0, 2).map((f, i) => (
+                        <div key={i} className="text-[10px] text-muted-foreground flex items-center gap-1.5">
+                          <span className="w-1 h-1 rounded-full bg-primary/60 shrink-0" />
+                          <span className="truncate">{f}</span>
+                        </div>
+                      ))}
+                    </div>
+                    <Button variant="outline" size="sm" className="w-full text-xs h-7 group-hover:bg-primary group-hover:text-primary-foreground">
+                      Access
+                    </Button>
+                  </CardContent>
+                </Card>
+              );
+            })}
           </div>
         </div>
       </section>
 
       {/* Footer */}
-      <footer className="bg-card border-t py-8">
-        <div className="container mx-auto px-4 text-center">
-          <p className="text-muted-foreground">
-            © 2025 Adhithyan<br />
-            AI&MCP Edu System
-          </p>
-        </div>
+      <footer className="border-t bg-card py-6 text-center text-xs text-muted-foreground">
+        <p>© 2026 Adithyan College. Secure Role-Based ERP & LMS.</p>
       </footer>
-    </div>;
+    </div>
+  );
 }

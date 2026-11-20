@@ -1,4 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { db } from '@/services/supabase/database';
+import { libraryService } from '@/services/libraryService';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -10,6 +12,7 @@ import { Switch } from '@/components/ui/switch';
 import { QRScannerDialog } from './QRScannerDialog';
 import { BookOpen, User, QrCode, AlertTriangle, CheckCircle, Clock, DollarSign } from 'lucide-react';
 import { format, differenceInDays } from 'date-fns';
+import { toast } from '@/hooks/use-toast';
 
 interface BookReturnDialogProps {
   children: React.ReactNode;
@@ -37,66 +40,92 @@ export const BookReturnDialog = ({ children, onBookReturned }: BookReturnDialogP
     dueDate: string;
     daysOverdue: number;
     fine: number;
+    issueId?: string;
   } | null>(null);
 
-  // Mock data for issued books lookup
-  const mockIssuedBooks = {
-    'BK001': {
-      id: 'BK001',
-      title: 'Advanced Mathematics',
-      author: 'Dr. Smith',
-      studentId: 'ST001',
-      studentName: 'John Smith',
-      rollNo: '2024001',
-      class: 'Class 10A',
-      issueDate: '2024-03-01',
-      dueDate: '2024-03-15',
-      daysOverdue: 0,
-      fine: 0
-    },
-    'BK002': {
-      id: 'BK002',
-      title: 'Modern Physics',
-      author: 'Prof. Johnson',
-      studentId: 'ST002',
-      studentName: 'Emma Johnson',
-      rollNo: '2024002',
-      class: 'Class 11B',
-      issueDate: '2024-02-20',
-      dueDate: '2024-03-05',
-      daysOverdue: 10,
-      fine: 50 // ₹5 per day
-    },
-    'BK003': {
-      id: 'BK003',
-      title: 'Chemistry Fundamentals',
-      author: 'Dr. Brown',
-      studentId: 'ST003',
-      studentName: 'Michael Brown',
-      rollNo: '2024003',
-      class: 'Class 10A',
-      issueDate: '2024-02-28',
-      dueDate: '2024-03-14',
-      daysOverdue: 1,
-      fine: 5
+  const [activeIssues, setActiveIssues] = useState<any[]>([]);
+
+  useEffect(() => {
+    async function loadIssues() {
+      try {
+        const issues = await db.getBookIssues();
+        setActiveIssues((issues || []).filter(i => i.status === 'Issued'));
+      } catch (err) {
+        console.warn('Load active issues warning:', err);
+      }
     }
-  };
+    loadIssues();
+  }, [open]);
 
   const handleCodeScanned = (code: string, type: 'book' | 'student') => {
     if (type === 'book') {
-      const book = mockIssuedBooks[code as keyof typeof mockIssuedBooks];
-      if (book) {
-        setIssuedBookData(book);
+      const match = activeIssues.find(i => 
+        i.book_code?.toLowerCase() === code.toLowerCase() || 
+        i.book_title?.toLowerCase().includes(code.toLowerCase()) ||
+        i.id === code
+      );
+      if (match) {
+        const due = new Date(match.due_date);
+        const today = new Date();
+        const diff = Math.max(0, differenceInDays(today, due));
+        setIssuedBookData({
+          id: match.book_code || match.id,
+          title: match.book_title,
+          author: 'Library Reference',
+          studentId: match.student_id || 'STU',
+          studentName: match.student_name,
+          rollNo: match.roll_no || 'N/A',
+          class: match.class_name || 'Class',
+          issueDate: match.issue_date,
+          dueDate: match.due_date,
+          daysOverdue: diff,
+          fine: diff * 5,
+          issueId: match.id,
+        });
         setStep('details');
+      } else {
+        toast({
+          title: "Issued Book Not Found",
+          description: `No active issued record found for book "${code}".`,
+          variant: "destructive"
+        });
       }
     }
   };
 
   const handleManualBookInput = (bookId: string) => {
-    const book = mockIssuedBooks[bookId as keyof typeof mockIssuedBooks];
-    if (book) {
-      setIssuedBookData(book);
+    const trimmed = bookId.trim();
+    if (!trimmed) return;
+    const match = activeIssues.find(i => 
+      i.book_code?.toLowerCase() === trimmed.toLowerCase() || 
+      i.book_title?.toLowerCase().includes(trimmed.toLowerCase()) ||
+      i.id === trimmed
+    );
+    if (match) {
+      const due = new Date(match.due_date);
+      const today = new Date();
+      const diff = Math.max(0, differenceInDays(today, due));
+      setIssuedBookData({
+        id: match.book_code || match.id,
+        title: match.book_title,
+        author: 'Library Reference',
+        studentId: match.student_id || 'STU',
+        studentName: match.student_name,
+        rollNo: match.roll_no || 'N/A',
+        class: match.class_name || 'Class',
+        issueDate: match.issue_date,
+        dueDate: match.due_date,
+        daysOverdue: diff,
+        fine: diff * 5,
+        issueId: match.id,
+      });
       setStep('details');
+    } else {
+      toast({
+        title: "Record Not Found",
+        description: `No active issue record found matching "${trimmed}".`,
+        variant: "destructive"
+      });
     }
   };
 
@@ -105,14 +134,12 @@ export const BookReturnDialog = ({ children, onBookReturned }: BookReturnDialogP
     
     let total = issuedBookData.fine;
     
-    // Add condition-based charges
     if (bookCondition === 'damaged') {
-      total += 100; // ₹100 for damaged book
+      total += 100;
     } else if (bookCondition === 'lost') {
-      total += 500; // ₹500 for lost book
+      total += 500;
     }
     
-    // Add custom fine if specified
     if (chargeFine && customFine) {
       total += parseInt(customFine) || 0;
     }
@@ -120,7 +147,7 @@ export const BookReturnDialog = ({ children, onBookReturned }: BookReturnDialogP
     return total;
   };
 
-  const handleReturnBook = () => {
+  const handleReturnBook = async () => {
     if (issuedBookData) {
       const returnData = {
         bookId: issuedBookData.id,
@@ -134,6 +161,27 @@ export const BookReturnDialog = ({ children, onBookReturned }: BookReturnDialogP
         daysOverdue: issuedBookData.daysOverdue,
         status: 'Returned'
       };
+
+      try {
+        if (issuedBookData.issueId) {
+          try {
+            await libraryService.returnBook(issuedBookData.issueId, calculateTotalFine());
+          } catch (rpcErr) {
+            console.warn('RPC return_library_book fallback to db.returnBook:', rpcErr);
+            await db.returnBook(issuedBookData.issueId);
+          }
+        }
+        toast({
+          title: "Book Return Processed",
+          description: `Successfully recorded return for "${issuedBookData.title}".`,
+        });
+      } catch (err: any) {
+        toast({
+          title: "Return Failed",
+          description: err.message || "Failed to process book return.",
+          variant: "destructive"
+        });
+      }
       
       onBookReturned?.(returnData);
       resetDialog();
@@ -201,7 +249,7 @@ export const BookReturnDialog = ({ children, onBookReturned }: BookReturnDialogP
                     <div className="space-y-3">
                       <div className="flex gap-2">
                         <Input 
-                          placeholder="Enter Book ID (e.g., BK001)" 
+                          placeholder="Enter Book ID or Title" 
                           onKeyDown={(e) => {
                             if (e.key === 'Enter') {
                               handleManualBookInput((e.target as HTMLInputElement).value);
@@ -213,7 +261,9 @@ export const BookReturnDialog = ({ children, onBookReturned }: BookReturnDialogP
                         </Button>
                       </div>
                       <p className="text-xs text-muted-foreground">
-                        Currently issued books: BK001 (no overdue), BK002 (10 days overdue), BK003 (1 day overdue)
+                        {activeIssues.length > 0 
+                          ? `${activeIssues.length} book(s) currently issued out in database.` 
+                          : 'No books are currently issued out.'}
                       </p>
                     </div>
                   )}

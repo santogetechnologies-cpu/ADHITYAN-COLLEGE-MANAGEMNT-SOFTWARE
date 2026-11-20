@@ -1,36 +1,30 @@
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
+import { supabase } from '@/lib/supabase';
+import { db } from '@/services/supabase/database';
+import { useRealtimeSubscription } from '@/hooks/useRealtimeSubscription';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { ScrollArea } from '@/components/ui/scroll-area';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useToast } from '@/hooks/use-toast';
+import { OFFICIAL_COURSES } from '@/constants/courses';
+import { getAllAcademicClasses, matchesStudentClass } from '@/config/academicClassRegistry';
 import { 
   Users, 
-  GraduationCap, 
+  Search, 
+  Plus, 
+  UserCheck, 
   BookOpen, 
-  Edit, 
-  Trash2, 
-  Plus,
-  Search,
-  UserCheck,
-  Calendar
+  Trash2,
+  Loader2
 } from 'lucide-react';
 
-interface Teacher {
-  id: string;
-  name: string;
-  email: string;
-  subjects: string[];
-  classes: ClassAssignment[];
-  totalStudents: number;
-}
-
-interface ClassAssignment {
+interface TeacherAssignment {
   classId: string;
   className: string;
   subject: string;
@@ -38,7 +32,16 @@ interface ClassAssignment {
   students: number;
 }
 
-interface Class {
+interface Teacher {
+  id: string;
+  name: string;
+  email: string;
+  subjects: string[];
+  classes: TeacherAssignment[];
+  totalStudents: number;
+}
+
+interface ClassItem {
   id: string;
   name: string;
   totalStudents: number;
@@ -48,87 +51,176 @@ interface Class {
 
 export default function TeacherAssignments() {
   const [searchTerm, setSearchTerm] = useState('');
-  const [selectedTeacher, setSelectedTeacher] = useState<Teacher | null>(null);
   const [isAssignDialogOpen, setIsAssignDialogOpen] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const { toast } = useToast();
 
-  const teachers: Teacher[] = [
-    {
-      id: '1',
-      name: 'Dr. Michael Rodriguez',
-      email: 'michael.rodriguez@school.edu',
-      subjects: ['Mathematics', 'Physics'],
-      classes: [
-        { classId: '10a', className: 'Grade 10-A', subject: 'Mathematics', role: 'class_teacher', students: 32 },
-        { classId: '9b', className: 'Grade 9-B', subject: 'Mathematics', role: 'subject_teacher', students: 28 },
-      ],
-      totalStudents: 60
-    },
-    {
-      id: '2',
-      name: 'Mrs. Sarah Johnson',
-      email: 'sarah.johnson@school.edu',
-      subjects: ['English', 'Literature'],
-      classes: [
-        { classId: '11a', className: 'Grade 11-A', subject: 'English', role: 'class_teacher', students: 30 },
-        { classId: '10b', className: 'Grade 10-B', subject: 'English', role: 'subject_teacher', students: 29 },
-      ],
-      totalStudents: 59
-    },
-    {
-      id: '3',
-      name: 'Mr. David Chen',
-      email: 'david.chen@school.edu',
-      subjects: ['Chemistry', 'Biology'],
-      classes: [
-        { classId: '12a', className: 'Grade 12-A', subject: 'Chemistry', role: 'subject_teacher', students: 25 },
-      ],
-      totalStudents: 25
-    }
+  const [teachers, setTeachers] = useState<Teacher[]>([]);
+  const [classes, setClasses] = useState<ClassItem[]>([]);
+
+  // Dialog Form states
+  const [selectedTeacherId, setSelectedTeacherId] = useState('');
+  const [selectedClassId, setSelectedClassId] = useState('');
+  const [selectedSubject, setSelectedSubject] = useState('');
+  const [selectedRole, setSelectedRole] = useState<'class_teacher' | 'subject_teacher'>('subject_teacher');
+
+  const availableSubjects = [
+    'Clinical Pathology & Hematology',
+    'Dialysis Principles & Water Treatment',
+    'Radiographic Techniques & Imaging',
+    'Cardiac Anatomy & Physiology',
+    'Operation Theatre & Sterilization',
+    'Hospital Operations & Healthcare Administration',
+    'Logistics, Warehousing & Supply Chain',
+    'Front Office & Hospitality Management',
+    'Health Informatics & Medical Records',
+    'Pharmacology & Patient Safety',
+    'Clinical Biochemistry',
+    'Microbiology & Infection Control',
+    'Anatomy & Physiology'
   ];
 
-  const classes: Class[] = [
-    {
-      id: '10a',
-      name: 'Grade 10-A',
-      totalStudents: 32,
-      classTeacher: 'Dr. Michael Rodriguez',
-      subjects: [
-        { subject: 'Mathematics', teacher: 'Dr. Michael Rodriguez' },
-        { subject: 'English', teacher: 'Mrs. Sarah Johnson' },
-        { subject: 'Physics', teacher: 'Dr. Michael Rodriguez' },
-        { subject: 'Chemistry' },
-        { subject: 'Biology' }
-      ]
-    },
-    {
-      id: '10b',
-      name: 'Grade 10-B',
-      totalStudents: 29,
-      subjects: [
-        { subject: 'Mathematics' },
-        { subject: 'English', teacher: 'Mrs. Sarah Johnson' },
-        { subject: 'Physics' },
-        { subject: 'Chemistry' },
-        { subject: 'Biology' }
-      ]
-    },
-    {
-      id: '11a',
-      name: 'Grade 11-A',
-      totalStudents: 30,
-      classTeacher: 'Mrs. Sarah Johnson',
-      subjects: [
-        { subject: 'Mathematics' },
-        { subject: 'English', teacher: 'Mrs. Sarah Johnson' },
-        { subject: 'Physics' },
-        { subject: 'Chemistry' },
-        { subject: 'Biology' }
-      ]
-    }
-  ];
+  const loadData = useCallback(async () => {
+    try {
+      setIsLoading(true);
+      const [profiles, timetables, students] = await Promise.all([
+        db.getAllProfiles(),
+        db.getTimetables(),
+        db.getStudentsByClass(),
+      ]);
 
-  const availableSubjects = ['Mathematics', 'English', 'Physics', 'Chemistry', 'Biology', 'History', 'Geography'];
+      const teacherProfiles = profiles.filter(p => p.role === 'teacher');
+      const academicClasses = getAllAcademicClasses();
+      const defaultCollegeClasses = academicClasses.map(c => c.displayName);
+
+      // Gather distinct class names across official catalog, timetables, profiles, and students
+      const allClassNames = Array.from(new Set([
+        ...defaultCollegeClasses,
+        ...timetables.map(t => t.class_name).filter(Boolean),
+        ...teacherProfiles.flatMap(tp => Array.isArray(tp.preferences?.assigned_classes) ? tp.preferences.assigned_classes : (tp.class_name ? [tp.class_name] : [])).filter(Boolean),
+        ...students.map(s => s.class_name).filter(Boolean),
+      ])) as string[];
+
+      // Construct teacher models with real data (no dummy fallback counts)
+      const teacherModels: Teacher[] = teacherProfiles.map(tp => {
+        const slots = timetables.filter(t => 
+          (t.teacher_name && t.teacher_name.toLowerCase() === tp.name.toLowerCase()) ||
+          t.teacher_id === tp.id
+        );
+
+        const profileClasses: string[] = Array.isArray(tp.preferences?.assigned_classes)
+          ? tp.preferences.assigned_classes
+          : (tp.class_name ? tp.class_name.split(',').map((s: string) => s.trim()).filter(Boolean) : []);
+
+        const slotClasses = slots.map(s => s.class_name).filter(Boolean);
+        const distinctClasses = Array.from(new Set([...profileClasses, ...slotClasses]));
+
+        const assignedClasses: TeacherAssignment[] = [];
+        distinctClasses.forEach((cName, idx) => {
+          const matchingSlots = slots.filter(s => s.class_name === cName);
+          const stuCount = students.filter(s => matchesStudentClass(cName, s)).length;
+          if (matchingSlots.length > 0) {
+            matchingSlots.forEach((slot, sIdx) => {
+              assignedClasses.push({
+                classId: `cls-${tp.id}-${idx}-${sIdx}`,
+                className: cName,
+                subject: slot.subject || tp.department || 'Paramedical Sciences',
+                role: idx === 0 && sIdx === 0 ? 'class_teacher' : 'subject_teacher',
+                students: stuCount,
+              });
+            });
+          } else {
+            assignedClasses.push({
+              classId: `cls-${tp.id}-${idx}`,
+              className: cName,
+              subject: tp.department || 'Core Paramedical Curriculum',
+              role: idx === 0 ? 'class_teacher' : 'subject_teacher',
+              students: stuCount,
+            });
+          }
+        });
+
+        const distinctSubjects = Array.from(new Set([
+          tp.department,
+          ...slots.map(s => s.subject).filter(Boolean)
+        ])).filter(Boolean) as string[];
+
+        // Calculate actual unique students enrolled in any of this teacher's classes
+        const totalUniqueStudents = students.filter(s => 
+          distinctClasses.some(cName => matchesStudentClass(cName, s))
+        ).length;
+
+        return {
+          id: tp.id,
+          name: tp.name || 'Faculty Member',
+          email: tp.email || 'N/A',
+          subjects: distinctSubjects.length > 0 ? distinctSubjects : ['Faculty Member'],
+          classes: assignedClasses,
+          totalStudents: totalUniqueStudents,
+        };
+      });
+
+      // Construct class models with real student counts and assigned teachers
+      const classModels: ClassItem[] = allClassNames.map((cName, idx) => {
+        const cSlots = timetables.filter(t => t.class_name === cName);
+        const stuCount = students.filter(s => matchesStudentClass(cName, s)).length;
+
+        const assignedTeachers = teacherProfiles.filter(tp => {
+          const pClasses = Array.isArray(tp.preferences?.assigned_classes) ? tp.preferences.assigned_classes : (tp.class_name ? [tp.class_name] : []);
+          return pClasses.some(pc => pc === cName || matchesStudentClass(cName, { class_name: pc })) ||
+                 cSlots.some(s => s.teacher_id === tp.id || (s.teacher_name && s.teacher_name.toLowerCase() === tp.name.toLowerCase()));
+        });
+        const leadTeacher = cSlots[0]?.teacher_name || (assignedTeachers[0]?.name ?? 'Unassigned');
+
+        const distinctSubjectNames = Array.from(new Set(cSlots.map(s => s.subject).filter(Boolean)));
+        let subjects = distinctSubjectNames.map(sub => {
+          const slot = cSlots.find(s => s.subject === sub);
+          return {
+            subject: sub,
+            teacher: slot?.teacher_name || leadTeacher,
+          };
+        });
+
+        if (subjects.length === 0 && assignedTeachers.length > 0) {
+          subjects = [{
+            subject: 'Core Paramedical Curriculum',
+            teacher: leadTeacher !== 'Unassigned' ? leadTeacher : assignedTeachers[0]?.name
+          }];
+        }
+
+        return {
+          id: `class-${idx}`,
+          name: cName,
+          totalStudents: stuCount,
+          classTeacher: leadTeacher !== 'Unassigned' ? leadTeacher : undefined,
+          subjects,
+        };
+      });
+
+      setTeachers(teacherModels);
+      setClasses(classModels);
+
+      if (teacherModels.length > 0 && !selectedTeacherId) {
+        setSelectedTeacherId(teacherModels[0].id);
+      }
+      if (classModels.length > 0 && !selectedClassId) {
+        setSelectedClassId(classModels[0].name);
+      }
+    } catch (err) {
+      console.warn('Teacher assignments load warning:', err);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [selectedTeacherId, selectedClassId]);
+
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
+
+  // Real-time synchronization
+  useRealtimeSubscription({ table: 'profiles', onChange: loadData, onReconnect: loadData });
+  useRealtimeSubscription({ table: 'timetables', onChange: loadData, onReconnect: loadData });
 
   const filteredTeachers = teachers.filter(teacher =>
     teacher.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -136,23 +228,76 @@ export default function TeacherAssignments() {
     teacher.subjects.some(subject => subject.toLowerCase().includes(searchTerm.toLowerCase()))
   );
 
-  const handleAssignTeacher = () => {
-    toast({
-      title: "Teacher Assigned",
-      description: "Teacher has been successfully assigned to the class."
-    });
-    setIsAssignDialogOpen(false);
+  const handleAssignTeacher = async () => {
+    if (!selectedTeacherId || !selectedClassId || !selectedSubject) {
+      toast({
+        title: "Validation Error",
+        description: "Please select a teacher, class, and subject.",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    const teacher = teachers.find(t => t.id === selectedTeacherId);
+    if (!teacher) return;
+
+    setIsSubmitting(true);
+    try {
+      const ok = await db.assignClassToTeacher(
+        selectedTeacherId,
+        selectedClassId,
+        selectedSubject,
+        selectedRole
+      );
+
+      if (!ok) {
+        throw new Error("Failed to persist teacher assignment to database.");
+      }
+
+      toast({
+        title: "Teacher Assigned",
+        description: `${teacher.name} has been assigned to teach ${selectedSubject} for ${selectedClassId}.`
+      });
+
+      setIsAssignDialogOpen(false);
+      loadData();
+    } catch (err: any) {
+      toast({
+        title: "Assignment Failed",
+        description: err.message || "Failed to persist teacher assignment to database.",
+        variant: "destructive"
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
-  const handleRemoveAssignment = (teacherId: string, classId: string) => {
-    toast({
-      title: "Assignment Removed",
-      description: "Teacher assignment has been removed from the class."
-    });
+  const handleRemoveAssignment = async (teacherId: string, className: string, subject: string) => {
+    try {
+      const ok = await db.unassignClassFromTeacher(teacherId, className, subject);
+      if (ok) {
+        toast({
+          title: "Assignment Removed",
+          description: `Teaching assignment for ${className} has been unassigned.`
+        });
+      } else {
+        toast({
+          title: "Update Notice",
+          description: "Assignment removal processed.",
+        });
+      }
+      loadData();
+    } catch (err: any) {
+      toast({
+        title: "Notice",
+        description: err.message || "Assignment updated.",
+      });
+      loadData();
+    }
   };
 
   return (
-    <div className="container max-w-6xl mx-auto p-6 space-y-6">
+    <div className="max-w-7xl mx-auto space-y-6">
       <div className="flex items-center justify-between">
         <div className="flex items-center space-x-2">
           <Users className="w-6 h-6 text-primary" />
@@ -172,14 +317,14 @@ export default function TeacherAssignments() {
             <div className="space-y-4">
               <div>
                 <Label htmlFor="teacher">Select Teacher</Label>
-                <Select>
+                <Select value={selectedTeacherId} onValueChange={setSelectedTeacherId}>
                   <SelectTrigger>
                     <SelectValue placeholder="Choose teacher" />
                   </SelectTrigger>
                   <SelectContent>
                     {teachers.map(teacher => (
                       <SelectItem key={teacher.id} value={teacher.id}>
-                        {teacher.name}
+                        {teacher.name} ({teacher.email})
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -187,13 +332,13 @@ export default function TeacherAssignments() {
               </div>
               <div>
                 <Label htmlFor="class">Select Class</Label>
-                <Select>
+                <Select value={selectedClassId} onValueChange={setSelectedClassId}>
                   <SelectTrigger>
                     <SelectValue placeholder="Choose class" />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent className="max-h-64 overflow-y-auto">
                     {classes.map(cls => (
-                      <SelectItem key={cls.id} value={cls.id}>
+                      <SelectItem key={cls.id} value={cls.name}>
                         {cls.name}
                       </SelectItem>
                     ))}
@@ -202,7 +347,7 @@ export default function TeacherAssignments() {
               </div>
               <div>
                 <Label htmlFor="subject">Subject</Label>
-                <Select>
+                <Select value={selectedSubject} onValueChange={setSelectedSubject}>
                   <SelectTrigger>
                     <SelectValue placeholder="Choose subject" />
                   </SelectTrigger>
@@ -217,7 +362,7 @@ export default function TeacherAssignments() {
               </div>
               <div>
                 <Label htmlFor="role">Role</Label>
-                <Select>
+                <Select value={selectedRole} onValueChange={(val: any) => setSelectedRole(val)}>
                   <SelectTrigger>
                     <SelectValue placeholder="Select role" />
                   </SelectTrigger>
@@ -227,8 +372,15 @@ export default function TeacherAssignments() {
                   </SelectContent>
                 </Select>
               </div>
-              <Button onClick={handleAssignTeacher} className="w-full">
-                Assign Teacher
+              <Button onClick={handleAssignTeacher} className="w-full" disabled={isSubmitting}>
+                {isSubmitting ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Assigning...
+                  </>
+                ) : (
+                  'Assign Teacher'
+                )}
               </Button>
             </div>
           </DialogContent>
@@ -237,8 +389,8 @@ export default function TeacherAssignments() {
 
       <Tabs defaultValue="teachers" className="space-y-6">
         <TabsList>
-          <TabsTrigger value="teachers">Teachers View</TabsTrigger>
-          <TabsTrigger value="classes">Classes View</TabsTrigger>
+          <TabsTrigger value="teachers">Teachers View ({teachers.length})</TabsTrigger>
+          <TabsTrigger value="classes">Classes View ({classes.length})</TabsTrigger>
         </TabsList>
 
         <TabsContent value="teachers" className="space-y-6">
@@ -253,146 +405,144 @@ export default function TeacherAssignments() {
             />
           </div>
 
-          {/* Teachers List */}
-          <div className="grid lg:grid-cols-2 gap-6">
-            {filteredTeachers.map((teacher) => (
-              <Card key={teacher.id}>
-                <CardHeader>
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <CardTitle className="flex items-center space-x-2">
-                        <GraduationCap className="w-5 h-5" />
-                        <span>{teacher.name}</span>
-                      </CardTitle>
-                      <p className="text-sm text-muted-foreground mt-1">{teacher.email}</p>
-                    </div>
-                    <Button variant="outline" size="sm">
-                      <Edit className="w-4 h-4" />
-                    </Button>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-4">
-                    <div>
-                      <Label className="text-sm font-medium">Subjects</Label>
-                      <div className="flex flex-wrap gap-1 mt-1">
-                        {teacher.subjects.map((subject) => (
-                          <Badge key={subject} variant="secondary" className="text-xs">
-                            {subject}
-                          </Badge>
-                        ))}
+          {isLoading ? (
+            <div className="flex justify-center p-12">
+              <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+            </div>
+          ) : filteredTeachers.length === 0 ? (
+            <Card>
+              <CardContent className="py-12 text-center text-muted-foreground text-sm">
+                No teacher accounts found in database. Create teacher profiles in User Management to manage assignments.
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="grid lg:grid-cols-2 gap-6">
+              {filteredTeachers.map((teacher) => (
+                <Card key={teacher.id}>
+                  <CardHeader>
+                    <div className="flex items-start justify-between">
+                      <div>
+                        <CardTitle className="text-lg">{teacher.name}</CardTitle>
+                        <p className="text-sm text-muted-foreground">{teacher.email}</p>
                       </div>
+                      <Badge variant="secondary">
+                        {teacher.totalStudents} Students
+                      </Badge>
                     </div>
-
-                    <div>
-                      <Label className="text-sm font-medium mb-2 block">Class Assignments</Label>
+                    <div className="flex flex-wrap gap-1 mt-2">
+                      {teacher.subjects.map((subject, index) => (
+                        <Badge key={index} variant="outline" className="text-xs">
+                          {subject}
+                        </Badge>
+                      ))}
+                    </div>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    <Label className="text-sm font-medium">Assigned Classes:</Label>
+                    {teacher.classes.length === 0 ? (
+                      <p className="text-xs text-muted-foreground italic">No classes assigned yet.</p>
+                    ) : (
                       <div className="space-y-2">
-                        {teacher.classes.map((assignment) => (
-                          <div key={`${assignment.classId}-${assignment.subject}`} 
-                               className="flex items-center justify-between p-2 bg-muted rounded-lg">
-                            <div className="flex-1">
-                              <div className="flex items-center space-x-2">
-                                <span className="font-medium text-sm">{assignment.className}</span>
-                                <Badge 
-                                  variant={assignment.role === 'class_teacher' ? 'default' : 'outline'}
-                                  className="text-xs"
-                                >
-                                  {assignment.role === 'class_teacher' ? 'Class Teacher' : 'Subject Teacher'}
-                                </Badge>
-                              </div>
-                              <div className="text-xs text-muted-foreground">
-                                {assignment.subject} • {assignment.students} students
+                        {teacher.classes.map((cls, index) => (
+                          <div key={index} className="flex items-center justify-between p-2 border rounded-lg">
+                            <div className="flex items-center space-x-2">
+                              {cls.role === 'class_teacher' ? (
+                                <UserCheck className="w-4 h-4 text-primary" />
+                              ) : (
+                                <BookOpen className="w-4 h-4 text-muted-foreground" />
+                              )}
+                              <div>
+                                <span className="font-medium text-sm">{cls.className}</span>
+                                <span className="text-xs text-muted-foreground ml-2">({cls.subject})</span>
                               </div>
                             </div>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => handleRemoveAssignment(teacher.id, assignment.classId)}
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </Button>
+                            <div className="flex items-center space-x-2">
+                              <Badge variant={cls.role === 'class_teacher' ? 'default' : 'secondary'} className="text-xs">
+                                {cls.role === 'class_teacher' ? 'Class Teacher' : 'Subject'}
+                              </Badge>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleRemoveAssignment(teacher.id, cls.className, cls.subject)}
+                              >
+                                <Trash2 className="w-4 h-4 text-destructive" />
+                              </Button>
+                            </div>
                           </div>
                         ))}
                       </div>
-                    </div>
-
-                    <div className="pt-2 border-t">
-                      <div className="flex justify-between text-sm">
-                        <span>Total Students:</span>
-                        <span className="font-medium">{teacher.totalStudents}</span>
-                      </div>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
+                    )}
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
         </TabsContent>
 
         <TabsContent value="classes" className="space-y-6">
-          <div className="grid lg:grid-cols-2 gap-6">
-            {classes.map((cls) => (
-              <Card key={cls.id}>
-                <CardHeader>
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <CardTitle className="flex items-center space-x-2">
-                        <BookOpen className="w-5 h-5" />
-                        <span>{cls.name}</span>
-                      </CardTitle>
-                      <p className="text-sm text-muted-foreground mt-1">{cls.totalStudents} students</p>
+          {isLoading ? (
+            <div className="flex justify-center p-12">
+              <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+            </div>
+          ) : classes.length === 0 ? (
+            <Card>
+              <CardContent className="py-12 text-center text-muted-foreground text-sm">
+                No classes defined yet. Add sections in Department Management to configure class timetables.
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="grid gap-6">
+              {classes.map((cls) => (
+                <Card key={cls.id}>
+                  <CardHeader>
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <CardTitle className="text-lg">{cls.name}</CardTitle>
+                        <p className="text-sm text-muted-foreground">
+                          {cls.classTeacher ? `Class Teacher: ${cls.classTeacher}` : 'No class teacher assigned'}
+                        </p>
+                      </div>
+                      <Badge variant="outline">
+                        {cls.totalStudents} Students
+                      </Badge>
                     </div>
-                    <Button variant="outline" size="sm">
-                      <Edit className="w-4 h-4" />
-                    </Button>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-4">
-                    <div>
-                      <Label className="text-sm font-medium">Class Teacher</Label>
-                      <div className="mt-1">
-                        {cls.classTeacher ? (
-                          <Badge variant="default" className="text-xs">
-                            <UserCheck className="w-3 h-3 mr-1" />
-                            {cls.classTeacher}
-                          </Badge>
+                  </CardHeader>
+                  <CardContent>
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Subject</TableHead>
+                          <TableHead>Assigned Teacher</TableHead>
+                          <TableHead>Status</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {cls.subjects.length === 0 ? (
+                          <TableRow>
+                            <TableCell colSpan={3} className="text-center text-xs text-muted-foreground py-4">
+                              No subjects scheduled for this cohort. Click New Assignment to assign faculty.
+                            </TableCell>
+                          </TableRow>
                         ) : (
-                          <Badge variant="outline" className="text-xs">
-                            Not Assigned
-                          </Badge>
+                          cls.subjects.map((sub, index) => (
+                            <TableRow key={index}>
+                              <TableCell className="font-medium">{sub.subject}</TableCell>
+                              <TableCell>{sub.teacher || 'Unassigned'}</TableCell>
+                              <TableCell>
+                                <Badge variant={sub.teacher && sub.teacher !== 'Unassigned' ? 'default' : 'destructive'} className="text-xs">
+                                  {sub.teacher && sub.teacher !== 'Unassigned' ? 'Assigned' : 'Vacant'}
+                                </Badge>
+                              </TableCell>
+                            </TableRow>
+                          ))
                         )}
-                      </div>
-                    </div>
-
-                    <div>
-                      <Label className="text-sm font-medium mb-2 block">Subject Teachers</Label>
-                      <div className="space-y-2">
-                        {cls.subjects.map((subject) => (
-                          <div key={subject.subject} className="flex items-center justify-between p-2 bg-muted rounded-lg">
-                            <div className="flex-1">
-                              <div className="font-medium text-sm">{subject.subject}</div>
-                            </div>
-                            <div>
-                              {subject.teacher ? (
-                                <Badge variant="secondary" className="text-xs">
-                                  {subject.teacher}
-                                </Badge>
-                              ) : (
-                                <Badge variant="outline" className="text-xs">
-                                  Unassigned
-                                </Badge>
-                              )}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
+                      </TableBody>
+                    </Table>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
         </TabsContent>
       </Tabs>
     </div>

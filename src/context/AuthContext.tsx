@@ -1,147 +1,311 @@
-import React, { createContext, useContext, useState, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { supabase } from '@/lib/supabase';
+import { Session, User as SupabaseAuthUser } from '@supabase/supabase-js';
+import { queryClient } from '@/lib/queryClient';
 
-export type UserRole = 'student' | 'parent' | 'teacher' | 'admin' | 'principal' | 'financier' | 'accountant' | 'storekeeper' | 'driver' | 'naac_coordinator' | 'receptionist' | 'store_manager' | 'finance_manager' | 'transport_driver';
+export type UserRole =
+  | 'platform_super_admin'
+  | 'admin'
+  | 'principal'
+  | 'student'
+  | 'parent'
+  | 'teacher'
+  | 'financier'
+  | 'accountant'
+  | 'storekeeper'
+  | 'driver'
+  | 'naac_coordinator'
+  | 'receptionist'
+  | 'store_manager'
+  | 'finance_manager'
+  | 'transport_driver'
+  | 'hr_manager'
+  | 'coe'
+  | 'hod'
+  | 'librarian'
+  | 'hostel_warden'
+  | 'placement_officer';
 
 export interface User {
   id: string;
   email: string;
   name: string;
   role: UserRole;
+  college_id?: string;
   avatar?: string;
+  phone?: string;
+  department?: string;
+  class_name?: string;
+  roll_number?: string;
+  student_id?: string;
+  preferences?: any;
+  assigned_classes?: string[];
 }
 
 interface AuthContextType {
   user: User | null;
-  login: (email: string, password: string) => Promise<boolean>;
-  logout: () => void;
+  session: Session | null;
+  login: (email: string, password: string) => Promise<User | null>;
+  signUp: (email: string, password: string, name: string, role: UserRole) => Promise<{ success: boolean; error?: string }>;
+  logout: () => Promise<void>;
+  resetPassword: (email: string) => Promise<{ success: boolean; error?: string }>;
+  updatePassword: (password: string) => Promise<{ success: boolean; error?: string }>;
+  updateUserProfile: (updates: Partial<User>) => Promise<boolean>;
   isLoading: boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-const DEMO_USERS: Record<string, User> = {
-  'student@gmail.com': {
-    id: '1',
-    email: 'student@gmail.com',
-    name: 'Alex Chen',
-    role: 'student',
-    avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&h=150&fit=crop&crop=face'
-  },
-  'parent@gmail.com': {
-    id: '2',
-    email: 'parent@gmail.com',
-    name: 'Sarah Johnson',
-    role: 'parent',
-    avatar: 'https://images.unsplash.com/photo-1494790108755-2616b612b829?w=150&h=150&fit=crop&crop=face'
-  },
-  'teacher@gmail.com': {
-    id: '3',
-    email: 'teacher@gmail.com',
-    name: 'Dr. Michael Rodriguez',
-    role: 'teacher',
-    avatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150&h=150&fit=crop&crop=face'
-  },
-  'admin@gmail.com': {
-    id: '4',
-    email: 'admin@gmail.com',
-    name: 'Jennifer Davis',
-    role: 'admin',
-    avatar: 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=150&h=150&fit=crop&crop=face'
-  },
-  'principal@gmail.com': {
-    id: '5',
-    email: 'principal@gmail.com',
-    name: 'Dr. Robert Singh',
-    role: 'principal',
-    avatar: 'https://images.unsplash.com/photo-1560250097-0b93528c311a?w=150&h=150&fit=crop&crop=face'
-  },
-  'financier@gmail.com': {
-    id: '6',
-    email: 'financier@gmail.com',
-    name: 'Maria Gonzalez',
-    role: 'financier',
-    avatar: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150&h=150&fit=crop&crop=face'
-  },
-  'accountant@gmail.com': {
-    id: '7',
-    email: 'accountant@gmail.com',
-    name: 'David Kumar',
-    role: 'accountant',
-    avatar: 'https://images.unsplash.com/photo-1519244703995-f4e0f30006d5?w=150&h=150&fit=crop&crop=face'
-  },
-  'storekeeper@gmail.com': {
-    id: '8',
-    email: 'storekeeper@gmail.com',
-    name: 'Lisa Wang',
-    role: 'storekeeper',
-    avatar: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?w=150&h=150&fit=crop&crop=face'
-  },
-  'driver@gmail.com': {
-    id: '9',
-    email: 'driver@gmail.com',
-    name: 'James Thompson',
-    role: 'driver',
-    avatar: 'https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=150&h=150&fit=crop&crop=face'
-  },
-  'receptionist@gmail.com': {
-    id: '10',
-    email: 'receptionist@gmail.com',
-    name: 'Emily Carter',
-    role: 'receptionist',
-    avatar: 'https://images.unsplash.com/photo-1494790108755-2616b612b829?w=150&h=150&fit=crop&crop=face'
-  },
-  'storemanager@gmail.com': {
-    id: '11',
-    email: 'storemanager@gmail.com',
-    name: 'Michael Brown',
-    role: 'store_manager',
-    avatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150&h=150&fit=crop&crop=face'
-  },
-  'financemanager@gmail.com': {
-    id: '12',
-    email: 'financemanager@gmail.com',
-    name: 'Sarah Wilson',
-    role: 'finance_manager',
-    avatar: 'https://images.unsplash.com/photo-1580489944761-15a19d654956?w=150&h=150&fit=crop&crop=face'
-  },
-  'transportdriver@gmail.com': {
-    id: '13',
-    email: 'transportdriver@gmail.com',
-    name: 'Robert Martinez',
-    role: 'transport_driver',
-    avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&h=150&fit=crop&crop=face'
+function mapAuthToUser(authUser: SupabaseAuthUser, profileData?: any): User {
+  const meta = authUser.user_metadata || {};
+  const email = (authUser.email || '').toLowerCase();
+
+  let fallbackRole: UserRole = 'student';
+  if (email.startsWith('superadmin') || email.includes('superadmin@') || meta.role === 'platform_super_admin') {
+    fallbackRole = 'platform_super_admin';
+  } else if (email.startsWith('admin') || email.includes('admin@')) {
+    fallbackRole = 'admin';
+  } else if (email.startsWith('principal') || email.includes('principal@')) {
+    fallbackRole = 'principal';
   }
-};
+
+  const resolvedRole = (meta.role || profileData?.preferences?.role || profileData?.role || fallbackRole) as UserRole;
+  const resolvedName = profileData?.name || meta.name || meta.full_name || email.split('@')[0].replace(/[._]/g, ' ');
+  const resolvedAvatar = profileData?.avatar_url || meta.avatar || meta.avatar_url || '';
+  const resolvedStudentId = profileData?.student_id || profileData?.roll_number || meta.student_id || meta.roll_number || undefined;
+
+  let assignedClasses: string[] = [];
+  if (Array.isArray(profileData?.preferences?.assigned_classes)) {
+    assignedClasses = profileData.preferences.assigned_classes;
+  } else if (Array.isArray(meta?.assigned_classes)) {
+    assignedClasses = meta.assigned_classes;
+  } else if (profileData?.class_name) {
+    assignedClasses = profileData.class_name.split(',').map((s: string) => s.trim()).filter(Boolean);
+  }
+
+  return {
+    id: authUser.id,
+    email: authUser.email || '',
+    name: resolvedName,
+    role: resolvedRole,
+    college_id: profileData?.college_id || meta.college_id || '11111111-1111-1111-1111-111111111111',
+    avatar: resolvedAvatar,
+    phone: profileData?.phone,
+    department: profileData?.department,
+    class_name: profileData?.class_name,
+    roll_number: profileData?.roll_number || resolvedStudentId,
+    student_id: resolvedStudentId,
+    preferences: profileData?.preferences,
+    assigned_classes: assignedClasses,
+  };
+}
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
+  const [session, setSession] = useState<Session | null>(null);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
 
-  const login = async (email: string, password: string): Promise<boolean> => {
-    setIsLoading(true);
-    
-    // Simulate API call delay
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    
-    const demoUser = DEMO_USERS[email.toLowerCase()];
-    const validPasswords = ['student@123', 'parent@123', 'teacher@123', 'admin@123', 'principal@123', 'financier@123', 'accountant@123', 'storekeeper@123', 'driver@123', 'receptionist@123', 'storemanager@123', 'financemanager@123', 'transportdriver@123'];
-    
-    if (demoUser && validPasswords.includes(password)) {
-      setUser(demoUser);
-      setIsLoading(false);
-      return true;
+  const fetchProfileAndSetUser = async (authUser: SupabaseAuthUser): Promise<User> => {
+    try {
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', authUser.id)
+        .maybeSingle();
+
+      const resolved = mapAuthToUser(authUser, profile);
+      setUser(resolved);
+      return resolved;
+    } catch {
+      const fallback = mapAuthToUser(authUser);
+      setUser(fallback);
+      return fallback;
     }
-    
-    setIsLoading(false);
-    return false;
   };
 
-  const logout = () => {
-    setUser(null);
+  useEffect(() => {
+    let isMounted = true;
+
+    async function initAuth() {
+      try {
+        const { data: { session: initialSession }, error } = await supabase.auth.getSession();
+        if (error) {
+          console.warn('[Auth] Session initialization warning:', error.message);
+        }
+
+        if (initialSession?.user && isMounted) {
+          setSession(initialSession);
+          await fetchProfileAndSetUser(initialSession.user);
+        }
+      } catch (err) {
+        console.error('[Auth] Failed to restore session:', err);
+      } finally {
+        if (isMounted) {
+          setIsLoading(false);
+        }
+      }
+    }
+
+    initAuth();
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (event, currentSession) => {
+        if (!isMounted) return;
+
+        if (event === 'SIGNED_OUT' || !currentSession?.user) {
+          queryClient.clear();
+          sessionStorage.clear();
+          setSession(null);
+          setUser(null);
+          setIsLoading(false);
+          return;
+        }
+
+        setSession(currentSession);
+        if (currentSession?.user) {
+          await fetchProfileAndSetUser(currentSession.user);
+        } else {
+          setUser(null);
+        }
+        setIsLoading(false);
+      }
+    );
+
+    return () => {
+      isMounted = false;
+      subscription.unsubscribe();
+    };
+  }, []);
+
+  const login = async (email: string, password: string): Promise<User | null> => {
+    setIsLoading(true);
+    try {
+      // Purge query client cache and session storage prior to setting new user session
+      queryClient.clear();
+      sessionStorage.clear();
+
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: email.trim().toLowerCase(),
+        password,
+      });
+
+      if (error) {
+        console.error('[Auth] Login error:', error.message);
+        setIsLoading(false);
+        return null;
+      }
+
+      if (data.user) {
+        const authenticatedUser = await fetchProfileAndSetUser(data.user);
+        setIsLoading(false);
+        return authenticatedUser;
+      }
+
+      setIsLoading(false);
+      return null;
+    } catch (err) {
+      console.error('[Auth] Login exception:', err);
+      setIsLoading(false);
+      return null;
+    }
+  };
+
+  const signUp = async (
+    _email: string,
+    _password: string,
+    _name: string,
+    _role: UserRole
+  ): Promise<{ success: boolean; error?: string }> => {
+    return {
+      success: false,
+      error: 'Self-registration is restricted. Accounts must be provisioned exclusively by Institutional Administration.'
+    };
+  };
+
+  const logout = async () => {
+    setIsLoading(true);
+    try {
+      await supabase.auth.signOut();
+    } catch (err) {
+      console.error('[Auth] Logout error:', err);
+    } finally {
+      queryClient.clear();
+      sessionStorage.clear();
+      setUser(null);
+      setSession(null);
+      setIsLoading(false);
+    }
+  };
+
+  const resetPassword = async (email: string): Promise<{ success: boolean; error?: string }> => {
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(email.trim().toLowerCase(), {
+        redirectTo: `${window.location.origin}/`,
+      });
+      if (error) throw error;
+      return { success: true };
+    } catch (err: any) {
+      return { success: false, error: err.message };
+    }
+  };
+
+  const updatePassword = async (password: string): Promise<{ success: boolean; error?: string }> => {
+    try {
+      const { error } = await supabase.auth.updateUser({ password });
+      if (error) throw error;
+      return { success: true };
+    } catch (err: any) {
+      return { success: false, error: err.message };
+    }
+  };
+
+  const updateUserProfile = async (updates: Partial<User>): Promise<boolean> => {
+    if (!user) return false;
+    try {
+      const { role: _role, ...allowedUpdates } = updates;
+
+      const { error: profileError } = await supabase
+        .from('profiles')
+        .update({
+          name: allowedUpdates.name,
+          avatar_url: allowedUpdates.avatar,
+          phone: allowedUpdates.phone,
+          department: allowedUpdates.department,
+          class_name: allowedUpdates.class_name,
+          roll_number: allowedUpdates.roll_number,
+          preferences: allowedUpdates.preferences !== undefined ? allowedUpdates.preferences : (user as any)?.preferences,
+        })
+        .eq('id', user.id);
+
+      await supabase.auth.updateUser({
+        data: {
+          name: allowedUpdates.name,
+          avatar: allowedUpdates.avatar,
+        },
+      });
+
+      setUser(prev => prev ? { ...prev, ...allowedUpdates } : null);
+      return !profileError;
+    } catch (err) {
+      console.error('[Auth] updateUserProfile error:', err);
+      return false;
+    }
   };
 
   return (
-    <AuthContext.Provider value={{ user, login, logout, isLoading }}>
+    <AuthContext.Provider
+      value={{
+        user,
+        session,
+        login,
+        signUp,
+        logout,
+        resetPassword,
+        updatePassword,
+        updateUserProfile,
+        isLoading,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );

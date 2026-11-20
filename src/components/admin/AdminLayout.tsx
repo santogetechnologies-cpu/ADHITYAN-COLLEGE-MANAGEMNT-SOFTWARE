@@ -1,24 +1,17 @@
 import { Outlet } from 'react-router-dom';
-import { SidebarProvider } from '@/components/ui/sidebar';
 import { ManagementRoute } from '@/components/guards/ManagementRoute';
-import { AdminNavigation } from './AdminNavigation';
-import { AdminHeader } from './AdminHeader';
+import { AdminExecutiveNavbar } from './AdminExecutiveNavbar';
+import { AdminContextBreadcrumbs } from './navigation/AdminContextBreadcrumbs';
 
 export function AdminLayout() {
   return (
     <ManagementRoute allowedRoles={['admin', 'principal', 'financier', 'accountant', 'storekeeper', 'driver', 'naac_coordinator', 'receptionist', 'store_manager', 'finance_manager', 'transport_driver']}>
-      <div className="min-h-screen bg-background">
-        <SidebarProvider>
-          <div className="flex min-h-screen w-full">
-            <AdminNavigation />
-            <main className="flex-1 flex flex-col">
-              <AdminHeader />
-              <div className="flex-1 p-6">
-                <Outlet />
-              </div>
-            </main>
-          </div>
-        </SidebarProvider>
+      <div className="min-h-screen flex flex-col bg-slate-50/50 dark:bg-background text-foreground overflow-x-hidden w-full">
+        <AdminExecutiveNavbar />
+        <AdminContextBreadcrumbs />
+        <main className="flex-1 w-full max-w-screen-2xl mx-auto px-3 sm:px-6 lg:px-8 py-5 min-w-0">
+          <Outlet />
+        </main>
       </div>
     </ManagementRoute>
   );

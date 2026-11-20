@@ -154,8 +154,8 @@ export const EventCreationDialog = ({
   ];
 
   const departments = [
-    'Computer Science', 'Electronics', 'Mechanical', 'Civil', 'Electrical',
-    'Chemical', 'Aerospace', 'Biotechnology', 'Information Technology'
+    'Medical Laboratory Technology', 'Dialysis Technology', 'Radiology & Imaging Technology',
+    'Operation Theatre & Anaesthesia', 'Cardiac Care Technology', 'Physician Assistant'
   ];
 
   const addSpeaker = () => {

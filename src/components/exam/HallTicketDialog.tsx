@@ -40,15 +40,15 @@ export const HallTicketDialog = ({ children, examData }: HallTicketDialogProps) 
             <CardContent>
               <div className="grid grid-cols-3 gap-4 text-center">
                 <div>
-                  <p className="text-2xl font-bold">45</p>
+                  <p className="text-2xl font-bold">{examData?.totalStudents ?? 0}</p>
                   <p className="text-sm text-muted-foreground">Total Students</p>
                 </div>
                 <div>
-                  <p className="text-2xl font-bold">42</p>
+                  <p className="text-2xl font-bold">{examData?.ticketsGenerated ?? 0}</p>
                   <p className="text-sm text-muted-foreground">Tickets Generated</p>
                 </div>
                 <div>
-                  <p className="text-2xl font-bold">3</p>
+                  <p className="text-2xl font-bold">{Math.max(0, (examData?.totalStudents ?? 0) - (examData?.ticketsGenerated ?? 0))}</p>
                   <p className="text-sm text-muted-foreground">Pending</p>
                 </div>
               </div>

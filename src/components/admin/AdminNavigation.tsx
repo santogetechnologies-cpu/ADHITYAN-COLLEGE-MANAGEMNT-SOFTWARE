@@ -6,9 +6,11 @@ import {
   SidebarGroup,
   SidebarGroupContent,
   SidebarGroupLabel,
+  SidebarHeader,
   SidebarMenu,
   SidebarMenuItem,
   SidebarMenuButton,
+  SidebarRail,
   useSidebar,
 } from '@/components/ui/sidebar';
 import {
@@ -96,6 +98,20 @@ const adminModules = [
     url: '/admin/departments',
     description: 'Manage Departments & Sections',
     roles: ['admin']
+  },
+  {
+    title: 'Teacher Assignments',
+    icon: Users,
+    url: '/admin/teachers',
+    description: 'Faculty Scheduling & Subject Allocation',
+    roles: ['admin', 'principal']
+  },
+  {
+    title: 'Timetable Management',
+    icon: Calendar,
+    url: '/admin/timetable',
+    description: 'Class Schedules & Conflict Detection',
+    roles: ['admin', 'principal']
   },
   {
     title: 'NAAC Accreditation',
@@ -215,11 +231,11 @@ const quickAccess = [
 ];
 
 export function AdminNavigation() {
-  const { state } = useSidebar();
+  const { isMobile, state, setOpenMobile } = useSidebar();
   const { user } = useAuth();
   const location = useLocation();
   const currentPath = location.pathname;
-  const isCollapsed = state === 'collapsed';
+  const isCollapsed = !isMobile && state === 'collapsed';
 
   const isActive = (path: string) => {
     if (path === '/admin') {
@@ -240,13 +256,32 @@ export function AdminNavigation() {
   };
 
   return (
-    <Sidebar className={isCollapsed ? 'w-16' : 'w-80'} collapsible="icon">
+    <Sidebar collapsible="icon" className="border-r border-sidebar-border">
+      {/* Brand Header */}
+      <SidebarHeader className="border-b border-sidebar-border/50 py-3">
+        <div className="flex items-center gap-2.5 px-2">
+          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground font-bold shadow-sm">
+            <Shield className="h-4 w-4" />
+          </div>
+          {!isCollapsed && (
+            <div className="min-w-0 flex-1 leading-tight">
+              <h2 className="text-sm font-semibold tracking-tight text-sidebar-foreground truncate">
+                Adhityan ERP
+              </h2>
+              <p className="text-xs text-muted-foreground truncate">
+                Admin Console
+              </p>
+            </div>
+          )}
+        </div>
+      </SidebarHeader>
+
       <SidebarContent>
         {/* Main Admin Modules */}
         <SidebarGroup>
           <SidebarGroupLabel className="flex items-center gap-2">
-            <Shield className="w-4 h-4" />
-            {!isCollapsed && 'Management Modules'}
+            <Shield className="w-4 h-4 shrink-0" />
+            {!isCollapsed && <span>Management Modules</span>}
           </SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
@@ -255,21 +290,31 @@ export function AdminNavigation() {
                 
                 return (
                   <SidebarMenuItem key={module.title}>
-                    <SidebarMenuButton asChild>
-                      <NavLink to={module.url} className={getNavClass(module.url)}>
-                        <div className="flex items-center gap-3 w-full">
-                          <Icon className="w-4 h-4 shrink-0" />
-                          {!isCollapsed && (
-                            <div className="min-w-0 flex-1">
-                              <div className="font-medium text-sm truncate">
-                                {module.title}
-                              </div>
-                              <div className="text-xs text-muted-foreground truncate">
-                                {module.description}
-                              </div>
+                    <SidebarMenuButton 
+                      asChild 
+                      tooltip={isCollapsed ? module.title : undefined}
+                      size="lg"
+                    >
+                      <NavLink 
+                        to={module.url} 
+                        className={getNavClass(module.url)}
+                        onClick={() => {
+                          if (isMobile) {
+                            setOpenMobile(false);
+                          }
+                        }}
+                      >
+                        <Icon className="w-4 h-4 shrink-0" />
+                        {!isCollapsed && (
+                          <div className="min-w-0 flex-1">
+                            <div className="font-medium text-sm truncate">
+                              {module.title}
                             </div>
-                          )}
-                        </div>
+                            <div className="text-xs text-muted-foreground truncate">
+                              {module.description}
+                            </div>
+                          </div>
+                        )}
                       </NavLink>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
@@ -282,7 +327,7 @@ export function AdminNavigation() {
         {/* Quick Access */}
         <SidebarGroup>
           <SidebarGroupLabel>
-            {!isCollapsed && 'Quick Access'}
+            {!isCollapsed && <span>Quick Access</span>}
           </SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
@@ -291,12 +336,24 @@ export function AdminNavigation() {
                 
                 return (
                   <SidebarMenuItem key={item.title}>
-                    <SidebarMenuButton asChild>
-                      <NavLink to={item.url} className={getNavClass(item.url)}>
-                        <Icon className="w-4 h-4" />
+                    <SidebarMenuButton 
+                      asChild 
+                      tooltip={isCollapsed ? item.title : undefined}
+                      size="lg"
+                    >
+                      <NavLink 
+                        to={item.url} 
+                        className={getNavClass(item.url)}
+                        onClick={() => {
+                          if (isMobile) {
+                            setOpenMobile(false);
+                          }
+                        }}
+                      >
+                        <Icon className="w-4 h-4 shrink-0" />
                         {!isCollapsed && (
                           <div className="min-w-0 flex-1">
-                            <div className="font-medium text-sm">{item.title}</div>
+                            <div className="font-medium text-sm truncate">{item.title}</div>
                             <div className="text-xs text-muted-foreground truncate">
                               {item.description}
                             </div>
@@ -328,6 +385,7 @@ export function AdminNavigation() {
           </SidebarGroup>
         )}
       </SidebarContent>
+      <SidebarRail />
     </Sidebar>
   );
 }

@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { db } from '@/services/supabase/database';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -177,69 +178,57 @@ export const MentorshipMatchingDialog = ({
   ];
 
   const departments = [
-    'Computer Science', 'Electronics', 'Mechanical', 'Civil', 'Electrical',
-    'Chemical', 'Aerospace', 'Biotechnology', 'Information Technology'
+    'Medical Laboratory Technology', 'Dialysis Technology', 'Radiology & Imaging Technology',
+    'Operation Theatre & Anaesthesia', 'Cardiac Care Technology', 'Physician Assistant'
   ];
 
   const menteeYears = ['1st Year', '2nd Year', '3rd Year', '4th Year', 'Final Year'];
   const experienceLevels = ['Entry Level', 'Mid-Level', 'Senior Level', 'Executive Level'];
 
-  // Mock data for demonstration
-  const availableMentors = [
-    {
-      id: 'M001',
-      name: 'Rajesh Kumar',
-      batch: '2015',
-      department: 'Computer Science',
-      position: 'Senior Software Engineer',
-      company: 'Google',
-      experience: '8 years',
-      location: 'Bangalore',
-      expertise: ['Full Stack Development', 'System Design', 'Career Growth'],
-      matchScore: 95,
-      rating: 4.8,
-      mentees: 5,
-      avatar: ''
-    },
-    {
-      id: 'M002',
-      name: 'Priya Sharma',
-      batch: '2012',
-      department: 'Electronics',
-      position: 'Product Manager',
-      company: 'Microsoft',
-      experience: '11 years',
-      location: 'Hyderabad',
-      expertise: ['Product Management', 'Leadership', 'Tech Strategy'],
-      matchScore: 88,
-      rating: 4.9,
-      mentees: 8,
-      avatar: ''
-    }
-  ];
+  const [availableMentors, setAvailableMentors] = useState<any[]>([]);
+  const [availableMentees, setAvailableMentees] = useState<any[]>([]);
 
-  const availableMentees = [
-    {
-      id: 'S001',
-      name: 'Arjun Singh',
-      year: '3rd Year',
-      department: 'Computer Science',
-      cgpa: '8.5',
-      interests: ['Software Development', 'Machine Learning'],
-      goals: 'Software Engineer at top tech company',
-      avatar: ''
-    },
-    {
-      id: 'S002',
-      name: 'Sneha Reddy',
-      year: '4th Year',
-      department: 'Electronics',
-      cgpa: '9.1',
-      interests: ['Product Management', 'IoT'],
-      goals: 'Product Manager in tech industry',
-      avatar: ''
+  useEffect(() => {
+    async function loadMentorshipData() {
+      try {
+        const [alumni, students] = await Promise.all([
+          db.getAlumniProfiles(),
+          db.getAllProfiles(),
+        ]);
+        const mentorList = (alumni || []).map(a => ({
+          id: a.id,
+          name: `${a.first_name || ''} ${a.last_name || ''}`.trim() || 'Alumni Mentor',
+          batch: a.graduation_year || 'Alumni',
+          department: a.department || 'Academics',
+          position: a.current_position || 'Professional',
+          company: a.company || 'Industry',
+          experience: '5+ years',
+          location: a.location || 'India',
+          expertise: [a.department || 'Engineering', 'Professional Mentorship'],
+          matchScore: 90,
+          rating: 4.8,
+          mentees: 2,
+          avatar: ''
+        }));
+        setAvailableMentors(mentorList);
+
+        const menteeList = (students || []).filter(s => s.role === 'student').map(s => ({
+          id: s.id,
+          name: s.name,
+          year: s.class_name || 'Enrolled Student',
+          department: s.department || 'Academics',
+          cgpa: '8.5',
+          interests: ['Career Development', 'Skill Enhancement'],
+          goals: 'Academic and industry excellence',
+          avatar: ''
+        }));
+        setAvailableMentees(menteeList);
+      } catch (err) {
+        console.warn('Mentorship data load warning:', err);
+      }
     }
-  ];
+    loadMentorshipData();
+  }, [open]);
 
   const handleCreateMatch = () => {
     if (selectedMentor && selectedMentee) {

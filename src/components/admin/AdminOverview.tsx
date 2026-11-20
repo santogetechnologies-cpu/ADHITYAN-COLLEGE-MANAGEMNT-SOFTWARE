@@ -1,13 +1,17 @@
+import { useState, useEffect, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
+import { Skeleton } from '@/components/ui/skeleton';
 import { Link } from 'react-router-dom';
+import { db } from '@/services/supabase/database';
+import { useRealtimeSubscription } from '@/hooks/useRealtimeSubscription';
 import { 
   Users, 
   GraduationCap, 
   DollarSign, 
-  Truck,
+  Truck, 
   TrendingUp,
   AlertTriangle,
   CheckCircle,
@@ -19,73 +23,318 @@ import {
   Stethoscope,
   Trophy,
   Shield,
-  Calendar,
-  PenTool
+  PenTool,
+  Heart,
+  RefreshCw,
+  Settings
 } from 'lucide-react';
 
 export default function AdminOverview() {
-  const systemStats = [
-    { title: 'Total Students', value: '1,247', icon: GraduationCap, trend: '+5.2%', positive: true },
-    { title: 'Staff Members', value: '156', icon: Users, trend: '+2.1%', positive: true },
-    { title: 'Monthly Revenue', value: '₹24,56,789', icon: DollarSign, trend: '+12.5%', positive: true },
-    { title: 'Active Vehicles', value: '24', icon: Truck, trend: '92% uptime', positive: true }
-  ];
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  const moduleStatus = [
-    { module: 'NAAC Accreditation', completion: 78, status: 'in-progress', priority: 'high' },
-    { module: 'Financial Management', completion: 95, status: 'operational', priority: 'low' },
-    { module: 'Transport System', completion: 85, status: 'operational', priority: 'medium' },
-    { module: 'Store Management', completion: 70, status: 'in-progress', priority: 'medium' }
-  ];
+  const [systemStats, setSystemStats] = useState([
+    { title: 'Total Registered Users', value: '0', icon: Users, trend: 'All portal logins', positive: true },
+    { title: 'Active Students', value: '0', icon: GraduationCap, trend: 'Enrolled & active', positive: true },
+    { title: 'Parent Accounts', value: '0', icon: Heart, trend: 'Verified guardians', positive: true },
+    { title: 'Faculty & Teachers', value: '0', icon: BookOpen, trend: 'Academic staff', positive: true },
+    { title: 'Staff & Admin', value: '0', icon: Shield, trend: 'Operational staff', positive: true },
+    { title: 'Monthly Revenue', value: '₹0', icon: DollarSign, trend: 'Live collections', positive: true }
+  ]);
 
-  const recentActivities = [
-    { activity: 'New teacher registration completed', user: 'Dr. Priya Sharma', time: '2 hours ago', type: 'success' },
-    { activity: 'Fee collection report generated', user: 'Finance Team', time: '4 hours ago', type: 'info' },
-    { activity: 'Transport route updated', user: 'Transport Manager', time: '6 hours ago', type: 'info' },
-    { activity: 'Low stock alert: Laboratory chemicals', user: 'Store Manager', time: '8 hours ago', type: 'warning' }
-  ];
+  const [moduleStatus, setModuleStatus] = useState([
+    { module: 'NAAC Accreditation', completion: 0, status: 'operational', priority: 'high' },
+    { module: 'Financial Management', completion: 0, status: 'operational', priority: 'low' },
+    { module: 'Transport System', completion: 0, status: 'operational', priority: 'medium' },
+    { module: 'Store Management', completion: 0, status: 'operational', priority: 'medium' }
+  ]);
 
-  const pendingApprovals = [
-    { type: 'Student Admission', count: 23, urgency: 'high' },
-    { type: 'Fee Waiver Requests', count: 8, urgency: 'medium' },
-    { type: 'Staff Leave Applications', count: 12, urgency: 'low' },
-    { type: 'Infrastructure Requests', count: 5, urgency: 'high' }
-  ];
+  const [recentActivities, setRecentActivities] = useState<Array<{
+    activity: string;
+    user: string;
+    time: string;
+    type: 'success' | 'warning' | 'info';
+  }>>([]);
+
+  const [pendingApprovals, setPendingApprovals] = useState<Array<{
+    type: string;
+    count: number;
+    urgency: 'high' | 'medium' | 'low';
+    route: string;
+  }>>([
+    { type: 'Student Admission', count: 0, urgency: 'medium', route: '/admission-management' },
+    { type: 'Fee Waiver / Overdue', count: 0, urgency: 'medium', route: '/admin/finance' },
+    { type: 'Student Concerns', count: 0, urgency: 'low', route: '/disciplinary-management' },
+    { type: 'Inventory Procurement', count: 0, urgency: 'medium', route: '/admin/store' }
+  ]);
+
+  const loadData = useCallback(async () => {
+    try {
+      setError(null);
+      const [
+        profiles,
+        transactions,
+        fees,
+        vehicles,
+        naac,
+        admissions,
+        concerns,
+        inventoryTx,
+        inventoryItems
+      ] = await Promise.all([
+        db.getAllProfiles(),
+        db.getFinanceTransactions(),
+        db.getStudentFees(),
+        db.getTransportVehicles(),
+        db.getNAACCriterionProgress(),
+        db.getAdmissionApplications(),
+        db.getConcerns(),
+        db.getInventoryTransactions(),
+        db.getInventoryItems()
+      ]);
+
+      // 1. Stats calculation from live Supabase records
+      const totalUsers = profiles.length;
+      const activeStudents = profiles.filter(p => p.role === 'student' && (p.status === 'active' || !p.status)).length;
+      const parentAccounts = profiles.filter(p => p.role === 'parent').length;
+      const teachers = profiles.filter(p => p.role === 'teacher').length;
+      const staff = profiles.filter(p => p.role !== 'student' && p.role !== 'parent').length;
+      
+      const collectedFees = fees.reduce((sum, f) => sum + Number(f.paid_amount || 0), 0);
+      const txIncome = transactions
+        .filter(t => t.type === 'Fee Payment' || t.type === 'Income' || (t.amount > 0 && t.status === 'Approved'))
+        .reduce((sum, t) => sum + Number(t.amount || 0), 0);
+      const totalRev = Math.max(collectedFees, txIncome, 0);
+
+      const activeVehicles = vehicles.filter(v => v.status === 'active' || v.status === 'on-route');
+
+      setSystemStats([
+        { 
+          title: 'Total Registered Users', 
+          value: totalUsers.toLocaleString(), 
+          icon: Users, 
+          trend: `${totalUsers} Auth Accounts`, 
+          positive: true 
+        },
+        { 
+          title: 'Active Students', 
+          value: activeStudents.toLocaleString(), 
+          icon: GraduationCap, 
+          trend: `${activeStudents} Active Learners`, 
+          positive: true 
+        },
+        { 
+          title: 'Parent Accounts', 
+          value: parentAccounts.toLocaleString(), 
+          icon: Heart, 
+          trend: `${parentAccounts} Linked Portals`, 
+          positive: true 
+        },
+        { 
+          title: 'Faculty & Teachers', 
+          value: teachers.toLocaleString(), 
+          icon: BookOpen, 
+          trend: `${teachers} Academic Staff`, 
+          positive: true 
+        },
+        { 
+          title: 'Staff & Admin', 
+          value: staff.toLocaleString(), 
+          icon: Shield, 
+          trend: `${staff} Operations`, 
+          positive: true 
+        },
+        { 
+          title: 'Monthly Revenue', 
+          value: totalRev >= 100000 ? `₹${(totalRev / 100000).toFixed(1)}L` : `₹${totalRev.toLocaleString()}`, 
+          icon: DollarSign, 
+          trend: 'Live collection', 
+          positive: true 
+        }
+      ]);
+
+      // 2. Module status
+      let naacPct = 0;
+      if (naac.length > 0) {
+        const total = naac.reduce((sum, n) => sum + (n.completion_percentage || 0), 0);
+        naacPct = Math.round(total / naac.length);
+      }
+
+      let finPct = 0;
+      if (fees.length > 0) {
+        const paidCount = fees.filter(f => f.status === 'paid').length;
+        finPct = Math.round((paidCount / fees.length) * 100);
+      }
+
+      const transportPct = vehicles.length > 0 ? Math.round((activeVehicles.length / vehicles.length) * 100) : 0;
+      const storePct = inventoryItems.length > 0 ? Math.round((inventoryItems.filter(i => (i.current_stock || 0) > 0).length / inventoryItems.length) * 100) : 0;
+
+      setModuleStatus([
+        { module: 'NAAC Accreditation', completion: naacPct, status: naacPct >= 80 ? 'operational' : 'in-progress', priority: 'high' },
+        { module: 'Financial Management', completion: finPct, status: 'operational', priority: 'low' },
+        { module: 'Transport System', completion: transportPct, status: 'operational', priority: 'medium' },
+        { module: 'Store Management', completion: storePct, status: storePct >= 80 ? 'operational' : 'in-progress', priority: 'medium' }
+      ]);
+
+      // 3. Pending approvals
+      const pendingAdmissions = admissions.filter(a => a.status === 'Submitted' || a.status === 'Under Review');
+      const overdueFees = fees.filter(f => f.status === 'overdue');
+      const pendingConcerns = concerns.filter(c => c.status === 'pending' || c.status === 'Pending' || c.status === 'open');
+      const pendingProcurement = inventoryTx.filter(t => t.status === 'pending');
+
+      setPendingApprovals([
+        { 
+          type: 'Student Admission', 
+          count: pendingAdmissions.length, 
+          urgency: pendingAdmissions.length > 5 ? 'high' : 'medium',
+          route: '/admission-management' 
+        },
+        { 
+          type: 'Fee Reminders / Overdue', 
+          count: overdueFees.length, 
+          urgency: overdueFees.length > 0 ? 'high' : 'low',
+          route: '/admin/finance' 
+        },
+        { 
+          type: 'Student Concerns', 
+          count: pendingConcerns.length, 
+          urgency: pendingConcerns.length > 3 ? 'high' : 'medium',
+          route: '/disciplinary-management' 
+        },
+        { 
+          type: 'Procurement Orders', 
+          count: pendingProcurement.length, 
+          urgency: pendingProcurement.length > 0 ? 'medium' : 'low',
+          route: '/admin/store' 
+        }
+      ]);
+
+      // 4. Recent activities
+      const acts: Array<{ activity: string; user: string; time: string; type: 'success' | 'warning' | 'info' }> = [];
+      if (transactions.length > 0) {
+        acts.push({
+          activity: `Financial transaction registered: ${transactions[0].description}`,
+          user: transactions[0].department || 'Finance Team',
+          time: transactions[0].date || 'Recent',
+          type: 'info'
+        });
+      }
+      if (pendingAdmissions.length > 0) {
+        acts.push({
+          activity: `New admission submitted for ${pendingAdmissions[0].applicant_name}`,
+          user: pendingAdmissions[0].program || 'Admissions',
+          time: 'Active',
+          type: 'success'
+        });
+      }
+      if (vehicles.length > 0) {
+        acts.push({
+          activity: `Bus route tracking operational for ${vehicles[0].vehicle_number}`,
+          user: vehicles[0].driver_name || 'Transport Team',
+          time: 'Active',
+          type: 'info'
+        });
+      }
+      if (overdueFees.length > 0) {
+        acts.push({
+          activity: `Fee balance notification pending for ${overdueFees[0].student_name}`,
+          user: 'Accounts Department',
+          time: overdueFees[0].due_date || 'Due',
+          type: 'warning'
+        });
+      }
+
+      setRecentActivities(acts);
+    } catch (err: any) {
+      console.warn('loadAdminOverview error:', err);
+      setError(err?.message || 'Failed to connect to Supabase database.');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
+
+  // Real-time subscriptions - automatically refresh counts when rows are added, updated, or removed
+  useRealtimeSubscription('profiles', loadData);
+  useRealtimeSubscription('student_fees', loadData);
+  useRealtimeSubscription('finance_transactions', loadData);
+  useRealtimeSubscription('transport_vehicles', loadData);
+  useRealtimeSubscription('admission_applications', loadData);
+  useRealtimeSubscription('inventory_transactions', loadData);
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">Admin Overview</h1>
-        <p className="text-muted-foreground">
-          Comprehensive system monitoring and management dashboard
-        </p>
+      <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-2">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">Admin Overview</h1>
+          <p className="text-muted-foreground">
+            Live institutional telemetry and real-time database metrics
+          </p>
+        </div>
+        <Button variant="outline" size="sm" onClick={() => { setLoading(true); loadData(); }}>
+          <RefreshCw className={`w-3.5 h-3.5 mr-2 ${loading ? 'animate-spin' : ''}`} />
+          Refresh Metrics
+        </Button>
       </div>
 
-      {/* System Statistics */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        {systemStats.map((stat) => {
-          const Icon = stat.icon;
-          return (
-            <Card key={stat.title}>
+      {/* Error state if connection fails */}
+      {error && (
+        <div className="p-4 border border-destructive/20 bg-destructive/10 rounded-lg flex items-center justify-between text-destructive text-sm">
+          <div className="flex items-center gap-2">
+            <AlertTriangle className="h-4 w-4 shrink-0" />
+            <span>Telemetry Connection Notice: {error}</span>
+          </div>
+          <Button size="sm" variant="outline" onClick={() => { setLoading(true); loadData(); }}>
+            Retry Connection
+          </Button>
+        </div>
+      )}
+
+      {/* System Statistics with Skeleton Loading */}
+      {loading ? (
+        <div className="grid gap-4 grid-cols-2 md:grid-cols-3 lg:grid-cols-6">
+          {[...Array(6)].map((_, i) => (
+            <Card key={i} className="shadow-sm">
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">
-                  {stat.title}
-                </CardTitle>
-                <Icon className="h-4 w-4 text-muted-foreground" />
+                <Skeleton className="h-4 w-20" />
+                <Skeleton className="h-4 w-4 rounded-full" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">{stat.value}</div>
-                <p className={`text-xs flex items-center gap-1 ${
-                  stat.positive ? 'text-green-600' : 'text-red-600'
-                }`}>
-                  <TrendingUp className="h-3 w-3" />
-                  {stat.trend}
-                </p>
+                <Skeleton className="h-7 w-16 mb-2" />
+                <Skeleton className="h-3 w-24" />
               </CardContent>
             </Card>
-          );
-        })}
-      </div>
+          ))}
+        </div>
+      ) : (
+        <div className="grid gap-4 grid-cols-2 md:grid-cols-3 lg:grid-cols-6">
+          {systemStats.map((stat) => {
+            const Icon = stat.icon;
+            return (
+              <Card key={stat.title} className="shadow-sm">
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-xs font-medium line-clamp-1">
+                    {stat.title}
+                  </CardTitle>
+                  <Icon className="h-4 w-4 text-muted-foreground shrink-0" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">{stat.value}</div>
+                  <p className={`text-xs flex items-center gap-1 ${
+                    stat.positive ? 'text-green-600' : 'text-red-600'
+                  }`}>
+                    <TrendingUp className="h-3 w-3 shrink-0" />
+                    <span className="truncate">{stat.trend}</span>
+                  </p>
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
+      )}
 
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
         {/* Module Status */}
@@ -146,8 +395,10 @@ export default function AdminOverview() {
                   >
                     {approval.urgency}
                   </Badge>
-                  <Button size="sm" variant="outline">
-                    Review
+                  <Button size="sm" variant="outline" asChild>
+                    <Link to={approval.route}>
+                      Review
+                    </Link>
                   </Button>
                 </div>
               </div>
@@ -164,19 +415,27 @@ export default function AdminOverview() {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            {recentActivities.map((activity, index) => (
-              <div key={index} className="flex items-start gap-3 p-3 border rounded-lg">
-                {activity.type === 'success' && <CheckCircle className="h-4 w-4 text-green-500 mt-0.5" />}
-                {activity.type === 'warning' && <AlertTriangle className="h-4 w-4 text-yellow-500 mt-0.5" />}
-                {activity.type === 'info' && <FileText className="h-4 w-4 text-blue-500 mt-0.5" />}
-                <div className="flex-1">
-                  <p className="text-sm font-medium">{activity.activity}</p>
-                  <p className="text-xs text-muted-foreground">
-                    {activity.user} • {activity.time}
-                  </p>
-                </div>
+            {recentActivities.length === 0 ? (
+              <div className="py-8 text-center text-sm text-muted-foreground">
+                <Clock className="w-8 h-8 mx-auto text-muted-foreground/40 mb-2" />
+                <p className="font-medium text-foreground/80">No recent activity recorded</p>
+                <p className="text-xs text-muted-foreground mt-0.5">Real-time transactions, admissions, and logs will appear here automatically.</p>
               </div>
-            ))}
+            ) : (
+              recentActivities.map((activity, index) => (
+                <div key={index} className="flex items-start gap-3 p-3 border rounded-lg">
+                  {activity.type === 'success' && <CheckCircle className="h-4 w-4 text-green-500 mt-0.5" />}
+                  {activity.type === 'warning' && <AlertTriangle className="h-4 w-4 text-yellow-500 mt-0.5" />}
+                  {activity.type === 'info' && <FileText className="h-4 w-4 text-blue-500 mt-0.5" />}
+                  <div className="flex-1">
+                    <p className="text-sm font-medium">{activity.activity}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {activity.user} • {activity.time}
+                    </p>
+                  </div>
+                </div>
+              ))
+            )}
           </CardContent>
         </Card>
       </div>
@@ -184,9 +443,9 @@ export default function AdminOverview() {
       {/* Featured Management Modules */}
       <Card>
         <CardHeader>
-          <CardTitle>🚀 New Management Modules</CardTitle>
+          <CardTitle>🚀 Institutional Management Modules</CardTitle>
           <p className="text-sm text-muted-foreground">
-            Access comprehensive management systems for all school operations
+            Access comprehensive management systems for all college operations
           </p>
         </CardHeader>
         <CardContent>
@@ -277,29 +536,41 @@ export default function AdminOverview() {
         </CardHeader>
         <CardContent>
           <div className="grid gap-3 md:grid-cols-3 lg:grid-cols-6">
-            <Button variant="outline" className="h-auto p-4 flex flex-col gap-2">
-              <Users className="h-6 w-6" />
-              <span className="text-xs">User Management</span>
+            <Button variant="outline" className="h-auto p-4 flex flex-col gap-2" asChild>
+              <Link to="/admin/users">
+                <Users className="h-6 w-6" />
+                <span className="text-xs">User Management</span>
+              </Link>
             </Button>
-            <Button variant="outline" className="h-auto p-4 flex flex-col gap-2">
-              <BarChart3 className="h-6 w-6" />
-              <span className="text-xs">System Reports</span>
+            <Button variant="outline" className="h-auto p-4 flex flex-col gap-2" asChild>
+              <Link to="/admin/reports">
+                <BarChart3 className="h-6 w-6" />
+                <span className="text-xs">System Reports</span>
+              </Link>
             </Button>
-            <Button variant="outline" className="h-auto p-4 flex flex-col gap-2">
-              <FileText className="h-6 w-6" />
-              <span className="text-xs">Audit Logs</span>
+            <Button variant="outline" className="h-auto p-4 flex flex-col gap-2" asChild>
+              <Link to="/admin/analytics">
+                <FileText className="h-6 w-6" />
+                <span className="text-xs">Audit Logs</span>
+              </Link>
             </Button>
-            <Button variant="outline" className="h-auto p-4 flex flex-col gap-2">
-              <AlertTriangle className="h-6 w-6" />
-              <span className="text-xs">System Health</span>
+            <Button variant="outline" className="h-auto p-4 flex flex-col gap-2" asChild>
+              <Link to="/admin/settings">
+                <Settings className="h-6 w-6" />
+                <span className="text-xs">System Settings</span>
+              </Link>
             </Button>
-            <Button variant="outline" className="h-auto p-4 flex flex-col gap-2">
-              <DollarSign className="h-6 w-6" />
-              <span className="text-xs">Financial Overview</span>
+            <Button variant="outline" className="h-auto p-4 flex flex-col gap-2" asChild>
+              <Link to="/admin/finance">
+                <DollarSign className="h-6 w-6" />
+                <span className="text-xs">Financial Overview</span>
+              </Link>
             </Button>
-            <Button variant="outline" className="h-auto p-4 flex flex-col gap-2">
-              <GraduationCap className="h-6 w-6" />
-              <span className="text-xs">Academic Reports</span>
+            <Button variant="outline" className="h-auto p-4 flex flex-col gap-2" asChild>
+              <Link to="/admin/departments">
+                <GraduationCap className="h-6 w-6" />
+                <span className="text-xs">Academic Departments</span>
+              </Link>
             </Button>
           </div>
         </CardContent>

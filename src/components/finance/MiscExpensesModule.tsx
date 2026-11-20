@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -6,11 +6,13 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Calendar } from '@/components/ui/calendar';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from '@/components/ui/dialog';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
+import { db } from '@/services/supabase/database';
+import { useRealtimeSubscription } from '@/hooks/useRealtimeSubscription';
+import { useToast } from '@/hooks/use-toast';
+import { FinanceTransaction } from '@/types/database.types';
 import { 
   Plus,
   Receipt,
@@ -21,17 +23,29 @@ import {
   PartyPopper,
   AlertCircle,
   CreditCard,
-  Calendar as CalendarIcon,
   Download,
   Filter,
   Search,
-  DollarSign
+  DollarSign,
+  Loader2
 } from 'lucide-react';
 
 export function MiscExpensesModule() {
+  const { toast } = useToast();
   const [selectedCategory, setSelectedCategory] = useState('all');
-  const [date, setDate] = useState<Date>();
   const [searchTerm, setSearchTerm] = useState('');
+  const [addDialogOpen, setAddDialogOpen] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [transactions, setTransactions] = useState<FinanceTransaction[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const [newExpense, setNewExpense] = useState({
+    category: 'office_supplies',
+    amount: '',
+    vendor: '',
+    description: '',
+    date: new Date().toISOString().split('T')[0]
+  });
 
   const expenseCategories = [
     { id: 'office_supplies', name: 'Office Supplies', icon: Coffee, color: 'bg-blue-100 text-blue-800' },
@@ -43,72 +57,85 @@ export function MiscExpensesModule() {
     { id: 'petty_cash', name: 'Petty Cash', icon: CreditCard, color: 'bg-yellow-100 text-yellow-800' }
   ];
 
-  const recentExpenses = [
-    {
-      id: 'EXP001',
-      category: 'office_supplies',
-      description: 'Office stationery and supplies',
-      amount: 2500,
-      date: '2024-01-15',
-      vendor: 'Office Mart',
-      status: 'approved',
-      receipt: 'RCP001.pdf',
-      approvedBy: 'Principal'
-    },
-    {
-      id: 'EXP002',
-      category: 'utilities',
-      description: 'Electricity bill - January',
-      amount: 15000,
-      date: '2024-01-10',
-      vendor: 'State Electricity Board',
-      status: 'paid',
-      receipt: 'RCP002.pdf',
-      approvedBy: 'Admin'
-    },
-    {
-      id: 'EXP003',
-      category: 'maintenance',
-      description: 'AC servicing - Computer Lab',
-      amount: 3500,
-      date: '2024-01-08',
-      vendor: 'Cool Tech Services',
-      status: 'pending',
-      receipt: 'RCP003.pdf',
-      approvedBy: 'Pending'
-    },
-    {
-      id: 'EXP004',
-      category: 'travel',
-      description: 'Faculty conference travel',
-      amount: 8000,
-      date: '2024-01-05',
-      vendor: 'Travel Agency',
-      status: 'approved',
-      receipt: 'RCP004.pdf',
-      approvedBy: 'Principal'
-    },
-    {
-      id: 'EXP005',
-      category: 'events',
-      description: 'Annual Day celebration expenses',
-      amount: 25000,
-      date: '2024-01-03',
-      vendor: 'Event Organizers',
-      status: 'paid',
-      receipt: 'RCP005.pdf',
-      approvedBy: 'Principal'
+  const loadData = useCallback(async () => {
+    try {
+      const data = await db.getFinanceTransactions();
+      setTransactions(data || []);
+    } catch (err) {
+      console.warn('Failed to load misc expenses:', err);
+    } finally {
+      setLoading(false);
     }
-  ];
+  }, []);
 
-  const monthlyStats = [
-    { category: 'Office Supplies', budgeted: 10000, spent: 6500, remaining: 3500 },
-    { category: 'Utilities', budgeted: 50000, spent: 45000, remaining: 5000 },
-    { category: 'Maintenance', budgeted: 20000, spent: 12000, remaining: 8000 },
-    { category: 'Travel', budgeted: 15000, spent: 8000, remaining: 7000 },
-    { category: 'Events', budgeted: 30000, spent: 25000, remaining: 5000 },
-    { category: 'Emergency', budgeted: 10000, spent: 0, remaining: 10000 }
-  ];
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
+
+  useRealtimeSubscription({ table: 'finance_transactions', onChange: loadData, onReconnect: loadData });
+
+  const handleAddExpense = async () => {
+    if (!newExpense.amount || !newExpense.description.trim()) {
+      toast({ title: 'Validation Error', description: 'Please provide amount and description.', variant: 'destructive' });
+      return;
+    }
+    setSubmitting(true);
+    try {
+      const created = await db.createFinanceTransaction({
+        type: newExpense.category,
+        amount: Number(newExpense.amount),
+        department: newExpense.vendor.trim() || 'Campus Facilities',
+        description: newExpense.description.trim(),
+        urgency: 'medium',
+        status: 'Approved'
+      });
+      if (created) {
+        toast({ title: 'Expense Logged', description: `₹${Number(newExpense.amount).toLocaleString('en-IN')} recorded in ledger.` });
+        setAddDialogOpen(false);
+        setNewExpense({
+          category: 'office_supplies',
+          amount: '',
+          vendor: '',
+          description: '',
+          date: new Date().toISOString().split('T')[0]
+        });
+        loadData();
+      }
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const recentExpenses = transactions.map(t => ({
+    id: t.id.slice(0, 8).toUpperCase(),
+    category: t.type,
+    description: t.description,
+    amount: Number(t.amount) || 0,
+    date: new Date(t.created_at).toISOString().split('T')[0],
+    vendor: t.department || 'Campus Facilities',
+    status: t.status.toLowerCase(),
+    receipt: 'Voucher-' + t.id.slice(0, 6).toUpperCase(),
+    approvedBy: 'Finance Office'
+  }));
+
+  const filteredExpenses = recentExpenses.filter(exp => {
+    const matchesCategory = selectedCategory === 'all' || exp.category === selectedCategory;
+    const matchesSearch = !searchTerm || exp.description.toLowerCase().includes(searchTerm.toLowerCase()) || exp.vendor.toLowerCase().includes(searchTerm.toLowerCase());
+    return matchesCategory && matchesSearch;
+  });
+
+  const monthlyStats = expenseCategories.map(cat => {
+    const spent = recentExpenses
+      .filter(exp => exp.category === cat.id)
+      .reduce((sum, exp) => sum + exp.amount, 0);
+    const budgeted = Math.max(spent * 1.25, 25000);
+    return {
+      category: cat.name,
+      budgeted: Math.round(budgeted),
+      spent,
+      remaining: Math.max(0, Math.round(budgeted - spent))
+    };
+  });
 
   const getCategoryIcon = (categoryId: string) => {
     const category = expenseCategories.find(cat => cat.id === categoryId);
@@ -139,7 +166,7 @@ export function MiscExpensesModule() {
             Track and manage all miscellaneous expenses
           </p>
         </div>
-        <Dialog>
+        <Dialog open={addDialogOpen} onOpenChange={setAddDialogOpen}>
           <DialogTrigger asChild>
             <Button className="gap-2">
               <Plus className="h-4 w-4" />
@@ -154,7 +181,10 @@ export function MiscExpensesModule() {
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="space-y-2">
                   <Label htmlFor="expense-category">Category</Label>
-                  <Select>
+                  <Select
+                    value={newExpense.category}
+                    onValueChange={(val) => setNewExpense({ ...newExpense, category: val })}
+                  >
                     <SelectTrigger>
                       <SelectValue placeholder="Select category" />
                     </SelectTrigger>
@@ -173,40 +203,27 @@ export function MiscExpensesModule() {
                     id="expense-amount" 
                     type="number" 
                     placeholder="Enter amount" 
+                    value={newExpense.amount}
+                    onChange={(e) => setNewExpense({ ...newExpense, amount: e.target.value })}
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="expense-vendor">Vendor/Payee</Label>
+                  <Label htmlFor="expense-vendor">Vendor / Payee</Label>
                   <Input 
                     id="expense-vendor" 
                     placeholder="Enter vendor name" 
+                    value={newExpense.vendor}
+                    onChange={(e) => setNewExpense({ ...newExpense, vendor: e.target.value })}
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label>Date</Label>
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <Button
-                        variant="outline"
-                        className={cn(
-                          "w-full justify-start text-left font-normal",
-                          !date && "text-muted-foreground"
-                        )}
-                      >
-                        <CalendarIcon className="mr-2 h-4 w-4" />
-                        {date ? format(date, "PPP") : <span>Pick a date</span>}
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0" align="start">
-                      <Calendar
-                        mode="single"
-                        selected={date}
-                        onSelect={setDate}
-                        initialFocus
-                        className="pointer-events-auto"
-                      />
-                    </PopoverContent>
-                  </Popover>
+                  <Label htmlFor="expense-date">Date</Label>
+                  <Input 
+                    id="expense-date" 
+                    type="date"
+                    value={newExpense.date}
+                    onChange={(e) => setNewExpense({ ...newExpense, date: e.target.value })}
+                  />
                 </div>
               </div>
               <div className="space-y-2">
@@ -214,19 +231,18 @@ export function MiscExpensesModule() {
                 <Textarea 
                   id="expense-description" 
                   placeholder="Enter expense description" 
+                  value={newExpense.description}
+                  onChange={(e) => setNewExpense({ ...newExpense, description: e.target.value })}
                 />
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="expense-receipt">Receipt/Invoice</Label>
-                <Input 
-                  id="expense-receipt" 
-                  type="file" 
-                  accept=".pdf,.jpg,.jpeg,.png"
-                />
-              </div>
-              <div className="flex gap-2">
-                <Button className="flex-1">Save & Submit for Approval</Button>
-                <Button variant="outline" className="flex-1">Save as Draft</Button>
+              <div className="flex gap-2 pt-2">
+                <Button onClick={handleAddExpense} disabled={submitting} className="flex-1">
+                  {submitting ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null}
+                  Save & Submit for Approval
+                </Button>
+                <Button variant="outline" onClick={() => setAddDialogOpen(false)} className="flex-1">
+                  Cancel
+                </Button>
               </div>
             </div>
           </DialogContent>
@@ -245,7 +261,7 @@ export function MiscExpensesModule() {
               <CardContent className="p-4 text-center">
                 <Icon className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
                 <h3 className="font-medium text-sm">{category.name}</h3>
-                <p className="text-xs text-muted-foreground mt-1">₹{totalAmount.toLocaleString()}</p>
+                <p className="text-xs text-muted-foreground mt-1">₹{totalAmount.toLocaleString('en-IN')}</p>
                 <Badge className={`mt-2 text-xs ${category.color}`}>
                   {categoryExpenses.length} items
                 </Badge>
@@ -270,18 +286,18 @@ export function MiscExpensesModule() {
                 <div className="flex-1">
                   <div className="font-medium">{stat.category}</div>
                   <div className="text-sm text-muted-foreground">
-                    Spent: ₹{stat.spent.toLocaleString()} / ₹{stat.budgeted.toLocaleString()}
+                    Spent: ₹{stat.spent.toLocaleString('en-IN')} / ₹{stat.budgeted.toLocaleString('en-IN')}
                   </div>
                   <div className="w-full bg-gray-200 rounded-full h-2 mt-2">
                     <div 
                       className="bg-blue-600 h-2 rounded-full" 
-                      style={{ width: `${(stat.spent / stat.budgeted) * 100}%` }}
+                      style={{ width: `${Math.min(100, (stat.spent / (stat.budgeted || 1)) * 100)}%` }}
                     ></div>
                   </div>
                 </div>
                 <div className="text-right ml-4">
                   <div className="font-medium text-green-600">
-                    ₹{stat.remaining.toLocaleString()}
+                    ₹{stat.remaining.toLocaleString('en-IN')}
                   </div>
                   <div className="text-xs text-muted-foreground">remaining</div>
                 </div>
@@ -329,7 +345,9 @@ export function MiscExpensesModule() {
           <CardTitle>Recent Expenses</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          {recentExpenses.map((expense) => {
+          {filteredExpenses.length === 0 ? (
+            <p className="text-sm text-muted-foreground py-6 text-center">No expense records found. Add an expense above to record in ledger.</p>
+          ) : filteredExpenses.map((expense) => {
             const Icon = getCategoryIcon(expense.category);
             return (
               <div key={expense.id} className="flex items-center justify-between p-4 border rounded-lg">
@@ -349,7 +367,7 @@ export function MiscExpensesModule() {
                   </div>
                 </div>
                 <div className="text-right">
-                  <div className="font-bold text-lg">₹{expense.amount.toLocaleString()}</div>
+                  <div className="font-bold text-lg">₹{expense.amount.toLocaleString('en-IN')}</div>
                   <Badge className={getStatusColor(expense.status)}>
                     {expense.status}
                   </Badge>

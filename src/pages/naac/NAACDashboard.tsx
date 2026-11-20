@@ -39,13 +39,13 @@ export default function NAACDashboard() {
         </div>
         <div className="flex gap-2">
           <Button asChild>
-            <Link to="/naac/repository">
+            <Link to="/admin/naac/repository">
               <Upload className="w-4 h-4 mr-2" />
               Upload Documents
             </Link>
           </Button>
           <Button variant="outline" asChild>
-            <Link to="/naac/reports">
+            <Link to="/admin/naac/reports">
               <BarChart3 className="w-4 h-4 mr-2" />
               Generate Reports
             </Link>
@@ -171,7 +171,7 @@ export default function NAACDashboard() {
         <CardContent>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <Button variant="outline" className="h-auto p-4" asChild>
-              <Link to="/naac/criterion-1">
+              <Link to="/admin/naac/criterion-1">
                 <div className="text-center">
                   <Award className="w-8 h-8 mx-auto mb-2" />
                   <div className="font-medium">Start Criterion 1</div>
@@ -181,7 +181,7 @@ export default function NAACDashboard() {
             </Button>
             
             <Button variant="outline" className="h-auto p-4" asChild>
-              <Link to="/naac/repository">
+              <Link to="/admin/naac/repository">
                 <div className="text-center">
                   <Upload className="w-8 h-8 mx-auto mb-2" />
                   <div className="font-medium">Upload Evidence</div>
@@ -191,7 +191,7 @@ export default function NAACDashboard() {
             </Button>
             
             <Button variant="outline" className="h-auto p-4" asChild>
-              <Link to="/naac/reports">
+              <Link to="/admin/naac/reports">
                 <div className="text-center">
                   <FileText className="w-8 h-8 mx-auto mb-2" />
                   <div className="font-medium">Generate SSR</div>

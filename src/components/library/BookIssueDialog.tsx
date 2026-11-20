@@ -1,4 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { db } from '@/services/supabase/database';
+import { libraryService } from '@/services/libraryService';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -11,6 +13,7 @@ import { QRScannerDialog } from './QRScannerDialog';
 import { BookOpen, User, CalendarIcon, QrCode, AlertTriangle, CheckCircle } from 'lucide-react';
 import { format, addDays } from 'date-fns';
 import { cn } from '@/lib/utils';
+import { toast } from '@/hooks/use-toast';
 
 interface BookIssueDialogProps {
   children: React.ReactNode;
@@ -30,6 +33,7 @@ export const BookIssueDialog = ({ children, onBookIssued }: BookIssueDialogProps
     author: string;
     isbn: string;
     available: boolean;
+    rawId?: string;
   } | null>(null);
   
   const [studentData, setStudentData] = useState<{
@@ -41,36 +45,74 @@ export const BookIssueDialog = ({ children, onBookIssued }: BookIssueDialogProps
     maxBooks: number;
   } | null>(null);
 
-  // Mock data lookup
-  const mockBookData = {
-    'BK001': { id: 'BK001', title: 'Advanced Mathematics', author: 'Dr. Smith', isbn: '978-0123456789', available: true },
-    'BK002': { id: 'BK002', title: 'Modern Physics', author: 'Prof. Johnson', isbn: '978-0987654321', available: false },
-    'BK003': { id: 'BK003', title: 'Chemistry Fundamentals', author: 'Dr. Brown', isbn: '978-0456789123', available: true },
-    'BK004': { id: 'BK004', title: 'Organic Chemistry', author: 'Dr. Wilson', isbn: '978-0321654987', available: true }
-  };
+  const [availableBooks, setAvailableBooks] = useState<any[]>([]);
+  const [availableStudents, setAvailableStudents] = useState<any[]>([]);
 
-  const mockStudentData = {
-    'ST001': { id: 'ST001', name: 'John Smith', class: 'Class 10A', rollNo: '2024001', currentBooks: 2, maxBooks: 5 },
-    'ST002': { id: 'ST002', name: 'Emma Johnson', class: 'Class 11B', rollNo: '2024002', currentBooks: 1, maxBooks: 5 },
-    'ST003': { id: 'ST003', name: 'Michael Brown', class: 'Class 10A', rollNo: '2024003', currentBooks: 0, maxBooks: 5 },
-    'ST004': { id: 'ST004', name: 'Sarah Wilson', class: 'Class 12B', rollNo: '2024004', currentBooks: 4, maxBooks: 5 }
-  };
+  useEffect(() => {
+    async function loadLibraryData() {
+      try {
+        const [books, profiles] = await Promise.all([
+          db.getLibraryBooks(),
+          db.getAllProfiles(),
+        ]);
+        setAvailableBooks(books || []);
+        setAvailableStudents((profiles || []).filter(p => p.role === 'student'));
+      } catch (err) {
+        console.warn('Library lookup data warning:', err);
+      }
+    }
+    loadLibraryData();
+  }, [open]);
 
   const handleCodeScanned = (code: string, type: 'book' | 'student') => {
     if (type === 'book') {
-      const book = mockBookData[code as keyof typeof mockBookData];
+      const book = availableBooks.find(b => 
+        b.book_code?.toLowerCase() === code.toLowerCase() || 
+        b.id === code || 
+        b.title?.toLowerCase().includes(code.toLowerCase())
+      );
       if (book) {
-        setBookData(book);
+        setBookData({
+          id: book.book_code || book.id,
+          title: book.title,
+          author: book.author,
+          isbn: book.isbn || 'N/A',
+          available: book.status === 'Available' || (book.available_copies || 0) > 0,
+          rawId: book.id,
+        });
         if (scannerMode === 'book') {
           setScannerMode('student');
           setScannerOpen(true);
         }
+      } else {
+        toast({
+          title: "Book Not Found",
+          description: `No book matches code "${code}" in library database.`,
+          variant: "destructive"
+        });
       }
     } else if (type === 'student') {
-      const student = mockStudentData[code as keyof typeof mockStudentData];
+      const student = availableStudents.find(s => 
+        s.id === code || 
+        s.roll_number?.toLowerCase() === code.toLowerCase() || 
+        s.name?.toLowerCase().includes(code.toLowerCase())
+      );
       if (student) {
-        setStudentData(student);
+        setStudentData({
+          id: student.id,
+          name: student.name,
+          class: student.class_name || 'Class',
+          rollNo: student.roll_number || 'N/A',
+          currentBooks: 0,
+          maxBooks: 5,
+        });
         setStep('details');
+      } else {
+        toast({
+          title: "Student Not Found",
+          description: `No registered student matches identifier "${code}".`,
+          variant: "destructive"
+        });
       }
     }
   };
@@ -81,31 +123,97 @@ export const BookIssueDialog = ({ children, onBookIssued }: BookIssueDialogProps
   };
 
   const handleManualBookInput = (bookId: string) => {
-    const book = mockBookData[bookId as keyof typeof mockBookData];
+    const trimmed = bookId.trim();
+    if (!trimmed) return;
+    const book = availableBooks.find(b => 
+      b.book_code?.toLowerCase() === trimmed.toLowerCase() || 
+      b.id === trimmed || 
+      b.title?.toLowerCase().includes(trimmed.toLowerCase())
+    );
     if (book) {
-      setBookData(book);
+      setBookData({
+        id: book.book_code || book.id,
+        title: book.title,
+        author: book.author,
+        isbn: book.isbn || 'N/A',
+        available: book.status === 'Available' || (book.available_copies || 0) > 0,
+        rawId: book.id,
+      });
+    } else {
+      toast({
+        title: "Book Not Found",
+        description: `No book matches code "${trimmed}" in library catalog.`,
+        variant: "destructive"
+      });
     }
   };
 
   const handleManualStudentInput = (studentId: string) => {
-    const student = mockStudentData[studentId as keyof typeof mockStudentData];
+    const trimmed = studentId.trim();
+    if (!trimmed) return;
+    const student = availableStudents.find(s => 
+      s.id === trimmed || 
+      s.roll_number?.toLowerCase() === trimmed.toLowerCase() || 
+      s.name?.toLowerCase().includes(trimmed.toLowerCase())
+    );
     if (student) {
-      setStudentData(student);
+      setStudentData({
+        id: student.id,
+        name: student.name,
+        class: student.class_name || 'Class',
+        rollNo: student.roll_number || 'N/A',
+        currentBooks: 0,
+        maxBooks: 5,
+      });
       setStep('details');
+    } else {
+      toast({
+        title: "Student Not Found",
+        description: `No registered student matches "${trimmed}".`,
+        variant: "destructive"
+      });
     }
   };
 
-  const handleIssueBook = () => {
+  const handleIssueBook = async () => {
     if (bookData && studentData) {
       const issueData = {
-        bookId: bookData.id,
-        bookTitle: bookData.title,
-        studentId: studentData.id,
-        studentName: studentData.name,
-        issueDate: format(issueDate, 'yyyy-MM-dd'),
-        dueDate: format(addDays(issueDate, 14), 'yyyy-MM-dd'),
-        status: 'Issued'
+        book_id: bookData.rawId,
+        book_title: bookData.title,
+        book_code: bookData.id,
+        student_id: studentData.id,
+        student_name: studentData.name,
+        roll_no: studentData.rollNo,
+        class_name: studentData.class,
+        issue_date: format(issueDate, 'yyyy-MM-dd'),
+        due_date: format(addDays(issueDate, 14), 'yyyy-MM-dd'),
+        status: 'Issued' as const,
+        days_overdue: 0,
+        renew_count: 0
       };
+
+      try {
+        if (bookData.rawId && studentData.id) {
+          try {
+            await libraryService.issueBook(bookData.rawId, studentData.id, issueData.due_date);
+          } catch (rpcErr) {
+            console.warn('RPC issue_library_book fallback to db.issueBook:', rpcErr);
+            await db.issueBook(issueData);
+          }
+        } else {
+          await db.issueBook(issueData);
+        }
+        toast({
+          title: "Book Issued Successfully",
+          description: `Issued "${bookData.title}" to ${studentData.name}.`,
+        });
+      } catch (err: any) {
+        toast({
+          title: "Issue Failed",
+          description: err.message || "Could not issue book.",
+          variant: "destructive"
+        });
+      }
       
       onBookIssued?.(issueData);
       resetDialog();
@@ -178,7 +286,7 @@ export const BookIssueDialog = ({ children, onBookIssued }: BookIssueDialogProps
                     <div className="space-y-3">
                       <div className="flex gap-2">
                         <Input 
-                          placeholder="Enter Book ID (e.g., BK001)" 
+                          placeholder="Enter Book ID or Title" 
                           onKeyDown={(e) => {
                             if (e.key === 'Enter') {
                               handleManualBookInput((e.target as HTMLInputElement).value);
@@ -190,7 +298,7 @@ export const BookIssueDialog = ({ children, onBookIssued }: BookIssueDialogProps
                         </Button>
                       </div>
                       <p className="text-xs text-muted-foreground">
-                        Available books: BK001, BK003, BK004 (BK002 is unavailable)
+                        Search books by code or title in the library catalog.
                       </p>
                     </div>
                   )}
@@ -225,7 +333,7 @@ export const BookIssueDialog = ({ children, onBookIssued }: BookIssueDialogProps
                     <div className="space-y-3">
                       <div className="flex gap-2">
                         <Input 
-                          placeholder="Enter Student ID (e.g., ST001)" 
+                          placeholder="Enter Student Name or Roll Number" 
                           onKeyDown={(e) => {
                             if (e.key === 'Enter') {
                               handleManualStudentInput((e.target as HTMLInputElement).value);
@@ -237,7 +345,7 @@ export const BookIssueDialog = ({ children, onBookIssued }: BookIssueDialogProps
                         </Button>
                       </div>
                       <p className="text-xs text-muted-foreground">
-                        Try: ST001, ST002, ST003, ST004
+                        Search registered students by name, roll number, or identifier.
                       </p>
                     </div>
                   )}

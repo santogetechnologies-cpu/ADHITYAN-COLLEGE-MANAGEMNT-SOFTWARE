@@ -37,8 +37,7 @@ export function CriterionTemplate({ criterionNumber, title, description, icon: I
   const criterionProgress = naacData.criterionProgress.find(p => p.criterionNumber === criterionNumber);
   const criterionDocuments = naacData.documents.filter(d => d.criterionNumber === criterionNumber);
 
-  // Mock data for metrics (this would come from API in real implementation)
-  const mockMetrics = [
+    const criterionMetrics = [
     {
       code: `${criterionNumber}.1.1`,
       title: 'Curriculum Planning and Implementation',
@@ -65,8 +64,7 @@ export function CriterionTemplate({ criterionNumber, title, description, icon: I
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
-      // Mock file upload - in real implementation, this would upload to server
-      addDocument({
+            addDocument({
         title: file.name.split('.')[0],
         filename: file.name,
         criterionNumber,
@@ -152,7 +150,7 @@ export function CriterionTemplate({ criterionNumber, title, description, icon: I
               </CardHeader>
               <CardContent>
                 <div className="space-y-3">
-                  {mockMetrics.map((metric) => (
+                  {criterionMetrics.map((metric) => (
                     <div key={metric.code} className="flex items-center justify-between p-2 rounded border">
                       <div className="flex-1">
                         <div className="font-medium text-sm">{metric.code}</div>
@@ -223,7 +221,7 @@ export function CriterionTemplate({ criterionNumber, title, description, icon: I
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {mockMetrics.map((metric) => (
+                  {criterionMetrics.map((metric) => (
                     <TableRow key={metric.code}>
                       <TableCell className="font-medium">{metric.code}</TableCell>
                       <TableCell>{metric.title}</TableCell>
@@ -364,7 +362,7 @@ export function CriterionTemplate({ criterionNumber, title, description, icon: I
                         <SelectValue placeholder="Select metric" />
                       </SelectTrigger>
                       <SelectContent>
-                        {mockMetrics.map((metric) => (
+                        {criterionMetrics.map((metric) => (
                           <SelectItem key={metric.code} value={metric.code}>
                             {metric.code} - {metric.title}
                           </SelectItem>

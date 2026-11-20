@@ -1,7 +1,27 @@
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useRealtimeSubscription } from '@/hooks/useRealtimeSubscription';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+  DialogDescription,
+} from '@/components/ui/dialog';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { 
   CreditCard, 
   DollarSign, 
@@ -14,340 +34,1341 @@ import {
   Award,
   Receipt,
   Building,
-  Globe
+  Globe,
+  Loader2,
+  Plus,
+  Download,
+  CheckCircle,
+  Bell,
+  Search,
+  Filter,
+  RefreshCw,
+  Printer,
+  ArrowRightLeft,
+  RotateCcw
 } from 'lucide-react';
+import { db } from '@/services/supabase/database';
+import { StudentFee, FinanceTransaction, Profile, FeeReceipt } from '@/types/database.types';
+import { useToast } from '@/hooks/use-toast';
+import { FeeStructureManager } from '@/components/finance/FeeStructureManager';
+import { ScholarshipManager } from '@/components/finance/ScholarshipManager';
+import { MiscExpensesModule } from '@/components/finance/MiscExpensesModule';
+import { StudentSearchSelect } from '@/components/shared/StudentSearchSelect';
+import { FeeReceiptModal } from '@/components/shared/FeeReceiptModal';
+import { OFFICIAL_COURSES } from '@/constants/courses';
 
 export default function FinanceManagerDashboard() {
+  const { toast } = useToast();
+  const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
+  const [activeFinanceTab, setActiveFinanceTab] = useState<
+    'overview' | 'student_fees' | 'structures' | 'expenses' | 'scholarships' | 'receipts' | 'reports'
+  >('overview');
+
+  // Core Data State
+  const [studentFees, setStudentFees] = useState<StudentFee[]>([]);
+  const [transactions, setTransactions] = useState<FinanceTransaction[]>([]);
+  const [students, setStudents] = useState<Profile[]>([]);
+  const [receipts, setReceipts] = useState<FeeReceipt[]>([]);
+
+  // Dialog States
+  const [collectPaymentOpen, setCollectPaymentOpen] = useState(false);
+  const [addFeeInvoiceOpen, setAddFeeInvoiceOpen] = useState(false);
+  const [payrollDialogOpen, setPayrollDialogOpen] = useState(false);
+  const [refundDialogOpen, setRefundDialogOpen] = useState(false);
+  const [selectedReceipt, setSelectedReceipt] = useState<FeeReceipt | null>(null);
+  const [receiptModalOpen, setReceiptModalOpen] = useState(false);
+  const [reportDialogOpen, setReportDialogOpen] = useState(false);
+
+  // Filters State for Student Fee Ledger
+  const [feeSearch, setFeeSearch] = useState('');
+  const [feeCourseFilter, setFeeCourseFilter] = useState('all');
+  const [feeSemesterFilter, setFeeSemesterFilter] = useState('all');
+  const [feeStatusFilter, setFeeStatusFilter] = useState('all');
+
+  // Forms
+  const [paymentForm, setPaymentForm] = useState({
+    student_id: '',
+    student_name: '',
+    amount: '',
+    payment_method: 'UPI',
+    notes: ''
+  });
+
+  const [newInvoice, setNewInvoice] = useState({
+    student_id: '',
+    student_name: '',
+    class_name: `${OFFICIAL_COURSES[0].name} - Semester 1`,
+    total_due: '65000',
+    due_date: new Date(Date.now() + 30 * 86400000).toISOString().split('T')[0]
+  });
+
+  const [refundForm, setRefundForm] = useState({
+    student_id: '',
+    student_name: '',
+    fee_id: '',
+    amount: '',
+    reason: 'Fee Concession Adjustment',
+    payment_method: 'Bank Transfer'
+  });
+
+  const [payrollForm, setPayrollForm] = useState({
+    department: 'Teaching Faculty',
+    employees: 45,
+    amount: 1850000,
+    type: 'salary'
+  });
+
+  const loadFinanceData = useCallback(async () => {
+    try {
+      const [fees, txs, studentList, rcpts] = await Promise.all([
+        db.getStudentFees(),
+        db.getFinanceTransactions(),
+        db.getAllStudents(),
+        db.getFeeReceipts()
+      ]);
+      setStudentFees(fees || []);
+      setTransactions(txs || []);
+      setStudents(studentList || []);
+      setReceipts(rcpts || []);
+    } catch (err) {
+      console.error('Failed to load finance data:', err);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadFinanceData();
+  }, [loadFinanceData]);
+
+  // Real-time synchronization
+  useRealtimeSubscription({ table: 'student_fees', onChange: loadFinanceData, onReconnect: loadFinanceData });
+  useRealtimeSubscription({ table: 'finance_transactions', onChange: loadFinanceData, onReconnect: loadFinanceData });
+  useRealtimeSubscription({ table: 'fee_receipts', onChange: loadFinanceData, onReconnect: loadFinanceData });
+
+  // Real financial calculations
+  const totalCollected = studentFees.reduce((acc, curr) => acc + Number(curr.paid_amount || 0), 0);
+  const totalOutstanding = studentFees.reduce((acc, curr) => acc + Number(curr.total_due || 0), 0);
+  const totalInvoiced = totalCollected + totalOutstanding;
+  const collectionPercentage = totalInvoiced > 0 ? Number(((totalCollected / totalInvoiced) * 100).toFixed(1)) : 100;
+
+  const paidStudentsCount = studentFees.filter(f => f.status === 'paid').length;
+  const pendingStudentsCount = studentFees.filter(f => f.status === 'pending' || f.status === 'partially_paid').length;
+  const overdueStudentsCount = studentFees.filter(f => f.status === 'overdue').length;
+
+  const payrollTransactions = transactions.filter(t => t.type?.toLowerCase().includes('payroll'));
+  const monthlyPayrollTotal = payrollTransactions.reduce((acc, curr) => acc + Number(curr.amount || 0), 0);
+
+  const totalExpenses = transactions
+    .filter(t => 
+      t.type?.toLowerCase().includes('procurement') || 
+      t.type?.toLowerCase().includes('maintenance') || 
+      t.type?.toLowerCase().includes('payroll') ||
+      t.type?.toLowerCase().includes('utilities') ||
+      t.type?.toLowerCase().includes('supplies') ||
+      t.type?.toLowerCase().includes('office') ||
+      t.type?.toLowerCase().includes('expense') ||
+      t.type?.toLowerCase().includes('refund')
+    )
+    .reduce((acc, curr) => acc + Number(curr.amount || 0), 0);
+
+  const totalRefunds = transactions
+    .filter(t => t.type?.toLowerCase().includes('refund'))
+    .reduce((acc, curr) => acc + Number(curr.amount || 0), 0);
+
+  const netBalance = Math.max(0, totalCollected - totalExpenses);
+
   const financialStats = [
-    { title: 'Total Fee Collection', value: '₹3,45,67,890', icon: DollarSign, trend: '+18.5%', positive: true },
-    { title: 'Outstanding Dues', value: '₹52,23,100', icon: AlertCircle, trend: '-12.3%', positive: true },
-    { title: 'Monthly Payroll', value: '₹2,15,45,200', icon: Users, trend: '+3.2%', positive: false },
-    { title: 'Scholarship Fund', value: '₹15,67,340', icon: Award, trend: '+25.1%', positive: true }
+    { 
+      title: 'Total Fee Realized', 
+      value: `₹${totalCollected.toLocaleString('en-IN')}`, 
+      icon: DollarSign, 
+      trend: `${studentFees.length} active fee accounts`, 
+      positive: true 
+    },
+    { 
+      title: 'Outstanding Dues', 
+      value: `₹${totalOutstanding.toLocaleString('en-IN')}`, 
+      icon: AlertCircle, 
+      trend: `${pendingStudentsCount + overdueStudentsCount} pending collections`, 
+      positive: overdueStudentsCount === 0 
+    },
+    { 
+      title: 'Operating Expenses', 
+      value: `₹${totalExpenses.toLocaleString('en-IN')}`, 
+      icon: TrendingDown, 
+      trend: `${transactions.length} ledger vouchers recorded`, 
+      positive: false 
+    },
+    { 
+      title: 'Net Cash Reserve', 
+      value: `₹${netBalance.toLocaleString('en-IN')}`, 
+      icon: PiggyBank, 
+      trend: 'Fiscal net surplus', 
+      positive: netBalance > 0 
+    }
   ];
 
-  const feeCollection = {
-    target: 4000000,
-    collected: 3456789,
-    percentage: 86.4
+  // Filtered Student Fees
+  const filteredFees = useMemo(() => {
+    return studentFees.filter((fee) => {
+      // Search
+      const searchMatch = !feeSearch.trim() || 
+        fee.student_name?.toLowerCase().includes(feeSearch.toLowerCase()) ||
+        fee.class_name?.toLowerCase().includes(feeSearch.toLowerCase()) ||
+        fee.student_id?.toLowerCase().includes(feeSearch.toLowerCase());
+
+      // Course filter
+      const courseMatch = feeCourseFilter === 'all' || 
+        fee.class_name?.toLowerCase().includes(feeCourseFilter.toLowerCase());
+
+      // Semester filter
+      const semMatch = feeSemesterFilter === 'all' || 
+        fee.class_name?.toLowerCase().includes(feeSemesterFilter.toLowerCase());
+
+      // Status filter
+      const statusMatch = feeStatusFilter === 'all' || fee.status === feeStatusFilter;
+
+      return searchMatch && courseMatch && semMatch && statusMatch;
+    });
+  }, [studentFees, feeSearch, feeCourseFilter, feeSemesterFilter, feeStatusFilter]);
+
+  // Handle Record Payment
+  const handleRecordPayment = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const amountNum = Number(paymentForm.amount);
+    if (!paymentForm.student_name.trim() || isNaN(amountNum) || amountNum <= 0) {
+      toast({ title: 'Validation Error', description: 'Please select a valid student and positive payment amount.', variant: 'destructive' });
+      return;
+    }
+    setSubmitting(true);
+    try {
+      const res = await db.recordFeePayment({
+        studentId: paymentForm.student_id,
+        studentName: paymentForm.student_name,
+        amount: amountNum,
+        paymentMethod: paymentForm.payment_method,
+        notes: paymentForm.notes
+      });
+      if (res.success) {
+        toast({ 
+          title: 'Payment Recorded', 
+          description: `₹${amountNum.toLocaleString('en-IN')} payment received from ${paymentForm.student_name} via ${paymentForm.payment_method}. Official receipt generated.` 
+        });
+        setCollectPaymentOpen(false);
+        setPaymentForm({ student_id: '', student_name: '', amount: '', payment_method: 'UPI', notes: '' });
+        loadFinanceData();
+
+        if (res.receipt) {
+          setSelectedReceipt(res.receipt);
+          setReceiptModalOpen(true);
+        }
+      } else {
+        toast({ title: 'Payment Failed', description: res.error, variant: 'destructive' });
+      }
+    } catch (err: any) {
+      toast({ title: 'Error', description: err.message, variant: 'destructive' });
+    } finally {
+      setSubmitting(false);
+    }
   };
 
-  const studentFeeStatus = [
-    { student_id: 'ST001', name: 'Aarav Sharma', grade: 'Class 10', fee_due: '₹15,000', due_date: '2024-01-15', status: 'overdue' },
-    { student_id: 'ST002', name: 'Priya Patel', grade: 'Class 8', fee_due: '₹12,000', due_date: '2024-01-20', status: 'pending' },
-    { student_id: 'ST003', name: 'Arjun Kumar', grade: 'Class 12', fee_due: '₹18,000', due_date: '2024-01-25', status: 'reminder_sent' },
-    { student_id: 'ST004', name: 'Sakshi Singh', grade: 'Class 9', fee_due: '₹14,000', due_date: '2024-01-30', status: 'paid' }
-  ];
+  // Handle Create Fee Invoice
+  const handleCreateFeeInvoice = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const dueNum = Number(newInvoice.total_due);
+    if (!newInvoice.student_name.trim() || isNaN(dueNum) || dueNum <= 0) {
+      toast({ title: 'Validation Error', description: 'Please fill student name and due amount.', variant: 'destructive' });
+      return;
+    }
+    setSubmitting(true);
+    try {
+      const created = await db.createStudentFee({
+        student_id: newInvoice.student_id || undefined,
+        student_name: newInvoice.student_name,
+        class_name: newInvoice.class_name,
+        total_due: dueNum,
+        paid_amount: 0,
+        due_date: newInvoice.due_date,
+        status: 'pending'
+      });
+      if (created) {
+        toast({ title: 'Fee Invoice Created', description: `Invoice of ₹${dueNum.toLocaleString('en-IN')} created for ${created.student_name}.` });
+        setAddFeeInvoiceOpen(false);
+        setNewInvoice({
+          student_id: '',
+          student_name: '',
+          class_name: `${OFFICIAL_COURSES[0].name} - Semester 1`,
+          total_due: '65000',
+          due_date: new Date(Date.now() + 30 * 86400000).toISOString().split('T')[0]
+        });
+        loadFinanceData();
+      }
+    } catch (err: any) {
+      toast({ title: 'Error', description: err.message, variant: 'destructive' });
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
-  const scholarships = [
-    { type: 'Merit Scholarship', students: 25, amount: '₹2,50,000', criteria: 'Above 90%', status: 'active' },
-    { type: 'Need-based Aid', students: 18, amount: '₹1,80,000', criteria: 'Family Income < 2L', status: 'active' },
-    { type: 'Sports Excellence', students: 12, amount: '₹1,20,000', criteria: 'State Level', status: 'processing' },
-    { type: 'Cultural Arts', students: 8, amount: '₹80,000', criteria: 'Competition Winners', status: 'active' }
-  ];
+  // Handle Process Refund
+  const handleProcessRefund = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const refundNum = Number(refundForm.amount);
+    if (!refundForm.student_name.trim() || isNaN(refundNum) || refundNum <= 0) {
+      toast({ title: 'Validation Error', description: 'Please fill student and refund amount.', variant: 'destructive' });
+      return;
+    }
+    setSubmitting(true);
+    try {
+      const res = await db.processFeeRefund({
+        studentId: refundForm.student_id,
+        studentName: refundForm.student_name,
+        feeId: refundForm.fee_id || undefined,
+        amount: refundNum,
+        reason: refundForm.reason,
+        paymentMethod: refundForm.payment_method
+      });
+      if (res.success) {
+        toast({ title: 'Refund Processed', description: `₹${refundNum.toLocaleString('en-IN')} refund recorded for ${refundForm.student_name}.` });
+        setRefundDialogOpen(false);
+        setRefundForm({ student_id: '', student_name: '', fee_id: '', amount: '', reason: 'Fee Concession Adjustment', payment_method: 'Bank Transfer' });
+        loadFinanceData();
+      } else {
+        toast({ title: 'Refund Failed', description: res.error, variant: 'destructive' });
+      }
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
-  const payrollData = [
-    { department: 'Teaching Staff', employees: 45, amount: '₹18,50,000', status: 'processed', type: 'salary' },
-    { department: 'Administrative', employees: 12, amount: '₹4,20,000', status: 'processed', type: 'salary' },
-    { department: 'Support Staff', employees: 28, amount: '₹6,80,000', status: 'pending', type: 'salary' },
-    { department: 'Part-time Faculty', employees: 8, amount: '₹2,40,000', status: 'processing', type: 'hourly' }
-  ];
+  // Handle Send Reminder
+  const handleSendReminder = async (fee: StudentFee) => {
+    try {
+      const ok = await db.sendFeeReminder({
+        feeId: fee.id,
+        studentId: fee.student_id,
+        studentName: fee.student_name,
+        amountDue: Number(fee.total_due),
+        dueDate: fee.due_date
+      });
+      if (ok) {
+        toast({ 
+          title: 'Reminder Dispatched', 
+          description: `Fee payment alert dispatched to ${fee.student_name} and linked parent for ₹${Number(fee.total_due).toLocaleString('en-IN')}.` 
+        });
+        loadFinanceData();
+      }
+    } catch (err: any) {
+      toast({ title: 'Error', description: err.message, variant: 'destructive' });
+    }
+  };
+
+  // Handle Disburse Payroll
+  const handleDisbursePayroll = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSubmitting(true);
+    try {
+      const ok = await db.processPayrollDisbursement({
+        department: payrollForm.department,
+        amount: Number(payrollForm.amount),
+        employeesCount: Number(payrollForm.employees),
+        type: payrollForm.type
+      });
+      if (ok) {
+        toast({ 
+          title: 'Payroll Disbursed', 
+          description: `Disbursed ₹${Number(payrollForm.amount).toLocaleString('en-IN')} to ${payrollForm.employees} employees in ${payrollForm.department}.` 
+        });
+        setPayrollDialogOpen(false);
+        loadFinanceData();
+      }
+    } catch (err: any) {
+      toast({ title: 'Error', description: err.message, variant: 'destructive' });
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  // CSV Audit Export
+  const handleExportCSV = () => {
+    if (studentFees.length === 0 && transactions.length === 0) {
+      toast({ title: 'No Data', description: 'No financial records available for audit export.' });
+      return;
+    }
+    const headers = ['Student Name', 'Class / Course', 'Total Due (INR)', 'Paid Amount (INR)', 'Due Date', 'Status'];
+    const rows = studentFees.map(f => [
+      `"${f.student_name}"`,
+      `"${f.class_name}"`,
+      f.total_due,
+      f.paid_amount,
+      `"${f.due_date}"`,
+      `"${f.status}"`
+    ]);
+    const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement('a');
+    link.setAttribute('href', encodedUri);
+    link.setAttribute('download', `Finance_Audit_Ledger_${new Date().toISOString().split('T')[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    toast({ title: 'Audit Exported', description: 'Financial ledger successfully downloaded.' });
+  };
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">Finance Management Hub</h1>
-        <p className="text-muted-foreground">
-          Comprehensive financial oversight and fee management
-        </p>
+      {/* Top Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 bg-white p-5 border border-slate-200 rounded-2xl shadow-2xs">
+        <div>
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold">
+              <DollarSign className="w-5 h-5" />
+            </div>
+            <h1 className="text-2xl font-bold tracking-tight text-slate-900">Institutional Finance Hub</h1>
+          </div>
+          <p className="text-xs text-slate-500 mt-0.5">
+            Real-time fee collections, student accounts, verifiable receipts & institutional fiscal accounting
+          </p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button variant="outline" size="sm" onClick={handleExportCSV} className="h-8 text-xs">
+            <Download className="h-3.5 w-3.5 mr-1.5" />
+            CSV Ledger
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => setPayrollDialogOpen(true)} className="h-8 text-xs">
+            <Users className="h-3.5 w-3.5 mr-1.5 text-blue-600" />
+            Disburse Payroll
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => setAddFeeInvoiceOpen(true)} className="h-8 text-xs font-semibold">
+            <Plus className="h-3.5 w-3.5 mr-1.5 text-purple-600" />
+            Issue Invoice
+          </Button>
+          <Button size="sm" onClick={() => setCollectPaymentOpen(true)} className="h-8 text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs">
+            <CreditCard className="h-3.5 w-3.5 mr-1.5" />
+            Collect Fee Payment
+          </Button>
+        </div>
       </div>
 
-      {/* Financial Statistics */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        {financialStats.map((stat) => {
-          const Icon = stat.icon;
-          return (
-            <Card key={stat.title}>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">
-                  {stat.title}
+      {/* Finance Portal Sub-Navigation Tabs */}
+      <div className="flex flex-wrap items-center gap-1.5 border-b border-border pb-3">
+        <Button
+          size="sm"
+          variant={activeFinanceTab === 'overview' ? 'default' : 'outline'}
+          onClick={() => setActiveFinanceTab('overview')}
+          className="text-xs font-bold"
+        >
+          Overview & Telemetry
+        </Button>
+        <Button
+          size="sm"
+          variant={activeFinanceTab === 'student_fees' ? 'default' : 'outline'}
+          onClick={() => setActiveFinanceTab('student_fees')}
+          className="text-xs font-bold"
+        >
+          Student Fee Accounts ({studentFees.length})
+        </Button>
+        <Button
+          size="sm"
+          variant={activeFinanceTab === 'structures' ? 'default' : 'outline'}
+          onClick={() => setActiveFinanceTab('structures')}
+          className="text-xs font-bold"
+        >
+          Fee Structures Master
+        </Button>
+        <Button
+          size="sm"
+          variant={activeFinanceTab === 'expenses' ? 'default' : 'outline'}
+          onClick={() => setActiveFinanceTab('expenses')}
+          className="text-xs font-bold"
+        >
+          Expenses & Vouchers
+        </Button>
+        <Button
+          size="sm"
+          variant={activeFinanceTab === 'scholarships' ? 'default' : 'outline'}
+          onClick={() => setActiveFinanceTab('scholarships')}
+          className="text-xs font-bold"
+        >
+          Scholarships & Waivers
+        </Button>
+        <Button
+          size="sm"
+          variant={activeFinanceTab === 'receipts' ? 'default' : 'outline'}
+          onClick={() => setActiveFinanceTab('receipts')}
+          className="text-xs font-bold"
+        >
+          Official Receipts ({receipts.length})
+        </Button>
+        <Button
+          size="sm"
+          variant={activeFinanceTab === 'reports' ? 'default' : 'outline'}
+          onClick={() => setActiveFinanceTab('reports')}
+          className="text-xs font-bold"
+        >
+          Financial Reports
+        </Button>
+      </div>
+
+      {/* 1. OVERVIEW TAB */}
+      {activeFinanceTab === 'overview' && (
+        <div className="space-y-6">
+          {/* Financial Statistics */}
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+            {financialStats.map((stat) => {
+              const Icon = stat.icon;
+              return (
+                <Card key={stat.title} className="bg-white rounded-2xl border border-slate-200/90 shadow-2xs">
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-xs font-bold text-slate-600">
+                      {stat.title}
+                    </CardTitle>
+                    <Icon className="h-4 w-4 text-muted-foreground" />
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-black text-slate-900">
+                      {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : stat.value}
+                    </div>
+                    <p className={`text-xs flex items-center gap-1 mt-1 font-semibold ${
+                      stat.positive ? 'text-emerald-600' : 'text-amber-600'
+                    }`}>
+                      {stat.positive ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
+                      {stat.trend}
+                    </p>
+                  </CardContent>
+                </Card>
+              );
+            })}
+          </div>
+
+          <div className="grid gap-6 md:grid-cols-2">
+            {/* Fee Collection Progress */}
+            <Card className="bg-white rounded-2xl border border-slate-200/90 shadow-2xs">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-sm font-bold flex items-center gap-2 text-slate-900">
+                  <CreditCard className="h-4 w-4 text-[#1D61E7]" />
+                  Fee Collection Recovery
                 </CardTitle>
-                <Icon className="h-4 w-4 text-muted-foreground" />
+                <CardDescription className="text-xs">
+                  Realized collections vs outstanding student fee demand
+                </CardDescription>
               </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{stat.value}</div>
-                <p className={`text-xs flex items-center gap-1 ${
-                  stat.positive ? 'text-green-600' : 'text-red-600'
-                }`}>
-                  {stat.positive ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
-                  {stat.trend} from last month
-                </p>
+              <CardContent className="space-y-4">
+                <div className="space-y-2">
+                  <div className="flex justify-between text-xs">
+                    <span className="text-slate-500">Total Invoiced: ₹{totalInvoiced.toLocaleString('en-IN')}</span>
+                    <span className="font-bold text-emerald-600">Collected: ₹{totalCollected.toLocaleString('en-IN')}</span>
+                  </div>
+                  <Progress value={collectionPercentage} className="h-2.5" />
+                  <p className="text-[11px] text-slate-500">
+                    {collectionPercentage}% of target collected to date
+                  </p>
+                </div>
+                
+                <div className="grid grid-cols-3 gap-3 pt-2">
+                  <div className="text-center p-3 bg-emerald-50 rounded-xl border border-emerald-200">
+                    <div className="text-lg font-black text-emerald-700">{paidStudentsCount}</div>
+                    <div className="text-[10px] font-bold text-emerald-800 uppercase tracking-wider">Paid Accounts</div>
+                  </div>
+                  <div className="text-center p-3 bg-amber-50 rounded-xl border border-amber-200">
+                    <div className="text-lg font-black text-amber-700">{pendingStudentsCount}</div>
+                    <div className="text-[10px] font-bold text-amber-800 uppercase tracking-wider">Pending Dues</div>
+                  </div>
+                  <div className="text-center p-3 bg-rose-50 rounded-xl border border-rose-200">
+                    <div className="text-lg font-black text-rose-700">{overdueStudentsCount}</div>
+                    <div className="text-[10px] font-bold text-rose-800 uppercase tracking-wider">Overdue Dues</div>
+                  </div>
+                </div>
               </CardContent>
             </Card>
-          );
-        })}
-      </div>
 
-      <div className="grid gap-6 md:grid-cols-2">
-        {/* Fee Collection Progress */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <CreditCard className="h-5 w-5" />
-              Fee Collection Progress
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <div className="flex justify-between text-sm">
-                <span>Target: ₹{(feeCollection.target / 100000).toFixed(1)}L</span>
-                <span>Collected: ₹{(feeCollection.collected / 100000).toFixed(1)}L</span>
-              </div>
-              <Progress value={feeCollection.percentage} className="h-3" />
-              <p className="text-xs text-muted-foreground">
-                {feeCollection.percentage}% of annual target achieved
-              </p>
-            </div>
-            
-            <div className="grid grid-cols-3 gap-3 pt-4">
-              <div className="text-center p-3 bg-green-50 rounded-lg">
-                <div className="text-lg font-bold text-green-700">1,245</div>
-                <div className="text-xs text-green-600">Paid Students</div>
-              </div>
-              <div className="text-center p-3 bg-yellow-50 rounded-lg">
-                <div className="text-lg font-bold text-yellow-700">89</div>
-                <div className="text-xs text-yellow-600">Pending</div>
-              </div>
-              <div className="text-center p-3 bg-red-50 rounded-lg">
-                <div className="text-lg font-bold text-red-700">34</div>
-                <div className="text-xs text-red-600">Overdue</div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Online Payment Gateway Integration */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Globe className="h-5 w-5" />
-              Online Payment Gateway
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div className="text-center p-4 border rounded-lg">
-                <div className="text-2xl font-bold text-blue-600">₹8.2L</div>
-                <div className="text-xs text-muted-foreground">Online Payments Today</div>
-              </div>
-              <div className="text-center p-4 border rounded-lg">
-                <div className="text-2xl font-bold text-green-600">98.5%</div>
-                <div className="text-xs text-muted-foreground">Success Rate</div>
-              </div>
-            </div>
-            
-            <div className="space-y-2">
-              <div className="flex justify-between text-sm">
-                <span>UPI</span>
-                <span>45%</span>
-              </div>
-              <div className="flex justify-between text-sm">
-                <span>Card Payment</span>
-                <span>35%</span>
-              </div>
-              <div className="flex justify-between text-sm">
-                <span>Net Banking</span>
-                <span>20%</span>
-              </div>
-            </div>
-            
-            <Button className="w-full">
-              Payment Gateway Settings
-            </Button>
-          </CardContent>
-        </Card>
-      </div>
-
-      <div className="grid gap-6 md:grid-cols-2">
-        {/* Student Fee Status & Dues */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <AlertCircle className="h-5 w-5" />
-              Student Fee Status & Reminders
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {studentFeeStatus.map((student, index) => (
-              <div key={index} className="flex items-center justify-between p-3 border rounded-lg">
-                <div className="flex-1">
-                  <div className="font-medium">{student.name}</div>
-                  <div className="text-sm text-muted-foreground">
-                    {student.student_id} • {student.grade}
+            {/* Income vs Expenses Cash Flow */}
+            <Card className="bg-white rounded-2xl border border-slate-200/90 shadow-2xs">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-sm font-bold flex items-center gap-2 text-slate-900">
+                  <Globe className="h-4 w-4 text-emerald-600" />
+                  Operating Cash Flow & Reserves
+                </CardTitle>
+                <CardDescription className="text-xs">
+                  Direct ledger revenues vs operating expenses
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="p-3 bg-emerald-50 rounded-xl border border-emerald-200">
+                    <span className="text-[10px] uppercase font-bold text-emerald-700">Total Realized Revenue</span>
+                    <div className="text-xl font-black text-emerald-800 mt-0.5">₹{totalCollected.toLocaleString('en-IN')}</div>
                   </div>
-                  <div className="text-sm font-semibold text-red-600">
-                    Due: {student.fee_due} by {student.due_date}
+                  <div className="p-3 bg-rose-50 rounded-xl border border-rose-200">
+                    <span className="text-[10px] uppercase font-bold text-rose-700">Total Expenses & Vouchers</span>
+                    <div className="text-xl font-black text-rose-800 mt-0.5">₹{totalExpenses.toLocaleString('en-IN')}</div>
                   </div>
                 </div>
-                <div className="flex items-center gap-2">
-                  <Badge 
-                    variant={
-                      student.status === 'paid' ? 'default' :
-                      student.status === 'overdue' ? 'destructive' :
-                      student.status === 'reminder_sent' ? 'secondary' : 'outline'
-                    }
-                  >
-                    {student.status.replace('_', ' ')}
-                  </Badge>
-                  {student.status !== 'paid' && (
-                    <Button size="sm" variant="outline">
-                      Send Reminder
-                    </Button>
+
+                <div className="space-y-2 text-xs">
+                  <div className="flex justify-between py-1 border-b text-slate-600">
+                    <span>Staff Payroll Disbursed</span>
+                    <span className="font-bold text-slate-900">₹{monthlyPayrollTotal.toLocaleString('en-IN')}</span>
+                  </div>
+                  <div className="flex justify-between py-1 border-b text-slate-600">
+                    <span>Student Concessions & Refunds</span>
+                    <span className="font-bold text-slate-900">₹{totalRefunds.toLocaleString('en-IN')}</span>
+                  </div>
+                  <div className="flex justify-between py-1 text-slate-600">
+                    <span>Operating Cash Reserve</span>
+                    <span className="font-black text-emerald-600">₹{netBalance.toLocaleString('en-IN')}</span>
+                  </div>
+                </div>
+
+                <div className="pt-2 flex gap-2">
+                  <Button size="sm" variant="outline" className="flex-1 text-xs" onClick={() => setActiveFinanceTab('student_fees')}>
+                    View Student Fee Accounts
+                  </Button>
+                  <Button size="sm" className="flex-1 text-xs font-bold bg-[#1D61E7] text-white" onClick={() => setActiveFinanceTab('reports')}>
+                    Detailed Reports
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Recent Financial Transactions Feed */}
+          <Card className="bg-white rounded-2xl border border-slate-200/90 shadow-2xs">
+            <CardHeader className="flex flex-row items-center justify-between pb-3">
+              <div>
+                <CardTitle className="text-sm font-bold text-slate-900">Recent Institutional Ledger Transactions</CardTitle>
+                <CardDescription className="text-xs">Live entries from student fee payments, expenses, and payroll</CardDescription>
+              </div>
+              <Button size="sm" variant="ghost" onClick={loadFinanceData} className="h-7 text-xs">
+                <RefreshCw className="w-3.5 h-3.5 mr-1" /> Refresh
+              </Button>
+            </CardHeader>
+            <CardContent>
+              {transactions.length === 0 ? (
+                <div className="text-center py-8 text-xs text-slate-500">No ledger transactions logged yet.</div>
+              ) : (
+                <div className="divide-y divide-slate-100">
+                  {transactions.slice(0, 6).map((tx) => (
+                    <div key={tx.id} className="py-2.5 flex items-center justify-between text-xs">
+                      <div className="flex items-center space-x-3">
+                        <div className={`w-8 h-8 rounded-lg flex items-center justify-center font-bold ${
+                          tx.type?.toLowerCase().includes('fee') ? 'bg-emerald-50 text-emerald-600' :
+                          tx.type?.toLowerCase().includes('refund') ? 'bg-amber-50 text-amber-600' :
+                          'bg-blue-50 text-blue-600'
+                        }`}>
+                          {tx.type?.toLowerCase().includes('fee') ? <DollarSign className="w-4 h-4" /> : <Receipt className="w-4 h-4" />}
+                        </div>
+                        <div>
+                          <div className="font-bold text-slate-900">{tx.type} — {tx.description || tx.department || 'General'}</div>
+                          <div className="text-[10px] text-slate-400">
+                            {tx.department} • {tx.created_at ? new Date(tx.created_at).toLocaleDateString('en-IN') : 'Today'}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <span className={`font-black ${
+                          tx.type?.toLowerCase().includes('fee') ? 'text-emerald-600' : 'text-slate-900'
+                        }`}>
+                          {tx.type?.toLowerCase().includes('fee') ? '+' : '-'}₹{Number(tx.amount).toLocaleString('en-IN')}
+                        </span>
+                        <div className="text-[10px]">
+                          <Badge variant="outline" className="text-[9px] font-bold capitalize">
+                            {tx.status || 'Approved'}
+                          </Badge>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {/* 2. STUDENT FEES TAB */}
+      {activeFinanceTab === 'student_fees' && (
+        <div className="space-y-4">
+          {/* Controls Bar */}
+          <div className="bg-white p-4 border border-slate-200 rounded-2xl shadow-2xs space-y-3">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="flex-1 flex flex-wrap items-center gap-2">
+                <div className="relative flex-1 min-w-[200px]">
+                  <Search className="w-3.5 h-3.5 absolute left-3 top-2.5 text-slate-400" />
+                  <Input
+                    placeholder="Search by Student ID, Name or Class..."
+                    value={feeSearch}
+                    onChange={(e) => setFeeSearch(e.target.value)}
+                    className="pl-8 h-8 text-xs rounded-xl"
+                  />
+                </div>
+                <Select value={feeCourseFilter} onValueChange={setFeeCourseFilter}>
+                  <SelectTrigger className="w-[180px] h-8 text-xs rounded-xl"><SelectValue placeholder="All Courses" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Courses</SelectItem>
+                    {OFFICIAL_COURSES.map(c => (
+                      <SelectItem key={c.id} value={c.name}>{c.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Select value={feeSemesterFilter} onValueChange={setFeeSemesterFilter}>
+                  <SelectTrigger className="w-[130px] h-8 text-xs rounded-xl"><SelectValue placeholder="All Semesters" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Semesters</SelectItem>
+                    {[1, 2, 3, 4, 5, 6].map(sem => (
+                      <SelectItem key={sem} value={`Semester ${sem}`}>Semester {sem}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Select value={feeStatusFilter} onValueChange={setFeeStatusFilter}>
+                  <SelectTrigger className="w-[130px] h-8 text-xs rounded-xl"><SelectValue placeholder="All Status" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Status</SelectItem>
+                    <SelectItem value="paid">Paid</SelectItem>
+                    <SelectItem value="partially_paid">Partially Paid</SelectItem>
+                    <SelectItem value="pending">Pending</SelectItem>
+                    <SelectItem value="overdue">Overdue</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="flex items-center space-x-2">
+                <Button size="sm" onClick={() => setAddFeeInvoiceOpen(true)} className="h-8 text-xs">
+                  <Plus className="w-3.5 h-3.5 mr-1" /> Single Invoice
+                </Button>
+                <Button size="sm" onClick={() => setCollectPaymentOpen(true)} className="h-8 text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white">
+                  <CreditCard className="w-3.5 h-3.5 mr-1" /> Collect Payment
+                </Button>
+              </div>
+            </div>
+          </div>
+
+          {/* Student Fees Table */}
+          <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-2xs">
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs text-left">
+                <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 uppercase text-[10px] font-bold">
+                  <tr>
+                    <th className="p-3">Student & ID</th>
+                    <th className="p-3">Program / Semester</th>
+                    <th className="p-3">Total Invoiced</th>
+                    <th className="p-3">Paid Amount</th>
+                    <th className="p-3">Balance Due</th>
+                    <th className="p-3">Due Date</th>
+                    <th className="p-3">Status</th>
+                    <th className="p-3 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {filteredFees.length === 0 ? (
+                    <tr>
+                      <td colSpan={8} className="p-8 text-center text-slate-400">
+                        No student fee records found matching your filters.
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredFees.map((fee) => {
+                      const matchedStudent = students.find(s => s.id === fee.student_id);
+                      const displayId = matchedStudent?.student_id || matchedStudent?.roll_number || 'AIP-VERIFIED';
+
+                      return (
+                        <tr key={fee.id} className="hover:bg-slate-50/50">
+                          <td className="p-3">
+                            <div className="font-bold text-slate-900">{fee.student_name}</div>
+                            <div className="text-[10px] text-slate-400 font-mono">{displayId}</div>
+                          </td>
+                          <td className="p-3 text-slate-700 font-medium">
+                            {fee.class_name}
+                          </td>
+                          <td className="p-3 font-semibold text-slate-800">
+                            ₹{(Number(fee.total_due) + Number(fee.paid_amount)).toLocaleString('en-IN')}
+                          </td>
+                          <td className="p-3 font-bold text-emerald-600">
+                            ₹{Number(fee.paid_amount).toLocaleString('en-IN')}
+                          </td>
+                          <td className="p-3 font-bold text-rose-600">
+                            ₹{Number(fee.total_due).toLocaleString('en-IN')}
+                          </td>
+                          <td className="p-3 text-slate-500 font-mono text-[11px]">
+                            {fee.due_date}
+                          </td>
+                          <td className="p-3">
+                            <Badge
+                              variant={
+                                fee.status === 'paid' ? 'default' :
+                                fee.status === 'overdue' ? 'destructive' :
+                                fee.status === 'partially_paid' ? 'outline' : 'secondary'
+                              }
+                              className={`text-[10px] font-bold capitalize ${
+                                fee.status === 'paid' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
+                                fee.status === 'partially_paid' ? 'bg-amber-50 text-amber-700 border-amber-200' : ''
+                              }`}
+                            >
+                              {fee.status?.replace('_', ' ')}
+                            </Badge>
+                          </td>
+                          <td className="p-3 text-right space-x-1">
+                            {fee.status !== 'paid' && (
+                              <>
+                                <Button
+                                  size="sm"
+                                  className="h-7 text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg"
+                                  onClick={() => {
+                                    setPaymentForm({
+                                      student_id: fee.student_id || '',
+                                      student_name: fee.student_name,
+                                      amount: String(fee.total_due),
+                                      payment_method: 'UPI',
+                                      notes: `Payment for ${fee.class_name}`
+                                    });
+                                    setCollectPaymentOpen(true);
+                                  }}
+                                >
+                                  Collect
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="h-7 text-xs text-amber-600 border-amber-200 hover:bg-amber-50 rounded-lg"
+                                  onClick={() => handleSendReminder(fee)}
+                                >
+                                  <Bell className="w-3 h-3 mr-1" /> Remind
+                                </Button>
+                              </>
+                            )}
+
+                            {Number(fee.paid_amount) > 0 && (
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="h-7 text-xs text-rose-600 hover:bg-rose-50"
+                                onClick={() => {
+                                  setRefundForm({
+                                    student_id: fee.student_id || '',
+                                    student_name: fee.student_name,
+                                    fee_id: fee.id,
+                                    amount: String(Math.min(10000, Number(fee.paid_amount))),
+                                    reason: 'Fee Concession Adjustment',
+                                    payment_method: 'Bank Transfer'
+                                  });
+                                  setRefundDialogOpen(true);
+                                }}
+                              >
+                                <RotateCcw className="w-3 h-3 mr-1" /> Refund
+                              </Button>
+                            )}
+
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="h-7 text-xs"
+                              onClick={() => {
+                                // Match official fee receipt if exists or construct temporary view
+                                const existingReceipt = receipts.find(r => r.student_id === fee.student_id);
+                                if (existingReceipt) {
+                                  setSelectedReceipt(existingReceipt);
+                                  setReceiptModalOpen(true);
+                                } else {
+                                  // Construct receipt object for viewing
+                                  const previewReceipt: FeeReceipt = {
+                                    id: fee.id,
+                                    receipt_number: `REC-${fee.id.slice(0, 8).toUpperCase()}`,
+                                    student_id: fee.student_id,
+                                    student_name: fee.student_name,
+                                    roll_number: displayId,
+                                    department: fee.class_name,
+                                    academic_year: '2026-2027',
+                                    semester: fee.class_name,
+                                    fee_type: 'Tuition & Academic Composite Fee',
+                                    gross_amount: Number(fee.total_due) + Number(fee.paid_amount),
+                                    discount_applied: 0,
+                                    amount_paid: Number(fee.paid_amount),
+                                    balance_remaining: Number(fee.total_due),
+                                    payment_mode: 'Verified Counter / Online',
+                                    transaction_reference: `TXN-${fee.id.slice(0, 8)}`,
+                                    payment_date: fee.created_at,
+                                    qr_verification_token: `QR-AIP-${fee.id.slice(0, 6)}`,
+                                    created_at: fee.created_at
+                                  };
+                                  setSelectedReceipt(previewReceipt);
+                                  setReceiptModalOpen(true);
+                                }
+                              }}
+                            >
+                              <Receipt className="w-3.5 h-3.5" />
+                            </Button>
+                          </td>
+                        </tr>
+                      );
+                    })
                   )}
-                </div>
-              </div>
-            ))}
-          </CardContent>
-        </Card>
-
-        {/* Scholarships & Concessions */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Award className="h-5 w-5" />
-              Scholarships & Concessions Management
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {scholarships.map((scholarship, index) => (
-              <div key={index} className="flex items-center justify-between p-3 border rounded-lg">
-                <div className="flex-1">
-                  <div className="font-medium">{scholarship.type}</div>
-                  <div className="text-sm text-muted-foreground">
-                    {scholarship.students} students • {scholarship.amount}
-                  </div>
-                  <div className="text-xs text-muted-foreground">
-                    Criteria: {scholarship.criteria}
-                  </div>
-                </div>
-                <Badge 
-                  variant={scholarship.status === 'active' ? 'default' : 'secondary'}
-                  className="capitalize"
-                >
-                  {scholarship.status}
-                </Badge>
-              </div>
-            ))}
-          </CardContent>
-        </Card>
-      </div>
-
-      <div className="grid gap-6 md:grid-cols-2">
-        {/* Payroll Management */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Users className="h-5 w-5" />
-              Payroll Management (Teachers & Staff)
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {payrollData.map((dept, index) => (
-              <div key={index} className="flex items-center justify-between p-3 border rounded-lg">
-                <div className="flex-1">
-                  <div className="font-medium">{dept.department}</div>
-                  <div className="text-sm text-muted-foreground">
-                    {dept.employees} employees • {dept.amount}
-                  </div>
-                  <div className="text-xs text-muted-foreground capitalize">
-                    Payment type: {dept.type}
-                  </div>
-                </div>
-                <Badge 
-                  variant={
-                    dept.status === 'processed' ? 'default' :
-                    dept.status === 'processing' ? 'secondary' : 'outline'
-                  }
-                  className="capitalize"
-                >
-                  {dept.status}
-                </Badge>
-              </div>
-            ))}
-          </CardContent>
-        </Card>
-
-        {/* Budget Planning & Reports */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <PiggyBank className="h-5 w-5" />
-              Budget Planning & Audit Reports
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div className="text-center p-4 border rounded-lg">
-                <div className="text-xl font-bold text-green-600">₹45.2L</div>
-                <div className="text-xs text-muted-foreground">Monthly Income</div>
-              </div>
-              <div className="text-center p-4 border rounded-lg">
-                <div className="text-xl font-bold text-red-600">₹38.7L</div>
-                <div className="text-xs text-muted-foreground">Monthly Expenses</div>
-              </div>
+                </tbody>
+              </table>
             </div>
-            
-            <div className="space-y-3">
-              <Button variant="outline" className="w-full justify-start">
-                <Receipt className="h-4 w-4 mr-2" />
-                Generate Receipt
-              </Button>
-              <Button variant="outline" className="w-full justify-start">
-                <FileText className="h-4 w-4 mr-2" />
-                Financial Report
-              </Button>
-              <Button variant="outline" className="w-full justify-start">
-                <Building className="h-4 w-4 mr-2" />
-                Audit Export
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+          </div>
+        </div>
+      )}
 
-      {/* Quick Actions */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Financial Operations</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid gap-3 md:grid-cols-3 lg:grid-cols-6">
-            <Button variant="outline" className="h-auto p-4 flex flex-col gap-2">
-              <CreditCard className="h-6 w-6" />
-              <span className="text-xs">Fee Collection</span>
-            </Button>
-            <Button variant="outline" className="h-auto p-4 flex flex-col gap-2">
-              <Globe className="h-6 w-6" />
-              <span className="text-xs">Payment Gateway</span>
-            </Button>
-            <Button variant="outline" className="h-auto p-4 flex flex-col gap-2">
-              <Award className="h-6 w-6" />
-              <span className="text-xs">Scholarships</span>
-            </Button>
-            <Button variant="outline" className="h-auto p-4 flex flex-col gap-2">
-              <Users className="h-6 w-6" />
-              <span className="text-xs">Payroll</span>
-            </Button>
-            <Button variant="outline" className="h-auto p-4 flex flex-col gap-2">
-              <PiggyBank className="h-6 w-6" />
-              <span className="text-xs">Budget Planning</span>
-            </Button>
-            <Button variant="outline" className="h-auto p-4 flex flex-col gap-2">
-              <FileText className="h-6 w-6" />
-              <span className="text-xs">Reports</span>
+      {/* 3. FEE STRUCTURES TAB */}
+      {activeFinanceTab === 'structures' && (
+        <FeeStructureManager />
+      )}
+
+      {/* 4. EXPENSES TAB */}
+      {activeFinanceTab === 'expenses' && (
+        <MiscExpensesModule />
+      )}
+
+      {/* 5. SCHOLARSHIPS TAB */}
+      {activeFinanceTab === 'scholarships' && (
+        <ScholarshipManager />
+      )}
+
+      {/* 6. RECEIPTS & AUDIT TAB */}
+      {activeFinanceTab === 'receipts' && (
+        <div className="space-y-4">
+          <div className="bg-white p-4 border border-slate-200 rounded-2xl shadow-2xs flex items-center justify-between">
+            <div>
+              <h3 className="text-sm font-bold text-slate-900">Official Institutional Receipts Ledger</h3>
+              <p className="text-xs text-slate-500">Verifiable fee receipts with cryptographic QR tokens and timestamp audit records</p>
+            </div>
+            <Button size="sm" variant="outline" onClick={handleExportCSV} className="h-8 text-xs">
+              <Download className="w-3.5 h-3.5 mr-1.5" /> Export Receipts CSV
             </Button>
           </div>
-        </CardContent>
-      </Card>
+
+          <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-2xs">
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs text-left">
+                <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 uppercase text-[10px] font-bold">
+                  <tr>
+                    <th className="p-3">Receipt No</th>
+                    <th className="p-3">Student Name</th>
+                    <th className="p-3">Course / Dept</th>
+                    <th className="p-3">Payment Mode</th>
+                    <th className="p-3">Amount Paid</th>
+                    <th className="p-3">Payment Date</th>
+                    <th className="p-3">QR Token</th>
+                    <th className="p-3 text-right">Action</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {receipts.length === 0 ? (
+                    <tr>
+                      <td colSpan={8} className="p-8 text-center text-slate-400">
+                        No receipts issued yet. When payments are recorded, official receipts will appear here.
+                      </td>
+                    </tr>
+                  ) : (
+                    receipts.map((r) => (
+                      <tr key={r.id} className="hover:bg-slate-50/50">
+                        <td className="p-3 font-mono font-bold text-[#1D61E7]">
+                          {r.receipt_number}
+                        </td>
+                        <td className="p-3">
+                          <div className="font-bold text-slate-900">{r.student_name}</div>
+                          <div className="text-[10px] text-slate-400 font-mono">{r.roll_number}</div>
+                        </td>
+                        <td className="p-3 text-slate-600">{r.department}</td>
+                        <td className="p-3">
+                          <Badge variant="outline" className="text-[10px] font-bold">
+                            {r.payment_mode}
+                          </Badge>
+                        </td>
+                        <td className="p-3 font-extrabold text-emerald-600">
+                          ₹{Number(r.amount_paid).toLocaleString('en-IN')}
+                        </td>
+                        <td className="p-3 text-slate-500 font-mono text-[11px]">
+                          {new Date(r.payment_date).toLocaleDateString('en-IN')}
+                        </td>
+                        <td className="p-3 font-mono text-[10px] text-slate-400">
+                          {r.qr_verification_token?.slice(0, 14)}...
+                        </td>
+                        <td className="p-3 text-right">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-7 text-xs font-semibold"
+                            onClick={() => {
+                              setSelectedReceipt(r);
+                              setReceiptModalOpen(true);
+                            }}
+                          >
+                            <Printer className="w-3.5 h-3.5 mr-1 text-[#1D61E7]" /> View & Print
+                          </Button>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 7. FINANCIAL REPORTS TAB */}
+      {activeFinanceTab === 'reports' && (
+        <div className="space-y-6">
+          <div className="bg-white p-5 border border-slate-200 rounded-2xl shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <h3 className="text-base font-bold text-slate-900">Financial Reports & Institutional Analytics</h3>
+              <p className="text-xs text-slate-500">Program-wise revenue recovery, defaulters list, and budget statements</p>
+            </div>
+            <div className="flex items-center space-x-2">
+              <Button size="sm" variant="outline" onClick={() => window.print()} className="h-8 text-xs">
+                <Printer className="w-3.5 h-3.5 mr-1.5" /> Print Statement
+              </Button>
+              <Button size="sm" onClick={handleExportCSV} className="h-8 text-xs font-bold bg-[#1D61E7] text-white">
+                <Download className="w-3.5 h-3.5 mr-1.5" /> Export Full Report
+              </Button>
+            </div>
+          </div>
+
+          {/* Program-wise Collection Recovery Matrix */}
+          <Card className="bg-white rounded-2xl border border-slate-200/90 shadow-2xs">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm font-bold text-slate-900">Program-Wise Fee Recovery Matrix</CardTitle>
+              <CardDescription className="text-xs">Breakdown of collections and outstanding dues across official paramedical programs</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="overflow-x-auto">
+                <table className="w-full text-xs text-left">
+                  <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 uppercase text-[10px] font-bold">
+                    <tr>
+                      <th className="p-3">Academic Program</th>
+                      <th className="p-3">Tracked Accounts</th>
+                      <th className="p-3">Total Invoiced</th>
+                      <th className="p-3">Amount Realized</th>
+                      <th className="p-3">Outstanding Dues</th>
+                      <th className="p-3">Recovery %</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {OFFICIAL_COURSES.map((course) => {
+                      const courseFees = studentFees.filter(f => f.class_name?.toLowerCase().includes(course.name.toLowerCase()));
+                      const cInvoiced = courseFees.reduce((sum, f) => sum + Number(f.total_due) + Number(f.paid_amount), 0);
+                      const cPaid = courseFees.reduce((sum, f) => sum + Number(f.paid_amount), 0);
+                      const cDue = courseFees.reduce((sum, f) => sum + Number(f.total_due), 0);
+                      const cPct = cInvoiced > 0 ? Math.round((cPaid / cInvoiced) * 100) : 100;
+
+                      return (
+                        <tr key={course.id} className="hover:bg-slate-50/50">
+                          <td className="p-3 font-bold text-slate-900">{course.name}</td>
+                          <td className="p-3 text-slate-600 font-semibold">{courseFees.length}</td>
+                          <td className="p-3 font-semibold text-slate-800">₹{cInvoiced.toLocaleString('en-IN')}</td>
+                          <td className="p-3 font-bold text-emerald-600">₹{cPaid.toLocaleString('en-IN')}</td>
+                          <td className="p-3 font-bold text-rose-600">₹{cDue.toLocaleString('en-IN')}</td>
+                          <td className="p-3">
+                            <div className="flex items-center space-x-2">
+                              <Progress value={cPct} className="w-16 h-2" />
+                              <span className="font-bold text-slate-700">{cPct}%</span>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {/* Collect Fee Payment Dialog */}
+      <Dialog open={collectPaymentOpen} onOpenChange={setCollectPaymentOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-base font-bold flex items-center gap-2">
+              <CreditCard className="w-5 h-5 text-emerald-600" />
+              Record Student Fee Payment
+            </DialogTitle>
+            <DialogDescription className="text-xs">
+              Record fee collection via Cash, UPI, Card, Net Banking or Cheque
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleRecordPayment} className="space-y-3.5 text-xs">
+            <div>
+              <Label className="text-xs font-bold">Select Enrolled Student *</Label>
+              <StudentSearchSelect
+                value={paymentForm.student_id}
+                onSelect={(st) => {
+                  setPaymentForm(prev => ({
+                    ...prev,
+                    student_id: st?.id || '',
+                    student_name: st?.name || '',
+                  }));
+                }}
+                placeholder="Search by AIP Student ID or Name..."
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label className="text-xs font-bold">Amount (INR) *</Label>
+                <Input
+                  type="number"
+                  min="1"
+                  placeholder="e.g. 25000"
+                  value={paymentForm.amount}
+                  onChange={(e) => setPaymentForm({ ...paymentForm, amount: e.target.value })}
+                  className="h-8 text-xs mt-1"
+                  required
+                />
+              </div>
+              <div>
+                <Label className="text-xs font-bold">Payment Method</Label>
+                <Select 
+                  value={paymentForm.payment_method} 
+                  onValueChange={(val) => setPaymentForm({ ...paymentForm, payment_method: val })}
+                >
+                  <SelectTrigger className="h-8 text-xs mt-1"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="UPI">UPI (GooglePay / PhonePe / Paytm)</SelectItem>
+                    <SelectItem value="Card Payment">Debit / Credit Card</SelectItem>
+                    <SelectItem value="Net Banking">Net Banking / NEFT / RTGS</SelectItem>
+                    <SelectItem value="Cash">Cash / Accounts Front Desk</SelectItem>
+                    <SelectItem value="Demand Draft">Demand Draft / Cheque</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div>
+              <Label className="text-xs font-bold">Notes / Transaction Reference (Optional)</Label>
+              <Input
+                placeholder="e.g. Bank Ref / Cheque No / Remarks"
+                value={paymentForm.notes}
+                onChange={(e) => setPaymentForm({ ...paymentForm, notes: e.target.value })}
+                className="h-8 text-xs mt-1"
+              />
+            </div>
+            <DialogFooter className="pt-2">
+              <Button type="button" variant="outline" size="sm" onClick={() => setCollectPaymentOpen(false)} className="h-8 text-xs">Cancel</Button>
+              <Button type="submit" size="sm" disabled={submitting || !paymentForm.student_name} className="h-8 text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white">
+                {submitting ? <Loader2 className="w-3.5 h-3.5 animate-spin mr-1" /> : null}
+                Confirm Payment & Issue Receipt
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Issue Fee Invoice Dialog */}
+      <Dialog open={addFeeInvoiceOpen} onOpenChange={setAddFeeInvoiceOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-base font-bold flex items-center gap-2">
+              <Plus className="w-5 h-5 text-purple-600" />
+              Issue Student Fee Invoice
+            </DialogTitle>
+            <DialogDescription className="text-xs">
+              Generate academic fee demand for a specific enrolled student
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleCreateFeeInvoice} className="space-y-3.5 text-xs">
+            <div>
+              <Label className="text-xs font-bold">Select Enrolled Student *</Label>
+              <StudentSearchSelect
+                value={newInvoice.student_id}
+                onSelect={(st) => {
+                  setNewInvoice(prev => ({
+                    ...prev,
+                    student_id: st?.id || '',
+                    student_name: st?.name || '',
+                    class_name: st?.class_name || st?.department || prev.class_name,
+                  }));
+                }}
+                placeholder="Search by AIP Student ID or Name..."
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label className="text-xs font-bold">Program / Semester</Label>
+                <Select
+                  value={newInvoice.class_name}
+                  onValueChange={(val) => setNewInvoice({ ...newInvoice, class_name: val })}
+                >
+                  <SelectTrigger className="h-8 text-xs mt-1">
+                    <SelectValue placeholder="Select Course & Semester" />
+                  </SelectTrigger>
+                  <SelectContent className="max-h-60">
+                    {OFFICIAL_COURSES.flatMap(c => 
+                      [1, 2, 3, 4, 5, 6].map(sem => (
+                        <SelectItem key={`${c.name}-Sem${sem}`} value={`${c.name} - Semester ${sem}`}>
+                          {c.name} - Semester {sem}
+                        </SelectItem>
+                      ))
+                    )}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label className="text-xs font-bold">Total Due (INR) *</Label>
+                <Input
+                  type="number"
+                  min="1"
+                  value={newInvoice.total_due}
+                  onChange={(e) => setNewInvoice({ ...newInvoice, total_due: e.target.value })}
+                  className="h-8 text-xs mt-1"
+                  required
+                />
+              </div>
+            </div>
+            <div>
+              <Label className="text-xs font-bold">Due Date</Label>
+              <Input
+                type="date"
+                value={newInvoice.due_date}
+                onChange={(e) => setNewInvoice({ ...newInvoice, due_date: e.target.value })}
+                className="h-8 text-xs mt-1"
+                required
+              />
+            </div>
+            <DialogFooter className="pt-2">
+              <Button type="button" variant="outline" size="sm" onClick={() => setAddFeeInvoiceOpen(false)} className="h-8 text-xs">Cancel</Button>
+              <Button type="submit" size="sm" disabled={submitting || !newInvoice.student_name} className="h-8 text-xs font-bold bg-[#1D61E7] text-white">
+                {submitting ? <Loader2 className="w-3.5 h-3.5 animate-spin mr-1" /> : null}
+                Generate Invoice
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Process Refund Dialog */}
+      <Dialog open={refundDialogOpen} onOpenChange={setRefundDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-base font-bold flex items-center gap-2">
+              <RotateCcw className="w-5 h-5 text-rose-600" />
+              Process Student Fee Refund
+            </DialogTitle>
+            <DialogDescription className="text-xs">
+              Issue an authorized fee refund and record corresponding financial ledger entries
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleProcessRefund} className="space-y-3.5 text-xs">
+            <div className="p-3 bg-slate-50 border rounded-xl space-y-1">
+              <div className="font-bold text-slate-800">Student: {refundForm.student_name}</div>
+              <div className="text-slate-500">Student ID: {refundForm.student_id}</div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label className="text-xs font-bold">Refund Amount (INR) *</Label>
+                <Input
+                  type="number"
+                  min="1"
+                  value={refundForm.amount}
+                  onChange={(e) => setRefundForm({ ...refundForm, amount: e.target.value })}
+                  className="h-8 text-xs mt-1"
+                  required
+                />
+              </div>
+              <div>
+                <Label className="text-xs font-bold">Disbursement Mode</Label>
+                <Select 
+                  value={refundForm.payment_method} 
+                  onValueChange={(val) => setRefundForm({ ...refundForm, payment_method: val })}
+                >
+                  <SelectTrigger className="h-8 text-xs mt-1"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Bank Transfer">Bank Transfer / NEFT</SelectItem>
+                    <SelectItem value="UPI">UPI Return</SelectItem>
+                    <SelectItem value="Cheque">Cheque Refund</SelectItem>
+                    <SelectItem value="Cash">Cash Return</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div>
+              <Label className="text-xs font-bold">Reason for Refund *</Label>
+              <Input
+                value={refundForm.reason}
+                onChange={(e) => setRefundForm({ ...refundForm, reason: e.target.value })}
+                placeholder="e.g. Scholarship waiver adjustment / Duplicate payment"
+                className="h-8 text-xs mt-1"
+                required
+              />
+            </div>
+            <DialogFooter className="pt-2">
+              <Button type="button" variant="outline" size="sm" onClick={() => setRefundDialogOpen(false)} className="h-8 text-xs">Cancel</Button>
+              <Button type="submit" size="sm" disabled={submitting || !refundForm.amount} className="h-8 text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white">
+                {submitting ? <Loader2 className="w-3.5 h-3.5 animate-spin mr-1" /> : null}
+                Authorize Refund
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Disburse Payroll Dialog */}
+      <Dialog open={payrollDialogOpen} onOpenChange={setPayrollDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-base font-bold flex items-center gap-2">
+              <Users className="w-5 h-5 text-blue-600" />
+              Disburse Monthly Staff Payroll
+            </DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleDisbursePayroll} className="space-y-3.5 text-xs">
+            <div>
+              <Label className="text-xs font-bold">Staff Department</Label>
+              <Select 
+                value={payrollForm.department} 
+                onValueChange={(val) => setPayrollForm({ ...payrollForm, department: val })}
+              >
+                <SelectTrigger className="h-8 text-xs mt-1"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Teaching Faculty">Teaching Faculty</SelectItem>
+                  <SelectItem value="Administrative Staff">Administrative Staff</SelectItem>
+                  <SelectItem value="Support Staff & Transport Drivers">Support Staff & Transport Drivers</SelectItem>
+                  <SelectItem value="Guest Lecturers">Guest & Clinical Faculty</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label className="text-xs font-bold">Staff Count</Label>
+                <Input
+                  type="number"
+                  min="1"
+                  value={payrollForm.employees}
+                  onChange={(e) => setPayrollForm({ ...payrollForm, employees: Number(e.target.value) })}
+                  className="h-8 text-xs mt-1"
+                  required
+                />
+              </div>
+              <div>
+                <Label className="text-xs font-bold">Total Amount (INR)</Label>
+                <Input
+                  type="number"
+                  min="1000"
+                  value={payrollForm.amount}
+                  onChange={(e) => setPayrollForm({ ...payrollForm, amount: Number(e.target.value) })}
+                  className="h-8 text-xs mt-1"
+                  required
+                />
+              </div>
+            </div>
+            <DialogFooter className="pt-2">
+              <Button type="button" variant="outline" size="sm" onClick={() => setPayrollDialogOpen(false)} className="h-8 text-xs">Cancel</Button>
+              <Button type="submit" size="sm" disabled={submitting} className="h-8 text-xs font-bold bg-[#1D61E7] text-white">
+                {submitting ? <Loader2 className="w-3.5 h-3.5 animate-spin mr-1" /> : null}
+                Authorize & Disburse
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Official Verifiable Receipt Modal */}
+      <FeeReceiptModal
+        open={receiptModalOpen}
+        onOpenChange={setReceiptModalOpen}
+        receipt={selectedReceipt}
+      />
     </div>
   );
 }

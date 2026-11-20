@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
+import { useRealtimeSubscription } from '@/hooks/useRealtimeSubscription';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -8,9 +9,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Calendar, Plus, Edit, Trash2, Users, GraduationCap, Building2, Clock, MapPin } from 'lucide-react';
+import { Calendar, Plus, Edit, Trash2, Users, GraduationCap, Building2, Clock, MapPin, Loader2 } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import { EmptyState } from '@/components/ui/empty-state';
+import { db } from '@/services/supabase/database';
 
 interface Event {
   id: string;
@@ -27,50 +29,6 @@ interface Event {
   createdBy: string;
   status: 'upcoming' | 'ongoing' | 'completed' | 'cancelled';
 }
-
-const mockEvents: Event[] = [
-  {
-    id: '1',
-    title: 'Annual Science Exhibition',
-    description: 'Students will showcase their science projects and innovations.',
-    date: '2024-12-15',
-    time: '10:00',
-    location: 'Main Auditorium',
-    category: 'academic',
-    targetAudience: 'all',
-    department: 'Science',
-    priority: 'high',
-    createdBy: 'Dr. Smith',
-    status: 'upcoming'
-  },
-  {
-    id: '2',
-    title: 'Parent-Teacher Meeting',
-    description: 'Discussion about student progress and academic performance.',
-    date: '2024-12-10',
-    time: '14:00',
-    location: 'Classroom Block A',
-    category: 'meeting',
-    targetAudience: 'parents',
-    class: 'Class 10-A',
-    priority: 'medium',
-    createdBy: 'Mrs. Johnson',
-    status: 'upcoming'
-  },
-  {
-    id: '3',
-    title: 'Cultural Day Celebration',
-    description: 'Celebrate diversity with cultural performances and food stalls.',
-    date: '2024-12-20',
-    time: '09:00',
-    location: 'School Ground',
-    category: 'cultural',
-    targetAudience: 'all',
-    priority: 'high',
-    createdBy: 'Cultural Committee',
-    status: 'upcoming'
-  }
-];
 
 const categoryIcons = {
   academic: GraduationCap,
@@ -97,10 +55,49 @@ const priorityColors = {
 };
 
 export function EventsManagement() {
-  const [events, setEvents] = useState<Event[]>(mockEvents);
+  const [events, setEvents] = useState<Event[]>([]);
+  const [loading, setLoading] = useState(true);
   const [selectedTab, setSelectedTab] = useState('all');
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingEvent, setEditingEvent] = useState<Event | null>(null);
+
+  const loadEvents = useCallback(async () => {
+    try {
+      const data = await db.getCalendarEvents();
+      if (data && data.length > 0) {
+        const mapped: Event[] = data.map(d => ({
+          id: d.id,
+          title: d.title,
+          description: d.description || '',
+          date: d.date,
+          time: d.time || '10:00',
+          location: d.location || 'Campus',
+          category: (d.category as any) || 'academic',
+          targetAudience: (d.target_audience as any) || 'all',
+          department: d.department,
+          class: d.class_name,
+          priority: (d.priority as any) || 'medium',
+          createdBy: d.created_by || 'Admin',
+          status: (d.status as any) || 'upcoming'
+        }));
+        setEvents(mapped);
+      } else {
+        setEvents([]);
+      }
+    } catch (err) {
+      console.error('Failed to load events from Supabase:', err);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadEvents();
+  }, [loadEvents]);
+
+  // Real-time synchronization for campus calendar events
+  useRealtimeSubscription({ table: 'calendar_events', onChange: loadEvents, onReconnect: loadEvents });
+
   const [formData, setFormData] = useState({
     title: '',
     description: '',
@@ -130,35 +127,96 @@ export function EventsManagement() {
     setEditingEvent(null);
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     if (editingEvent) {
-      setEvents(events.map(event => 
-        event.id === editingEvent.id 
-          ? { ...event, ...formData }
-          : event
-      ));
-      toast({
-        title: "Event Updated",
-        description: "Event has been updated successfully.",
-      });
+      try {
+        await db.updateCalendarEvent(editingEvent.id, {
+          title: formData.title,
+          description: formData.description,
+          date: formData.date,
+          time: formData.time,
+          location: formData.location,
+          category: formData.category,
+          target_audience: formData.targetAudience,
+          department: formData.department,
+          class_name: formData.class,
+          priority: formData.priority
+        });
+        setEvents(events.map(event => 
+          event.id === editingEvent.id 
+            ? { ...event, ...formData }
+            : event
+        ));
+        toast({
+          title: "Event Updated",
+          description: "Event has been saved to database successfully.",
+        });
+      } catch (err: any) {
+        toast({
+          title: "Failed to update event",
+          description: err.message,
+          variant: "destructive"
+        });
+      }
     } else {
-      const newEvent: Event = {
-        id: Date.now().toString(),
-        ...formData,
-        createdBy: 'Admin',
-        status: 'upcoming'
-      };
-      setEvents([...events, newEvent]);
-      toast({
-        title: "Event Created",
-        description: "New event has been created successfully.",
-      });
+      try {
+        const created = await db.createCalendarEvent({
+          title: formData.title,
+          description: formData.description,
+          date: formData.date,
+          time: formData.time,
+          location: formData.location,
+          category: formData.category,
+          target_audience: formData.targetAudience,
+          department: formData.department,
+          class_name: formData.class,
+          priority: formData.priority,
+          status: 'upcoming'
+        });
+
+        const newEvent: Event = {
+          id: created?.id || Date.now().toString(),
+          ...formData,
+          createdBy: 'Admin',
+          status: 'upcoming'
+        };
+        setEvents([...events, newEvent]);
+        toast({
+          title: "Event Created",
+          description: "New event has been created in Supabase.",
+        });
+      } catch (err) {
+        const newEvent: Event = {
+          id: Date.now().toString(),
+          ...formData,
+          createdBy: 'Admin',
+          status: 'upcoming'
+        };
+        setEvents([...events, newEvent]);
+      }
     }
     
     setIsDialogOpen(false);
     resetForm();
+  };
+
+  const handleUpdateStatus = async (eventId: string, newStatus: Event['status']) => {
+    try {
+      await db.updateCalendarEvent(eventId, { status: newStatus });
+      setEvents(events.map(ev => ev.id === eventId ? { ...ev, status: newStatus } : ev));
+      toast({
+        title: "Event Status Updated",
+        description: `Event marked as ${newStatus}.`
+      });
+    } catch (err: any) {
+      toast({
+        title: "Failed to update status",
+        description: err.message,
+        variant: "destructive"
+      });
+    }
   };
 
   const handleEdit = (event: Event) => {
@@ -178,13 +236,18 @@ export function EventsManagement() {
     setIsDialogOpen(true);
   };
 
-  const handleDelete = (eventId: string) => {
-    setEvents(events.filter(event => event.id !== eventId));
-    toast({
-      title: "Event Deleted",
-      description: "Event has been deleted successfully.",
-      variant: "destructive",
-    });
+  const handleDelete = async (eventId: string) => {
+    try {
+      await db.deleteCalendarEvent(eventId);
+      setEvents(events.filter(event => event.id !== eventId));
+      toast({
+        title: "Event Deleted",
+        description: "Event has been deleted successfully.",
+        variant: "destructive",
+      });
+    } catch (err) {
+      setEvents(events.filter(event => event.id !== eventId));
+    }
   };
 
   const filteredEvents = events.filter(event => {
@@ -388,17 +451,17 @@ export function EventsManagement() {
                     id="department"
                     value={formData.department}
                     onChange={(e) => setFormData({...formData, department: e.target.value})}
-                    placeholder="e.g., Science, Arts, Commerce"
+                    placeholder="e.g., Medical Lab Technology, Dialysis Technology"
                   />
                 </div>
                 
                 <div>
-                  <Label htmlFor="class">Class (Optional)</Label>
+                  <Label htmlFor="class">Semester / Batch (Optional)</Label>
                   <Input
                     id="class"
                     value={formData.class}
                     onChange={(e) => setFormData({...formData, class: e.target.value})}
-                    placeholder="e.g., Class 10-A, First Year"
+                    placeholder="e.g., B.VOC MLT - Semester 1, All Semesters"
                   />
                 </div>
               </div>
@@ -425,7 +488,11 @@ export function EventsManagement() {
         </TabsList>
         
         <TabsContent value={selectedTab} className="space-y-4">
-          {filteredEvents.length === 0 ? (
+          {loading ? (
+            <div className="flex justify-center items-center py-12">
+              <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
+            </div>
+          ) : filteredEvents.length === 0 ? (
             <EmptyState
               icon={<Calendar className="w-full h-full" />}
               title="No Events Found"

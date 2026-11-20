@@ -1,0 +1,1721 @@
+[
+  {
+    "file": "src/pages/AdmissionManagement.tsx",
+    "module": "src/pages",
+    "filename": "AdmissionManagement.tsx",
+    "hasSupabase": false,
+    "tables": [],
+    "hasToast": false,
+    "hasMock": false,
+    "hasForm": false,
+    "buttons": []
+  },
+  {
+    "file": "src/pages/AlumniManagement.tsx",
+    "module": "src/pages",
+    "filename": "AlumniManagement.tsx",
+    "hasSupabase": true,
+    "tables": [],
+    "hasToast": false,
+    "hasMock": false,
+    "hasForm": false,
+    "buttons": [
+      "Add Alumni",
+      "Filter",
+      "Export",
+      "window.open(`mailto:${alumnus.email}`)}>",
+      "Create Event",
+      "View Calendar"
+    ]
+  },
+  {
+    "file": "src/pages/CertificateGeneration.tsx",
+    "module": "src/pages",
+    "filename": "CertificateGeneration.tsx",
+    "hasSupabase": true,
+    "tables": [],
+    "hasToast": true,
+    "hasMock": false,
+    "hasForm": false,
+    "buttons": [
+      "New Certificate",
+      "Edit",
+      "Preview",
+      "Create New Template",
+      "Export",
+      "handleApprove(cert.id)}>"
+    ]
+  },
+  {
+    "file": "src/pages/Dashboard.tsx",
+    "module": "src/pages",
+    "filename": "Dashboard.tsx",
+    "hasSupabase": false,
+    "tables": [],
+    "hasToast": false,
+    "hasMock": false,
+    "hasForm": false,
+    "buttons": []
+  },
+  {
+    "file": "src/pages/DisciplinaryManagement.tsx",
+    "module": "src/pages",
+    "filename": "DisciplinaryManagement.tsx",
+    "hasSupabase": true,
+    "tables": [],
+    "hasToast": true,
+    "hasMock": false,
+    "hasForm": false,
+    "buttons": [
+      "Edit"
+    ]
+  },
+  {
+    "file": "src/pages/ExamManagement.tsx",
+    "module": "src/pages",
+    "filename": "ExamManagement.tsx",
+    "hasSupabase": false,
+    "tables": [],
+    "hasToast": false,
+    "hasMock": false,
+    "hasForm": false,
+    "buttons": []
+  },
+  {
+    "file": "src/pages/Index.tsx",
+    "module": "src/pages",
+    "filename": "Index.tsx",
+    "hasSupabase": false,
+    "tables": [],
+    "hasToast": false,
+    "hasMock": false,
+    "hasForm": false,
+    "buttons": []
+  },
+  {
+    "file": "src/pages/LibraryManagement.tsx",
+    "module": "src/pages",
+    "filename": "LibraryManagement.tsx",
+    "hasSupabase": false,
+    "tables": [],
+    "hasToast": false,
+    "hasMock": false,
+    "hasForm": false,
+    "buttons": []
+  },
+  {
+    "file": "src/pages/MedicalManagement.tsx",
+    "module": "src/pages",
+    "filename": "MedicalManagement.tsx",
+    "hasSupabase": true,
+    "tables": [],
+    "hasToast": true,
+    "hasMock": false,
+    "hasForm": false,
+    "buttons": [
+      "View details",
+      "Filter",
+      "Export",
+      "Today",
+      "This Week"
+    ]
+  },
+  {
+    "file": "src/pages/MessageTeacher.tsx",
+    "module": "src/pages",
+    "filename": "MessageTeacher.tsx",
+    "hasSupabase": true,
+    "tables": [],
+    "hasToast": true,
+    "hasMock": false,
+    "hasForm": false,
+    "buttons": []
+  },
+  {
+    "file": "src/pages/NotFound.tsx",
+    "module": "src/pages",
+    "filename": "NotFound.tsx",
+    "hasSupabase": false,
+    "tables": [],
+    "hasToast": false,
+    "hasMock": false,
+    "hasForm": false,
+    "buttons": []
+  },
+  {
+    "file": "src/pages/ReportConcern.tsx",
+    "module": "src/pages",
+    "filename": "ReportConcern.tsx",
+    "hasSupabase": true,
+    "tables": [],
+    "hasToast": true,
+    "hasMock": false,
+    "hasForm": true,
+    "buttons": []
+  },
+  {
+    "file": "src/pages/SportsManagement.tsx",
+    "module": "src/pages",
+    "filename": "SportsManagement.tsx",
+    "hasSupabase": true,
+    "tables": [],
+    "hasToast": true,
+    "hasMock": false,
+    "hasForm": false,
+    "buttons": []
+  },
+  {
+    "file": "src/pages/Store.tsx",
+    "module": "src/pages",
+    "filename": "Store.tsx",
+    "hasSupabase": true,
+    "tables": [],
+    "hasToast": true,
+    "hasMock": false,
+    "hasForm": false,
+    "buttons": [
+      "Filters"
+    ]
+  },
+  {
+    "file": "src/pages/TrackSchoolBus.tsx",
+    "module": "src/pages",
+    "filename": "TrackSchoolBus.tsx",
+    "hasSupabase": true,
+    "tables": [],
+    "hasToast": false,
+    "hasMock": false,
+    "hasForm": false,
+    "buttons": [
+      "Call Office"
+    ]
+  },
+  {
+    "file": "src/pages/ViewAchievements.tsx",
+    "module": "src/pages",
+    "filename": "ViewAchievements.tsx",
+    "hasSupabase": true,
+    "tables": [],
+    "hasToast": false,
+    "hasMock": false,
+    "hasForm": false,
+    "buttons": []
+  },
+  {
+    "file": "src/pages/admin/AdminAnalytics.tsx",
+    "module": "src/pages/admin",
+    "filename": "AdminAnalytics.tsx",
+    "hasSupabase": true,
+    "tables": [],
+    "hasToast": false,
+    "hasMock": false,
+    "hasForm": false,
+    "buttons": [
+      "Refresh Diagnostics"
+    ]
+  },
+  {
+    "file": "src/pages/admin/AdminReports.tsx",
+    "module": "src/pages/admin",
+    "filename": "AdminReports.tsx",
+    "hasSupabase": true,
+    "tables": [],
+    "hasToast": true,
+    "hasMock": false,
+    "hasForm": false,
+    "buttons": []
+  },
+  {
+    "file": "src/pages/admin/AdminSettings.tsx",
+    "module": "src/pages/admin",
+    "filename": "AdminSettings.tsx",
+    "hasSupabase": true,
+    "tables": [],
+    "hasToast": true,
+    "hasMock": false,
+    "hasForm": false,
+    "buttons": []
+  },
+  {
+    "file": "src/pages/teachers/CreateAssignment.tsx",
+    "module": "src/pages/teachers",
+    "filename": "CreateAssignment.tsx",
+    "hasSupabase": true,
+    "tables": [],
+    "hasToast": true,
+    "hasMock": false,
+    "hasForm": true,
+    "buttons": [
+      "removeAttachment(index)}\n                      >",
+      "Add Attachment",
+      "navigate('/dashboard')}>\n            Cancel"
+    ]
+  },
+  {
+    "file": "src/pages/teachers/GenerateReport.tsx",
+    "module": "src/pages/teachers",
+    "filename": "GenerateReport.tsx",
+    "hasSupabase": true,
+    "tables": [],
+    "hasToast": true,
+    "hasMock": false,
+    "hasForm": true,
+    "buttons": [
+      "Preview Report",
+      "setPreviewOpen(false)}>\n                Close"
+    ]
+  },
+  {
+    "file": "src/pages/teachers/MessageParents.tsx",
+    "module": "src/pages/teachers",
+    "filename": "MessageParents.tsx",
+    "hasSupabase": true,
+    "tables": [],
+    "hasToast": true,
+    "hasMock": false,
+    "hasForm": true,
+    "buttons": [
+      "Save Draft"
+    ]
+  },
+  {
+    "file": "src/pages/naac/Criterion1.tsx",
+    "module": "src/pages/naac",
+    "filename": "Criterion1.tsx",
+    "hasSupabase": false,
+    "tables": [],
+    "hasToast": false,
+    "hasMock": false,
+    "hasForm": false,
+    "buttons": []
+  },
+  {
+    "file": "src/pages/naac/Criterion2.tsx",
+    "module": "src/pages/naac",
+    "filename": "Criterion2.tsx",
+    "hasSupabase": false,
+    "tables": [],
+    "hasToast": false,
+    "hasMock": false,
+    "hasForm": false,
+    "buttons": []
+  },
+  {
+    "file": "src/pages/naac/Criterion3.tsx",
+    "module": "src/pages/naac",
+    "filename": "Criterion3.tsx",
+    "hasSupabase": false,
+    "tables": [],
+    "hasToast": false,
+    "hasMock": false,
+    "hasForm": false,
+    "buttons": []
+  },
+  {
+    "file": "src/pages/naac/Criterion4.tsx",
+    "module": "src/pages/naac",
+    "filename": "Criterion4.tsx",
+    "hasSupabase": false,
+    "tables": [],
+    "hasToast": false,
+    "hasMock": false,
+    "hasForm": false,
+    "buttons": []
+  },
+  {
+    "file": "src/pages/naac/Criterion5.tsx",
+    "module": "src/pages/naac",
+    "filename": "Criterion5.tsx",
+    "hasSupabase": false,
+    "tables": [],
+    "hasToast": false,
+    "hasMock": false,
+    "hasForm": false,
+    "buttons": []
+  },
+  {
+    "file": "src/pages/naac/Criterion6.tsx",
+    "module": "src/pages/naac",
+    "filename": "Criterion6.tsx",
+    "hasSupabase": false,
+    "tables": [],
+    "hasToast": false,
+    "hasMock": false,
+    "hasForm": false,
+    "buttons": []
+  },
+  {
+    "file": "src/pages/naac/Criterion7.tsx",
+    "module": "src/pages/naac",
+    "filename": "Criterion7.tsx",
+    "hasSupabase": false,
+    "tables": [],
+    "hasToast": false,
+    "hasMock": false,
+    "hasForm": false,
+    "buttons": []
+  },
+  {
+    "file": "src/pages/naac/CriterionTemplate.tsx",
+    "module": "src/pages/naac",
+    "filename": "CriterionTemplate.tsx",
+    "hasSupabase": false,
+    "tables": [],
+    "hasToast": false,
+    "hasMock": false,
+    "hasForm": false,
+    "buttons": [
+      "Save Draft",
+      "Submit Data"
+    ]
+  },
+  {
+    "file": "src/pages/naac/NAACDashboard.tsx",
+    "module": "src/pages/naac",
+    "filename": "NAACDashboard.tsx",
+    "hasSupabase": false,
+    "tables": [],
+    "hasToast": false,
+    "hasMock": false,
+    "hasForm": false,
+    "buttons": [
+      "Upload Documents",
+      "Generate Reports",
+      "Generate SSR\r\n                  Self Study Report"
+    ]
+  },
+  {
+    "file": "src/pages/naac/Reports.tsx",
+    "module": "src/pages/naac",
+    "filename": "Reports.tsx",
+    "hasSupabase": false,
+    "tables": [],
+    "hasToast": false,
+    "hasMock": false,
+    "hasForm": false,
+    "buttons": []
+  },
+  {
+    "file": "src/pages/naac/Repository.tsx",
+    "module": "src/pages/naac",
+    "filename": "Repository.tsx",
+    "hasSupabase": false,
+    "tables": [],
+    "hasToast": false,
+    "hasMock": false,
+    "hasForm": false,
+    "buttons": [
+      "removeDocument(doc.id)}\r\n                      >"
+    ]
+  },
+  {
+    "file": "src/pages/naac/Settings.tsx",
+    "module": "src/pages/naac",
+    "filename": "Settings.tsx",
+    "hasSupabase": false,
+    "tables": [],
+    "hasToast": false,
+    "hasMock": true,
+    "hasForm": false,
+    "buttons": [
+      "Save Institution Details",
+      "Save System Settings",
+      "Remove",
+      "Add Administrator",
+      "Add Coordinator",
+      "Save Access Settings"
+    ]
+  },
+  {
+    "file": "src/components/admin/AdminHeader.tsx",
+    "module": "src/components/admin",
+    "filename": "AdminHeader.tsx",
+    "hasSupabase": false,
+    "tables": [],
+    "hasToast": false,
+    "hasMock": false,
+    "hasForm": false,
+    "buttons": [
+      "{user?.name?.charAt(0).toUpperCase()}"
+    ]
+  },
+  {
+    "file": "src/components/admin/AdminLayout.tsx",
+    "module": "src/components/admin",
+    "filename": "AdminLayout.tsx",
+    "hasSupabase": false,
+    "tables": [],
+    "hasToast": false,
+    "hasMock": false,
+    "hasForm": false,
+    "buttons": []
+  },
+  {
+    "file": "src/components/admin/AdminNavigation.tsx",
+    "module": "src/components/admin",
+    "filename": "AdminNavigation.tsx",
+    "hasSupabase": false,
+    "tables": [],
+    "hasToast": false,
+    "hasMock": false,
+    "hasForm": false,
+    "buttons": []
+  },
+  {
+    "file": "src/components/admin/AdminOverview.tsx",
+    "module": "src/components/admin",
+    "filename": "AdminOverview.tsx",
+    "hasSupabase": true,
+    "tables": [],
+    "hasToast": false,
+    "hasMock": false,
+    "hasForm": false,
+    "buttons": [
+      "Review",
+      "User Management",
+      "System Reports",
+      "Audit Logs",
+      "System Health",
+      "Financial Overview"
+    ]
+  },
+  {
+    "file": "src/components/admin/DepartmentManagement.tsx",
+    "module": "src/components/admin",
+    "filename": "DepartmentManagement.tsx",
+    "hasSupabase": true,
+    "tables": [],
+    "hasToast": true,
+    "hasMock": false,
+    "hasForm": false,
+    "buttons": [
+      "Add Department / Course",
+      "Save & Initialize Department",
+      "Save Changes"
+    ]
+  },
+  {
+    "file": "src/components/admin/DepartmentOversight.tsx",
+    "module": "src/components/admin",
+    "filename": "DepartmentOversight.tsx",
+    "hasSupabase": true,
+    "tables": [],
+    "hasToast": true,
+    "hasMock": false,
+    "hasForm": false,
+    "buttons": [
+      "Manage Sections",
+      "Configure Sections",
+      "setIsAddOpen(false)}>Cancel",
+      "{submitting ? 'Creating...' : 'Save Department'}"
+    ]
+  },
+  {
+    "file": "src/components/admin/EventsManagement.tsx",
+    "module": "src/components/admin",
+    "filename": "EventsManagement.tsx",
+    "hasSupabase": true,
+    "tables": [],
+    "hasToast": true,
+    "hasMock": false,
+    "hasForm": true,
+    "buttons": [
+      "handleEdit(event)}>",
+      "handleDelete(event.id)}>",
+      "Add Event",
+      "setIsDialogOpen(false)}>\n                  Cancel",
+      "{editingEvent ? 'Update Event' : 'Create Event'}"
+    ]
+  },
+  {
+    "file": "src/components/admin/FeedbackSystem.tsx",
+    "module": "src/components/admin",
+    "filename": "FeedbackSystem.tsx",
+    "hasSupabase": true,
+    "tables": [],
+    "hasToast": true,
+    "hasMock": false,
+    "hasForm": false,
+    "buttons": []
+  },
+  {
+    "file": "src/components/admin/TeacherAssignments.tsx",
+    "module": "src/components/admin",
+    "filename": "TeacherAssignments.tsx",
+    "hasSupabase": true,
+    "tables": [],
+    "hasToast": true,
+    "hasMock": false,
+    "hasForm": false,
+    "buttons": [
+      "New Assignment"
+    ]
+  },
+  {
+    "file": "src/components/admin/TimetableManagement.tsx",
+    "module": "src/components/admin",
+    "filename": "TimetableManagement.tsx",
+    "hasSupabase": true,
+    "tables": [],
+    "hasToast": true,
+    "hasMock": false,
+    "hasForm": false,
+    "buttons": [
+      "{publishing ?  : }\n            Publish Schedule",
+      "Export CSV",
+      "Add Session / Lab",
+      "Save Session to Schedule",
+      "handleEditSlot(s)}>",
+      "handleDeleteSlot(s.id)}>"
+    ]
+  },
+  {
+    "file": "src/components/admin/UserManagement.tsx",
+    "module": "src/components/admin",
+    "filename": "UserManagement.tsx",
+    "hasSupabase": false,
+    "tables": [],
+    "hasToast": true,
+    "hasMock": false,
+    "hasForm": true,
+    "buttons": [
+      "Export CSV",
+      "setIsAddOpen(false)}>\n                Cancel",
+      "setIsEditOpen(false)}>\n                Cancel",
+      "setIsResetOpen(false)}>\n                Cancel",
+      "setIsDeleteOpen(false)}>\n              Cancel",
+      "setIsLinkOpen(false)}>\n              Close"
+    ]
+  },
+  {
+    "file": "src/components/admission/AdmissionFees.tsx",
+    "module": "src/components/admission",
+    "filename": "AdmissionFees.tsx",
+    "hasSupabase": true,
+    "tables": [],
+    "hasToast": true,
+    "hasMock": false,
+    "hasForm": false,
+    "buttons": [
+      "setIsAddOpen(false)}>Cancel",
+      "{submitting ? 'Recording...' : 'Save Payment'}",
+      "setSelectedReceipt(null)}>Close"
+    ]
+  },
+  {
+    "file": "src/components/admission/ApplicationDetailsDialog.tsx",
+    "module": "src/components/admission",
+    "filename": "ApplicationDetailsDialog.tsx",
+    "hasSupabase": false,
+    "tables": [],
+    "hasToast": true,
+    "hasMock": false,
+    "hasForm": false,
+    "buttons": [
+      "onOpenChange(false)}>\r\n            Close",
+      "Update Status"
+    ]
+  },
+  {
+    "file": "src/components/admission/ApplicationPortal.tsx",
+    "module": "src/components/admission",
+    "filename": "ApplicationPortal.tsx",
+    "hasSupabase": true,
+    "tables": [],
+    "hasToast": true,
+    "hasMock": false,
+    "hasForm": false,
+    "buttons": []
+  },
+  {
+    "file": "src/components/admission/DocumentVerification.tsx",
+    "module": "src/components/admission",
+    "filename": "DocumentVerification.tsx",
+    "hasSupabase": true,
+    "tables": [],
+    "hasToast": true,
+    "hasMock": false,
+    "hasForm": false,
+    "buttons": [
+      "setIsRejectOpen(false)}>Cancel",
+      "Confirm Rejection"
+    ]
+  },
+  {
+    "file": "src/components/admission/EntranceTest.tsx",
+    "module": "src/components/admission",
+    "filename": "EntranceTest.tsx",
+    "hasSupabase": true,
+    "tables": [],
+    "hasToast": true,
+    "hasMock": false,
+    "hasForm": false,
+    "buttons": [
+      "Schedule Entrance Test",
+      "setIsCreateOpen(false)}>Cancel"
+    ]
+  },
+  {
+    "file": "src/components/admission/MeritList.tsx",
+    "module": "src/components/admission",
+    "filename": "MeritList.tsx",
+    "hasSupabase": true,
+    "tables": [],
+    "hasToast": true,
+    "hasMock": false,
+    "hasForm": false,
+    "buttons": [
+      "Add Candidate to Merit",
+      "setIsAddOpen(false)}>Cancel",
+      "{submitting ? 'Adding...' : 'Add to Merit List'}"
+    ]
+  },
+  {
+    "file": "src/components/admission/NewApplicationDialog.tsx",
+    "module": "src/components/admission",
+    "filename": "NewApplicationDialog.tsx",
+    "hasSupabase": true,
+    "tables": [],
+    "hasToast": true,
+    "hasMock": false,
+    "hasForm": true,
+    "buttons": [
+      "New Application",
+      "setOpen(false)}>\n              Cancel"
+    ]
+  },
+  {
+    "file": "src/components/alumni/AddAlumniDialog.tsx",
+    "module": "src/components/alumni",
+    "filename": "AddAlumniDialog.tsx",
+    "hasSupabase": true,
+    "tables": [],
+    "hasToast": true,
+    "hasMock": false,
+    "hasForm": true,
+    "buttons": [
+      "Choose File",
+      "setOpen(false)}>\n              Cancel"
+    ]
+  },
+  {
+    "file": "src/components/alumni/DonationTrackingDialog.tsx",
+    "module": "src/components/alumni",
+    "filename": "DonationTrackingDialog.tsx",
+    "hasSupabase": false,
+    "tables": [],
+    "hasToast": false,
+    "hasMock": false,
+    "hasForm": false,
+    "buttons": [
+      "Add Allocation",
+      "Generate Receipt",
+      "Download Tax Certificate",
+      "Send Acknowledgment",
+      "Generate Thank You Letter",
+      "Add Milestone"
+    ]
+  },
+  {
+    "file": "src/components/alumni/EventCreationDialog.tsx",
+    "module": "src/components/alumni",
+    "filename": "EventCreationDialog.tsx",
+    "hasSupabase": false,
+    "tables": [],
+    "hasToast": false,
+    "hasMock": false,
+    "hasForm": false,
+    "buttons": [
+      "Add Speaker",
+      "Add Item",
+      "Browse Files",
+      "setOpen(false)}>\r\n              Cancel",
+      "Save Draft",
+      "{isEdit ? 'Update Event' : 'Publish Event'}"
+    ]
+  },
+  {
+    "file": "src/components/alumni/MentorshipMatchingDialog.tsx",
+    "module": "src/components/alumni",
+    "filename": "MentorshipMatchingDialog.tsx",
+    "hasSupabase": true,
+    "tables": [],
+    "hasToast": false,
+    "hasMock": false,
+    "hasForm": false,
+    "buttons": [
+      "Create Mentorship Match",
+      "Add Goal",
+      "Contact Participants",
+      "Schedule Meeting",
+      "setOpen(false)}>\r\n              Cancel",
+      "Save Changes"
+    ]
+  },
+  {
+    "file": "src/components/assignments/AssignmentsHomework.tsx",
+    "module": "src/components/assignments",
+    "filename": "AssignmentsHomework.tsx",
+    "hasSupabase": true,
+    "tables": [],
+    "hasToast": true,
+    "hasMock": false,
+    "hasForm": true,
+    "buttons": []
+  },
+  {
+    "file": "src/components/chat/AILearningChat.tsx",
+    "module": "src/components/chat",
+    "filename": "AILearningChat.tsx",
+    "hasSupabase": true,
+    "tables": [],
+    "hasToast": false,
+    "hasMock": false,
+    "hasForm": false,
+    "buttons": []
+  },
+  {
+    "file": "src/components/chat/MentorChat.tsx",
+    "module": "src/components/chat",
+    "filename": "MentorChat.tsx",
+    "hasSupabase": true,
+    "tables": [],
+    "hasToast": true,
+    "hasMock": false,
+    "hasForm": true,
+    "buttons": []
+  },
+  {
+    "file": "src/components/dashboards/AdminDashboard.tsx",
+    "module": "src/components/dashboards",
+    "filename": "AdminDashboard.tsx",
+    "hasSupabase": true,
+    "tables": [],
+    "hasToast": false,
+    "hasMock": false,
+    "hasForm": false,
+    "buttons": [
+      "Exam Management",
+      "Library System",
+      "Admissions",
+      "Alumni Network",
+      "Medical Center",
+      "Certificates"
+    ]
+  },
+  {
+    "file": "src/components/dashboards/FinanceDashboard.tsx",
+    "module": "src/components/dashboards",
+    "filename": "FinanceDashboard.tsx",
+    "hasSupabase": true,
+    "tables": [],
+    "hasToast": false,
+    "hasMock": false,
+    "hasForm": false,
+    "buttons": [
+      "Approve"
+    ]
+  },
+  {
+    "file": "src/components/dashboards/FinanceManagerDashboard.tsx",
+    "module": "src/components/dashboards",
+    "filename": "FinanceManagerDashboard.tsx",
+    "hasSupabase": true,
+    "tables": [],
+    "hasToast": true,
+    "hasMock": false,
+    "hasForm": true,
+    "buttons": [
+      "Audit Export",
+      "Audit Export to CSV",
+      "Reports",
+      "setCollectPaymentOpen(false)}>Cancel",
+      "setAddFeeInvoiceOpen(false)}>Cancel",
+      "setPayrollDialogOpen(false)}>Cancel"
+    ]
+  },
+  {
+    "file": "src/components/dashboards/HostelWardenDashboard.tsx",
+    "module": "src/components/dashboards",
+    "filename": "HostelWardenDashboard.tsx",
+    "hasSupabase": true,
+    "tables": [],
+    "hasToast": false,
+    "hasMock": true,
+    "hasForm": true,
+    "buttons": [
+      "Refresh"
+    ]
+  },
+  {
+    "file": "src/components/dashboards/HRManagerDashboard.tsx",
+    "module": "src/components/dashboards",
+    "filename": "HRManagerDashboard.tsx",
+    "hasSupabase": true,
+    "tables": [],
+    "hasToast": false,
+    "hasMock": true,
+    "hasForm": true,
+    "buttons": [
+      "Refresh"
+    ]
+  },
+  {
+    "file": "src/components/dashboards/LibrarianDashboard.tsx",
+    "module": "src/components/dashboards",
+    "filename": "LibrarianDashboard.tsx",
+    "hasSupabase": true,
+    "tables": [],
+    "hasToast": false,
+    "hasMock": true,
+    "hasForm": true,
+    "buttons": [
+      "Refresh",
+      "{issuing ? 'Processing...' : 'Authorize & Issue'}"
+    ]
+  },
+  {
+    "file": "src/components/dashboards/ParentDashboard.tsx",
+    "module": "src/components/dashboards",
+    "filename": "ParentDashboard.tsx",
+    "hasSupabase": true,
+    "tables": [],
+    "hasToast": true,
+    "hasMock": false,
+    "hasForm": false,
+    "buttons": []
+  },
+  {
+    "file": "src/components/dashboards/PlacementOfficerDashboard.tsx",
+    "module": "src/components/dashboards",
+    "filename": "PlacementOfficerDashboard.tsx",
+    "hasSupabase": true,
+    "tables": [],
+    "hasToast": false,
+    "hasMock": true,
+    "hasForm": true,
+    "buttons": [
+      "Refresh"
+    ]
+  },
+  {
+    "file": "src/components/dashboards/PrincipalDashboard.tsx",
+    "module": "src/components/dashboards",
+    "filename": "PrincipalDashboard.tsx",
+    "hasSupabase": true,
+    "tables": [],
+    "hasToast": false,
+    "hasMock": false,
+    "hasForm": true,
+    "buttons": [
+      "Refresh"
+    ]
+  },
+  {
+    "file": "src/components/dashboards/ReceptionistDashboard.tsx",
+    "module": "src/components/dashboards",
+    "filename": "ReceptionistDashboard.tsx",
+    "hasSupabase": true,
+    "tables": [],
+    "hasToast": true,
+    "hasMock": false,
+    "hasForm": true,
+    "buttons": [
+      "setVisitorDialogOpen(true)}>\n               Add",
+      "setVisitorDialogOpen(false)}>Cancel",
+      "setAppointmentDialogOpen(false)}>Cancel",
+      "setEnquiryDialogOpen(false)}>Cancel",
+      "setNoticeDialogOpen(false)}>Cancel",
+      "{searching ?  : 'Search'}"
+    ]
+  },
+  {
+    "file": "src/components/dashboards/StoreDashboard.tsx",
+    "module": "src/components/dashboards",
+    "filename": "StoreDashboard.tsx",
+    "hasSupabase": true,
+    "tables": [],
+    "hasToast": false,
+    "hasMock": false,
+    "hasForm": false,
+    "buttons": [
+      "Restock"
+    ]
+  },
+  {
+    "file": "src/components/dashboards/StoreManagerDashboard.tsx",
+    "module": "src/components/dashboards",
+    "filename": "StoreManagerDashboard.tsx",
+    "hasSupabase": true,
+    "tables": [],
+    "hasToast": true,
+    "hasMock": false,
+    "hasForm": true,
+    "buttons": [
+      "Export Audit",
+      "Inventory Audit",
+      "setAddItemDialogOpen(false)}>Cancel",
+      "{submitting ?  : null}\n                Save Item",
+      "setPurchaseOrderDialogOpen(false)}>Cancel",
+      "setDistributionDialogOpen(false)}>Cancel"
+    ]
+  },
+  {
+    "file": "src/components/dashboards/StudentDashboard.tsx",
+    "module": "src/components/dashboards",
+    "filename": "StudentDashboard.tsx",
+    "hasSupabase": true,
+    "tables": [],
+    "hasToast": true,
+    "hasMock": false,
+    "hasForm": true,
+    "buttons": []
+  },
+  {
+    "file": "src/components/dashboards/TeacherDashboard.tsx",
+    "module": "src/components/dashboards",
+    "filename": "TeacherDashboard.tsx",
+    "hasSupabase": true,
+    "tables": [],
+    "hasToast": true,
+    "hasMock": false,
+    "hasForm": false,
+    "buttons": [
+      "View Timetable",
+      "Contact Parent",
+      "Create Assignment",
+      "Message Parents",
+      "Generate Report",
+      "Daily Update"
+    ]
+  },
+  {
+    "file": "src/components/dashboards/TransportDashboard.tsx",
+    "module": "src/components/dashboards",
+    "filename": "TransportDashboard.tsx",
+    "hasSupabase": true,
+    "tables": [],
+    "hasToast": false,
+    "hasMock": false,
+    "hasForm": false,
+    "buttons": [
+      "Schedule"
+    ]
+  },
+  {
+    "file": "src/components/dashboards/TransportDriverDashboard.tsx",
+    "module": "src/components/dashboards",
+    "filename": "TransportDriverDashboard.tsx",
+    "hasSupabase": true,
+    "tables": [],
+    "hasToast": true,
+    "hasMock": false,
+    "hasForm": true,
+    "buttons": [
+      "{isTrackingGPS ? 'Stop GPS' : 'Share Location'}",
+      "{isTrackingGPS ? 'Stop GPS' : 'Start GPS'}",
+      "setEmergencyDialogOpen(false)}>Cancel",
+      "setAddStudentDialogOpen(false)}>Cancel",
+      "{submitting ?  : null}\n                Save Rider",
+      "setMaintenanceDialogOpen(false)}>Cancel"
+    ]
+  },
+  {
+    "file": "src/components/disciplinary/ReportIncidentDialog.tsx",
+    "module": "src/components/disciplinary",
+    "filename": "ReportIncidentDialog.tsx",
+    "hasSupabase": false,
+    "tables": [],
+    "hasToast": true,
+    "hasMock": false,
+    "hasForm": true,
+    "buttons": [
+      "Report Incident",
+      "setOpen(false)}>\r\n              Cancel",
+      "Submit Report"
+    ]
+  },
+  {
+    "file": "src/components/disciplinary/TakeActionDialog.tsx",
+    "module": "src/components/disciplinary",
+    "filename": "TakeActionDialog.tsx",
+    "hasSupabase": false,
+    "tables": [],
+    "hasToast": true,
+    "hasMock": false,
+    "hasForm": true,
+    "buttons": [
+      "onOpenChange(false)}>\r\n              Cancel",
+      "Record Action"
+    ]
+  },
+  {
+    "file": "src/components/exam/ExamAnalytics.tsx",
+    "module": "src/components/exam",
+    "filename": "ExamAnalytics.tsx",
+    "hasSupabase": false,
+    "tables": [],
+    "hasToast": false,
+    "hasMock": false,
+    "hasForm": false,
+    "buttons": []
+  },
+  {
+    "file": "src/components/exam/ExamDetailsDialog.tsx",
+    "module": "src/components/exam",
+    "filename": "ExamDetailsDialog.tsx",
+    "hasSupabase": true,
+    "tables": [],
+    "hasToast": false,
+    "hasMock": false,
+    "hasForm": false,
+    "buttons": [
+      "Save Changes",
+      "Add Students",
+      "Export List",
+      "Edit",
+      "Save Settings",
+      "Generate Hall Tickets"
+    ]
+  },
+  {
+    "file": "src/components/exam/ExamScheduling.tsx",
+    "module": "src/components/exam",
+    "filename": "ExamScheduling.tsx",
+    "hasSupabase": true,
+    "tables": [],
+    "hasToast": true,
+    "hasMock": false,
+    "hasForm": false,
+    "buttons": [
+      "Schedule New Exam",
+      "Hall Tickets",
+      "deleteExam(exam.id)}\n                    >"
+    ]
+  },
+  {
+    "file": "src/components/exam/ExamWorkflows.tsx",
+    "module": "src/components/exam",
+    "filename": "ExamWorkflows.tsx",
+    "hasSupabase": false,
+    "tables": [],
+    "hasToast": false,
+    "hasMock": false,
+    "hasForm": false,
+    "buttons": [
+      "View Participants",
+      "Monitor Live",
+      "End Exam",
+      "Attendance",
+      "Answer Sheets",
+      "Mark Complete"
+    ]
+  },
+  {
+    "file": "src/components/exam/GradingInterface.tsx",
+    "module": "src/components/exam",
+    "filename": "GradingInterface.tsx",
+    "hasSupabase": false,
+    "tables": [],
+    "hasToast": false,
+    "hasMock": false,
+    "hasForm": false,
+    "buttons": [
+      "View Results",
+      "Continue Grading",
+      "View Progress",
+      "Save",
+      "Save & Next"
+    ]
+  },
+  {
+    "file": "src/components/exam/HallTicketDialog.tsx",
+    "module": "src/components/exam",
+    "filename": "HallTicketDialog.tsx",
+    "hasSupabase": false,
+    "tables": [],
+    "hasToast": false,
+    "hasMock": false,
+    "hasForm": false,
+    "buttons": [
+      "Generate Missing Tickets",
+      "Download All Tickets",
+      "Regenerate All",
+      "Print Queue",
+      "Process All Actions",
+      "setOpen(false)}>\r\n              Close"
+    ]
+  },
+  {
+    "file": "src/components/exam/HallTicketGeneration.tsx",
+    "module": "src/components/exam",
+    "filename": "HallTicketGeneration.tsx",
+    "hasSupabase": true,
+    "tables": [],
+    "hasToast": true,
+    "hasMock": false,
+    "hasForm": false,
+    "buttons": [
+      "Generate Selected ({selectedIds.length})",
+      "Select All",
+      "Clear Selection",
+      "setPreviewTicket(null)}>Close"
+    ]
+  },
+  {
+    "file": "src/components/exam/ResultPublishing.tsx",
+    "module": "src/components/exam",
+    "filename": "ResultPublishing.tsx",
+    "hasSupabase": false,
+    "tables": [],
+    "hasToast": false,
+    "hasMock": false,
+    "hasForm": false,
+    "buttons": [
+      "Publish",
+      "Configure & Schedule Publishing",
+      "Export Results",
+      "Send Email Notifications",
+      "Send SMS Notifications"
+    ]
+  },
+  {
+    "file": "src/components/finance/FeeStructureManager.tsx",
+    "module": "src/components/finance",
+    "filename": "FeeStructureManager.tsx",
+    "hasSupabase": true,
+    "tables": [],
+    "hasToast": true,
+    "hasMock": false,
+    "hasForm": true,
+    "buttons": [
+      "Refresh"
+    ]
+  },
+  {
+    "file": "src/components/finance/MiscExpensesModule.tsx",
+    "module": "src/components/finance",
+    "filename": "MiscExpensesModule.tsx",
+    "hasSupabase": false,
+    "tables": [],
+    "hasToast": false,
+    "hasMock": false,
+    "hasForm": false,
+    "buttons": [
+      "Add Expense",
+      "{date ? format(date, \"PPP\") : Pick a date}",
+      "Save & Submit for Approval",
+      "Save as Draft",
+      "More Filters",
+      "Export"
+    ]
+  },
+  {
+    "file": "src/components/finance/ScholarshipManager.tsx",
+    "module": "src/components/finance",
+    "filename": "ScholarshipManager.tsx",
+    "hasSupabase": true,
+    "tables": [],
+    "hasToast": true,
+    "hasMock": false,
+    "hasForm": false,
+    "buttons": [
+      "Refresh"
+    ]
+  },
+  {
+    "file": "src/components/library/BookIssueDialog.tsx",
+    "module": "src/components/library",
+    "filename": "BookIssueDialog.tsx",
+    "hasSupabase": true,
+    "tables": [],
+    "hasToast": true,
+    "hasMock": false,
+    "hasForm": false,
+    "buttons": [
+      "openScanner('book')}>",
+      "openScanner('student')}>",
+      "setStep('scan')}>\n                  Back",
+      "Issue Book"
+    ]
+  },
+  {
+    "file": "src/components/library/BookReturnDialog.tsx",
+    "module": "src/components/library",
+    "filename": "BookReturnDialog.tsx",
+    "hasSupabase": true,
+    "tables": [],
+    "hasToast": true,
+    "hasMock": false,
+    "hasForm": false,
+    "buttons": [
+      "setScannerOpen(true)}>",
+      "setStep('scan')}>\n                  Back",
+      "Complete Return"
+    ]
+  },
+  {
+    "file": "src/components/library/BookTracking.tsx",
+    "module": "src/components/library",
+    "filename": "BookTracking.tsx",
+    "hasSupabase": true,
+    "tables": [],
+    "hasToast": true,
+    "hasMock": false,
+    "hasForm": false,
+    "buttons": [
+      "Issue Book",
+      "Return"
+    ]
+  },
+  {
+    "file": "src/components/library/DigitalCatalog.tsx",
+    "module": "src/components/library",
+    "filename": "DigitalCatalog.tsx",
+    "hasSupabase": true,
+    "tables": [],
+    "hasToast": true,
+    "hasMock": false,
+    "hasForm": false,
+    "buttons": [
+      "Add New Resource"
+    ]
+  },
+  {
+    "file": "src/components/library/DigitalLibrary.tsx",
+    "module": "src/components/library",
+    "filename": "DigitalLibrary.tsx",
+    "hasSupabase": false,
+    "tables": [],
+    "hasToast": false,
+    "hasMock": false,
+    "hasForm": false,
+    "buttons": [
+      "Choose Files"
+    ]
+  },
+  {
+    "file": "src/components/library/LibraryAnalytics.tsx",
+    "module": "src/components/library",
+    "filename": "LibraryAnalytics.tsx",
+    "hasSupabase": false,
+    "tables": [],
+    "hasToast": false,
+    "hasMock": false,
+    "hasForm": false,
+    "buttons": []
+  },
+  {
+    "file": "src/components/library/QRScannerDialog.tsx",
+    "module": "src/components/library",
+    "filename": "QRScannerDialog.tsx",
+    "hasSupabase": false,
+    "tables": [],
+    "hasToast": false,
+    "hasMock": true,
+    "hasForm": false,
+    "buttons": [
+      "Use This",
+      "Simulate Scan",
+      "Start Camera",
+      "Add"
+    ]
+  },
+  {
+    "file": "src/components/library/UploadResourceDialog.tsx",
+    "module": "src/components/library",
+    "filename": "UploadResourceDialog.tsx",
+    "hasSupabase": false,
+    "tables": [],
+    "hasToast": true,
+    "hasMock": false,
+    "hasForm": true,
+    "buttons": [
+      "Upload Resource",
+      "Choose Files",
+      "setOpen(false)}>\r\n              Cancel"
+    ]
+  },
+  {
+    "file": "src/components/medical/HealthRecordDetailsDialog.tsx",
+    "module": "src/components/medical",
+    "filename": "HealthRecordDetailsDialog.tsx",
+    "hasSupabase": false,
+    "tables": [],
+    "hasToast": false,
+    "hasMock": false,
+    "hasForm": false,
+    "buttons": [
+      "Add Medication",
+      "Add Condition",
+      "Add Family History",
+      "Add Emergency Contact",
+      "Export Record",
+      "Generate Report"
+    ]
+  },
+  {
+    "file": "src/components/medical/InfirmaryVisitDialog.tsx",
+    "module": "src/components/medical",
+    "filename": "InfirmaryVisitDialog.tsx",
+    "hasSupabase": true,
+    "tables": [],
+    "hasToast": false,
+    "hasMock": false,
+    "hasForm": false,
+    "buttons": [
+      "Add Medication",
+      "Print Visit Summary",
+      "setOpen(false)}>\r\n              Cancel",
+      "{isEdit ? 'Update Visit' : 'Save Visit Record'}"
+    ]
+  },
+  {
+    "file": "src/components/naac/NAACHeader.tsx",
+    "module": "src/components/naac",
+    "filename": "NAACHeader.tsx",
+    "hasSupabase": false,
+    "tables": [],
+    "hasToast": false,
+    "hasMock": false,
+    "hasForm": false,
+    "buttons": [
+      "Back to Admin",
+      "2"
+    ]
+  },
+  {
+    "file": "src/components/naac/NAACLayout.tsx",
+    "module": "src/components/naac",
+    "filename": "NAACLayout.tsx",
+    "hasSupabase": false,
+    "tables": [],
+    "hasToast": false,
+    "hasMock": false,
+    "hasForm": false,
+    "buttons": []
+  },
+  {
+    "file": "src/components/naac/NAACNavigation.tsx",
+    "module": "src/components/naac",
+    "filename": "NAACNavigation.tsx",
+    "hasSupabase": false,
+    "tables": [],
+    "hasToast": false,
+    "hasMock": false,
+    "hasForm": false,
+    "buttons": []
+  },
+  {
+    "file": "src/components/roles/AccountsOfficerDashboard.tsx",
+    "module": "src/components/roles",
+    "filename": "AccountsOfficerDashboard.tsx",
+    "hasSupabase": true,
+    "tables": [],
+    "hasToast": false,
+    "hasMock": false,
+    "hasForm": false,
+    "buttons": [
+      "Defaulters List",
+      "Fee Receipts",
+      "Collection Report",
+      "Process Salaries",
+      "View Payments",
+      "Budget Report"
+    ]
+  },
+  {
+    "file": "src/components/roles/StoreKeeperDashboard.tsx",
+    "module": "src/components/roles",
+    "filename": "StoreKeeperDashboard.tsx",
+    "hasSupabase": false,
+    "tables": [],
+    "hasToast": false,
+    "hasMock": false,
+    "hasForm": false,
+    "buttons": [
+      "Barcode Scan",
+      "Search Item",
+      "Reorder",
+      "Add to Inventory",
+      "Generate Asset Tag",
+      "Issue Items"
+    ]
+  },
+  {
+    "file": "src/components/sports/AddEventDialog.tsx",
+    "module": "src/components/sports",
+    "filename": "AddEventDialog.tsx",
+    "hasSupabase": false,
+    "tables": [],
+    "hasToast": true,
+    "hasMock": false,
+    "hasForm": true,
+    "buttons": [
+      "New Event",
+      "setOpen(false)}>\r\n              Cancel",
+      "Create Event"
+    ]
+  },
+  {
+    "file": "src/components/sports/AddTeamDialog.tsx",
+    "module": "src/components/sports",
+    "filename": "AddTeamDialog.tsx",
+    "hasSupabase": false,
+    "tables": [],
+    "hasToast": true,
+    "hasMock": false,
+    "hasForm": true,
+    "buttons": [
+      "Add Team",
+      "setOpen(false)}>\r\n              Cancel",
+      "Create Team"
+    ]
+  },
+  {
+    "file": "src/components/store/CartDialog.tsx",
+    "module": "src/components/store",
+    "filename": "CartDialog.tsx",
+    "hasSupabase": true,
+    "tables": [],
+    "hasToast": true,
+    "hasMock": false,
+    "hasForm": false,
+    "buttons": [
+      "Clear Cart"
+    ]
+  },
+  {
+    "file": "src/components/teachers/AttendanceShortageManager.tsx",
+    "module": "src/components/teachers",
+    "filename": "AttendanceShortageManager.tsx",
+    "hasSupabase": true,
+    "tables": [
+      "attendance_shortage_warnings"
+    ],
+    "hasToast": true,
+    "hasMock": false,
+    "hasForm": false,
+    "buttons": [
+      "Refresh Compliance"
+    ]
+  },
+  {
+    "file": "src/components/teachers/ClassManagementSidebar.tsx",
+    "module": "src/components/teachers",
+    "filename": "ClassManagementSidebar.tsx",
+    "hasSupabase": true,
+    "tables": [],
+    "hasToast": true,
+    "hasMock": false,
+    "hasForm": false,
+    "buttons": []
+  },
+  {
+    "file": "src/components/teachers/DailyTeachingUpdate.tsx",
+    "module": "src/components/teachers",
+    "filename": "DailyTeachingUpdate.tsx",
+    "hasSupabase": true,
+    "tables": [],
+    "hasToast": true,
+    "hasMock": false,
+    "hasForm": true,
+    "buttons": []
+  },
+  {
+    "file": "src/components/teachers/PeriodAttendanceDesk.tsx",
+    "module": "src/components/teachers",
+    "filename": "PeriodAttendanceDesk.tsx",
+    "hasSupabase": true,
+    "tables": [],
+    "hasToast": true,
+    "hasMock": true,
+    "hasForm": true,
+    "buttons": [
+      "{submitting ?  : }\n              Submit Roll Call"
+    ]
+  },
+  {
+    "file": "src/components/wellness/WellnessCheckIn.tsx",
+    "module": "src/components/wellness",
+    "filename": "WellnessCheckIn.tsx",
+    "hasSupabase": true,
+    "tables": [],
+    "hasToast": true,
+    "hasMock": false,
+    "hasForm": false,
+    "buttons": []
+  },
+  {
+    "file": "src/components/student/AILearningVenture.tsx",
+    "module": "src/components/student",
+    "filename": "AILearningVenture.tsx",
+    "hasSupabase": true,
+    "tables": [],
+    "hasToast": true,
+    "hasMock": false,
+    "hasForm": true,
+    "buttons": [
+      "Save Notes",
+      "Refresh Curriculum"
+    ]
+  },
+  {
+    "file": "src/components/student/CampusProDashboardView.tsx",
+    "module": "src/components/student",
+    "filename": "CampusProDashboardView.tsx",
+    "hasSupabase": false,
+    "tables": [],
+    "hasToast": false,
+    "hasMock": false,
+    "hasForm": true,
+    "buttons": [
+      "Submit Check-in"
+    ]
+  },
+  {
+    "file": "src/components/student/CampusProDesktopHeader.tsx",
+    "module": "src/components/student",
+    "filename": "CampusProDesktopHeader.tsx",
+    "hasSupabase": false,
+    "tables": [],
+    "hasToast": false,
+    "hasMock": false,
+    "hasForm": false,
+    "buttons": []
+  },
+  {
+    "file": "src/components/student/CampusProDesktopSidebar.tsx",
+    "module": "src/components/student",
+    "filename": "CampusProDesktopSidebar.tsx",
+    "hasSupabase": false,
+    "tables": [],
+    "hasToast": false,
+    "hasMock": false,
+    "hasForm": false,
+    "buttons": []
+  },
+  {
+    "file": "src/components/student/CampusProMobileHeader.tsx",
+    "module": "src/components/student",
+    "filename": "CampusProMobileHeader.tsx",
+    "hasSupabase": false,
+    "tables": [],
+    "hasToast": false,
+    "hasMock": false,
+    "hasForm": false,
+    "buttons": []
+  },
+  {
+    "file": "src/components/student/CampusProMobileNav.tsx",
+    "module": "src/components/student",
+    "filename": "CampusProMobileNav.tsx",
+    "hasSupabase": false,
+    "tables": [],
+    "hasToast": false,
+    "hasMock": false,
+    "hasForm": false,
+    "buttons": []
+  },
+  {
+    "file": "src/components/student/LiveBusTrackerMap.tsx",
+    "module": "src/components/student",
+    "filename": "LiveBusTrackerMap.tsx",
+    "hasSupabase": false,
+    "tables": [],
+    "hasToast": false,
+    "hasMock": false,
+    "hasForm": false,
+    "buttons": []
+  },
+  {
+    "file": "src/components/student/PrintableHallTicket.tsx",
+    "module": "src/components/student",
+    "filename": "PrintableHallTicket.tsx",
+    "hasSupabase": false,
+    "tables": [],
+    "hasToast": false,
+    "hasMock": false,
+    "hasForm": false,
+    "buttons": [
+      "Print / Save Admit Card",
+      "Close"
+    ]
+  },
+  {
+    "file": "src/components/student/StudentBusTab.tsx",
+    "module": "src/components/student",
+    "filename": "StudentBusTab.tsx",
+    "hasSupabase": true,
+    "tables": [],
+    "hasToast": false,
+    "hasMock": false,
+    "hasForm": false,
+    "buttons": [
+      "Refresh Status"
+    ]
+  },
+  {
+    "file": "src/components/student/StudentComplaintsTab.tsx",
+    "module": "src/components/student",
+    "filename": "StudentComplaintsTab.tsx",
+    "hasSupabase": true,
+    "tables": [],
+    "hasToast": true,
+    "hasMock": false,
+    "hasForm": true,
+    "buttons": [
+      "Refresh Tickets"
+    ]
+  },
+  {
+    "file": "src/components/student/StudentExams.tsx",
+    "module": "src/components/student",
+    "filename": "StudentExams.tsx",
+    "hasSupabase": true,
+    "tables": [],
+    "hasToast": false,
+    "hasMock": false,
+    "hasForm": false,
+    "buttons": [
+      "Refresh"
+    ]
+  },
+  {
+    "file": "src/components/student/StudentFeesTab.tsx",
+    "module": "src/components/student",
+    "filename": "StudentFeesTab.tsx",
+    "hasSupabase": true,
+    "tables": [],
+    "hasToast": true,
+    "hasMock": false,
+    "hasForm": true,
+    "buttons": [
+      "Refresh"
+    ]
+  },
+  {
+    "file": "src/components/student/StudentSettingsTab.tsx",
+    "module": "src/components/student",
+    "filename": "StudentSettingsTab.tsx",
+    "hasSupabase": true,
+    "tables": [],
+    "hasToast": true,
+    "hasMock": false,
+    "hasForm": false,
+    "buttons": [
+      "Sign Out of Student Account"
+    ]
+  },
+  {
+    "file": "src/components/student/StudentStoreTab.tsx",
+    "module": "src/components/student",
+    "filename": "StudentStoreTab.tsx",
+    "hasSupabase": true,
+    "tables": [],
+    "hasToast": true,
+    "hasMock": false,
+    "hasForm": false,
+    "buttons": []
+  }
+]

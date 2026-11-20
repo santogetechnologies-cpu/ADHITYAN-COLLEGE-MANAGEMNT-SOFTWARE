@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { db } from '@/services/supabase/database';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -163,16 +164,27 @@ export const InfirmaryVisitDialog = ({
   };
 
   const searchPatient = async (searchTerm: string) => {
-    // Mock patient search - in real app, this would search the database
-    if (searchTerm === 'CS2021001' || searchTerm.toLowerCase().includes('amit')) {
-      setVisitData({
-        ...visitData,
-        patientId: 'CS2021001',
-        patientName: 'Amit Kumar Singh',
-        patientType: 'student',
-        class: 'CSE - 3rd Year',
-        department: 'Computer Science'
-      });
+    const trimmed = searchTerm.trim().toLowerCase();
+    if (!trimmed) return;
+    try {
+      const profiles = await db.getAllProfiles();
+      const match = profiles.find(p => 
+        p.id.toLowerCase() === trimmed ||
+        p.roll_number?.toLowerCase() === trimmed ||
+        p.name?.toLowerCase().includes(trimmed)
+      );
+      if (match) {
+        setVisitData({
+          ...visitData,
+          patientId: match.roll_number || match.id,
+          patientName: match.name,
+          patientType: match.role === 'student' ? 'student' : 'staff',
+          class: match.class_name || 'Standard',
+          department: match.department || 'Academics'
+        });
+      }
+    } catch (err) {
+      console.warn('Patient lookup warning:', err);
     }
   };
 

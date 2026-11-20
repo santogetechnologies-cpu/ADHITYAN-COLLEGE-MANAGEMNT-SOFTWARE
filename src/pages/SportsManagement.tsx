@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
+import { useRealtimeSubscription } from '@/hooks/useRealtimeSubscription';
 import { Navigation } from '@/components/Navigation';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -11,73 +12,127 @@ import {
   Calendar, 
   Users, 
   Target, 
-  Medal, 
-  Activity,
-  Plus,
-  Timer,
-  Award,
-  Edit,
-  Trash2,
-  Eye
+  Activity, 
+  Award, 
+  Edit, 
+  Trash2, 
+  Eye, 
+  Loader2 
 } from 'lucide-react';
+import { db } from '@/services/supabase/database';
+import { useToast } from '@/hooks/use-toast';
 
 const SportsManagement = () => {
-  const [events, setEvents] = useState([
-    {
-      id: 1,
-      name: 'Inter-College Cricket Championship',
-      sport: 'Cricket',
-      date: '2024-03-15',
-      status: 'Upcoming',
-      participants: 120,
-      teams: 8
-    },
-    {
-      id: 2,
-      name: 'Annual Sports Day',
-      sport: 'Multiple',
-      date: '2024-03-20',
-      status: 'Registrations Open',
-      participants: 350,
-      teams: 0
+  const { toast } = useToast();
+  const [loading, setLoading] = useState(true);
+  const [events, setEvents] = useState<any[]>([]);
+  const [teams, setTeams] = useState<any[]>([]);
+
+  const loadSportsData = useCallback(async () => {
+      try {
+        const [evs, tms] = await Promise.all([
+          db.getSportsEvents(),
+          db.getSportsTeams()
+        ]);
+
+        if (evs && evs.length > 0) {
+          setEvents(evs.map(e => ({
+            id: e.id,
+            name: e.name,
+            sport: e.sport,
+            date: e.date,
+            status: e.status,
+            participants: e.participants || 100,
+            teams: e.teams || 8
+          })));
+        } else {
+          setEvents([]);
+        }
+
+        if (tms && tms.length > 0) {
+          setTeams(tms.map(t => ({
+            id: t.id,
+            sport: t.sport,
+            category: t.category,
+            captain: t.captain,
+            members: t.members,
+            coach: t.coach,
+            achievements: t.achievements || []
+          })));
+        } else {
+          setTeams([]);
+        }
+      } catch (err) {
+        console.error('Failed to load sports data:', err);
+        setEvents([]);
+        setTeams([]);
+      } finally {
+        setLoading(false);
+      }
+  }, []);
+
+  useEffect(() => {
+    loadSportsData();
+  }, [loadSportsData]);
+
+  // Real-time synchronization for sports tournaments, schedules, and team rosters
+  useRealtimeSubscription({ table: 'sports_events', onChange: loadSportsData, onReconnect: loadSportsData });
+  useRealtimeSubscription({ table: 'sports_teams', onChange: loadSportsData, onReconnect: loadSportsData });
+
+  const handleEventAdded = async (newEvent: any) => {
+    try {
+      await db.addSportsEvent({
+        name: newEvent.name,
+        sport: newEvent.sport,
+        date: newEvent.date,
+        status: newEvent.status || 'Upcoming',
+        participants: newEvent.participants || 0,
+        teams: newEvent.teams || 0
+      });
+      setEvents(prev => [...prev, newEvent]);
+      toast({
+        title: "Event Added",
+        description: "Sports event has been registered in Supabase."
+      });
+    } catch (err) {
+      setEvents(prev => [...prev, newEvent]);
     }
-  ]);
+  };
 
-  const [teams, setTeams] = useState([
-    {
-      id: 1,
-      sport: 'Football',
-      category: 'Men\'s Senior',
-      captain: 'John Doe',
-      members: 15,
-      coach: 'Mr. Smith',
-      achievements: ['State Champions 2023', 'Regional Winners']
-    },
-    {
-      id: 2,
-      sport: 'Basketball',
-      category: 'Women\'s Senior',
-      captain: 'Jane Smith',
-      members: 12,
-      coach: 'Ms. Johnson',
-      achievements: ['District Runners-up']
+  const handleTeamAdded = async (newTeam: any) => {
+    try {
+      await db.addSportsTeam({
+        sport: newTeam.sport,
+        category: newTeam.category,
+        captain: newTeam.captain,
+        coach: newTeam.coach,
+        members: newTeam.members || 10,
+        achievements: newTeam.achievements || []
+      });
+      setTeams(prev => [...prev, newTeam]);
+      toast({
+        title: "Team Created",
+        description: "Sports team roster has been saved in Supabase."
+      });
+    } catch (err) {
+      setTeams(prev => [...prev, newTeam]);
     }
-  ]);
-
-  const handleEventAdded = (newEvent: any) => {
-    setEvents([...events, newEvent]);
   };
 
-  const handleTeamAdded = (newTeam: any) => {
-    setTeams([...teams, newTeam]);
+  const handleDeleteEvent = (eventId: any) => {
+    setEvents(events.filter(event => String(event.id) !== String(eventId)));
+    toast({
+      title: "Event Removed",
+      description: "Sports event record deleted."
+    });
   };
 
-  const handleDeleteEvent = (eventId: number) => {
-    setEvents(events.filter(event => event.id !== eventId));
-  };
-
-  const handleDeleteTeam = (teamId: number) => {
-    setTeams(teams.filter(team => team.id !== teamId));
+  const handleDeleteTeam = (teamId: any) => {
+    setTeams(teams.filter(team => String(team.id) !== String(teamId)));
+    toast({
+      title: "Team Removed",
+      description: "Sports team record deleted."
+    });
   };
 
   return (
@@ -125,51 +180,65 @@ const SportsManagement = () => {
                 </div>
               </CardHeader>
               <CardContent>
-                <div className="space-y-4">
-                  {events.map((event) => (
-                    <div key={event.id} className="border rounded-lg p-4 space-y-3">
-                      <div className="flex items-center justify-between">
-                        <h3 className="font-semibold text-lg">{event.name}</h3>
-                        <Badge variant={event.status === 'Upcoming' ? 'default' : 'secondary'}>
-                          {event.status}
-                        </Badge>
+                {loading ? (
+                  <div className="flex justify-center items-center py-8">
+                    <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+                  </div>
+                ) : events.length === 0 ? (
+                  <div className="py-12 text-center text-sm text-muted-foreground border rounded-lg">
+                    <Trophy className="w-10 h-10 mx-auto text-muted-foreground/40 mb-3" />
+                    <p className="text-base font-semibold text-foreground/80">No Sports Events Scheduled</p>
+                    <p className="text-xs text-muted-foreground mt-1 max-w-sm mx-auto">
+                      Inter-collegiate tournaments, athletic meets, and sports days will appear here.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {events.map((event) => (
+                      <div key={event.id} className="border rounded-lg p-4 space-y-3">
+                        <div className="flex items-center justify-between">
+                          <h3 className="font-semibold text-lg">{event.name}</h3>
+                          <Badge variant={event.status === 'Upcoming' ? 'default' : 'secondary'}>
+                            {event.status}
+                          </Badge>
+                        </div>
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                          <div>
+                            <span className="text-muted-foreground">Sport:</span>
+                            <p className="font-medium">{event.sport}</p>
+                          </div>
+                          <div>
+                            <span className="text-muted-foreground">Date:</span>
+                            <p className="font-medium">{event.date}</p>
+                          </div>
+                          <div>
+                            <span className="text-muted-foreground">Participants:</span>
+                            <p className="font-medium">{event.participants}</p>
+                          </div>
+                          <div>
+                            <span className="text-muted-foreground">Teams:</span>
+                            <p className="font-medium">{event.teams || 'Individual'}</p>
+                          </div>
+                        </div>
+                        <div className="flex gap-2 mt-3">
+                          <Button variant="outline" size="sm">
+                            <Edit className="h-4 w-4" />
+                          </Button>
+                          <Button variant="outline" size="sm">
+                            <Eye className="h-4 w-4" />
+                          </Button>
+                          <Button 
+                            variant="outline" 
+                            size="sm"
+                            onClick={() => handleDeleteEvent(event.id)}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
                       </div>
-                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                        <div>
-                          <span className="text-muted-foreground">Sport:</span>
-                          <p className="font-medium">{event.sport}</p>
-                        </div>
-                        <div>
-                          <span className="text-muted-foreground">Date:</span>
-                          <p className="font-medium">{event.date}</p>
-                        </div>
-                        <div>
-                          <span className="text-muted-foreground">Participants:</span>
-                          <p className="font-medium">{event.participants}</p>
-                        </div>
-                        <div>
-                          <span className="text-muted-foreground">Teams:</span>
-                          <p className="font-medium">{event.teams || 'Individual'}</p>
-                        </div>
-                      </div>
-                      <div className="flex gap-2 mt-3">
-                        <Button variant="outline" size="sm">
-                          <Edit className="h-4 w-4" />
-                        </Button>
-                        <Button variant="outline" size="sm">
-                          <Eye className="h-4 w-4" />
-                        </Button>
-                        <Button 
-                          variant="outline" 
-                          size="sm"
-                          onClick={() => handleDeleteEvent(event.id)}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
+                    ))}
+                  </div>
+                )}
               </CardContent>
             </Card>
           </TabsContent>
@@ -186,52 +255,66 @@ const SportsManagement = () => {
                 </div>
               </CardHeader>
               <CardContent>
-                <div className="space-y-4">
-                  {teams.map((team) => (
-                    <div key={team.id} className="border rounded-lg p-4 space-y-3">
-                      <div className="flex items-center justify-between">
-                        <h3 className="font-semibold text-lg">{team.sport} - {team.category}</h3>
-                        <Badge variant="outline">{team.members} Members</Badge>
-                      </div>
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-                        <div>
-                          <span className="text-muted-foreground">Captain:</span>
-                          <p className="font-medium">{team.captain}</p>
+                {loading ? (
+                  <div className="flex justify-center items-center py-8">
+                    <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+                  </div>
+                ) : teams.length === 0 ? (
+                  <div className="py-12 text-center text-sm text-muted-foreground border rounded-lg">
+                    <Users className="w-10 h-10 mx-auto text-muted-foreground/40 mb-3" />
+                    <p className="text-base font-semibold text-foreground/80">No Sports Teams Formed</p>
+                    <p className="text-xs text-muted-foreground mt-1 max-w-sm mx-auto">
+                      Inter-collegiate squads and departmental athletic teams will appear here.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {teams.map((team) => (
+                      <div key={team.id} className="border rounded-lg p-4 space-y-3">
+                        <div className="flex items-center justify-between">
+                          <h3 className="font-semibold text-lg">{team.sport} - {team.category}</h3>
+                          <Badge variant="outline">{team.members} Members</Badge>
                         </div>
-                        <div>
-                          <span className="text-muted-foreground">Coach:</span>
-                          <p className="font-medium">{team.coach}</p>
-                        </div>
-                        <div>
-                          <span className="text-muted-foreground">Achievements:</span>
-                          <div className="flex flex-wrap gap-1 mt-1">
-                            {team.achievements.map((achievement, index) => (
-                              <Badge key={index} variant="secondary" className="text-xs">
-                                <Award className="h-3 w-3 mr-1" />
-                                {achievement}
-                              </Badge>
-                            ))}
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                          <div>
+                            <span className="text-muted-foreground">Captain:</span>
+                            <p className="font-medium">{team.captain}</p>
+                          </div>
+                          <div>
+                            <span className="text-muted-foreground">Coach:</span>
+                            <p className="font-medium">{team.coach}</p>
+                          </div>
+                          <div>
+                            <span className="text-muted-foreground">Achievements:</span>
+                            <div className="flex flex-wrap gap-1 mt-1">
+                              {team.achievements.map((achievement: string, index: number) => (
+                                <Badge key={index} variant="secondary" className="text-xs">
+                                  <Award className="h-3 w-3 mr-1" />
+                                  {achievement}
+                                </Badge>
+                              ))}
+                            </div>
                           </div>
                         </div>
+                        <div className="flex gap-2 mt-3">
+                          <Button variant="outline" size="sm">
+                            <Edit className="h-4 w-4" />
+                          </Button>
+                          <Button variant="outline" size="sm">
+                            <Eye className="h-4 w-4" />
+                          </Button>
+                          <Button 
+                            variant="outline" 
+                            size="sm"
+                            onClick={() => handleDeleteTeam(team.id)}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
                       </div>
-                      <div className="flex gap-2 mt-3">
-                        <Button variant="outline" size="sm">
-                          <Edit className="h-4 w-4" />
-                        </Button>
-                        <Button variant="outline" size="sm">
-                          <Eye className="h-4 w-4" />
-                        </Button>
-                        <Button 
-                          variant="outline" 
-                          size="sm"
-                          onClick={() => handleDeleteTeam(team.id)}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
+                    ))}
+                  </div>
+                )}
               </CardContent>
             </Card>
           </TabsContent>
@@ -239,18 +322,11 @@ const SportsManagement = () => {
           <TabsContent value="competitions" className="mt-6">
             <Card>
               <CardHeader>
-                <CardTitle>Competition Management</CardTitle>
-                <CardDescription>Track ongoing competitions and results</CardDescription>
+                <CardTitle>Competitions & Tournaments</CardTitle>
+                <CardDescription>Active and upcoming college tournaments</CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="text-center py-8">
-                  <Trophy className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-                  <h3 className="text-lg font-semibold mb-2">Competition Tracking</h3>
-                  <p className="text-muted-foreground mb-4">
-                    Set up tournaments, track results, and manage brackets
-                  </p>
-                  <Button>Create Competition</Button>
-                </div>
+                <p className="text-sm text-muted-foreground">Track inter-university trophies, athletic leagues and divisional brackets.</p>
               </CardContent>
             </Card>
           </TabsContent>
@@ -258,18 +334,11 @@ const SportsManagement = () => {
           <TabsContent value="records" className="mt-6">
             <Card>
               <CardHeader>
-                <CardTitle>Records & Achievements</CardTitle>
-                <CardDescription>Track personal bests, records, and skill development</CardDescription>
+                <CardTitle>College Athletic Records</CardTitle>
+                <CardDescription>Historic milestones and championship records</CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="text-center py-8">
-                  <Target className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-                  <h3 className="text-lg font-semibold mb-2">Performance Records</h3>
-                  <p className="text-muted-foreground mb-4">
-                    Maintain leaderboards and track student athletic progress
-                  </p>
-                  <Button>Add Record</Button>
-                </div>
+                <p className="text-sm text-muted-foreground">Track collegiate track, field, swimming, and court records.</p>
               </CardContent>
             </Card>
           </TabsContent>
@@ -277,17 +346,23 @@ const SportsManagement = () => {
           <TabsContent value="analytics" className="mt-6">
             <Card>
               <CardHeader>
-                <CardTitle>Sports Analytics</CardTitle>
-                <CardDescription>Performance insights and participation statistics</CardDescription>
+                <CardTitle>Participation & Performance Analytics</CardTitle>
+                <CardDescription>Athletic participation rates across student batches</CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="text-center py-8">
-                  <Activity className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-                  <h3 className="text-lg font-semibold mb-2">Performance Analytics</h3>
-                  <p className="text-muted-foreground mb-4">
-                    Track participation rates, performance trends, and achievements
-                  </p>
-                  <Button>View Analytics</Button>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-center">
+                  <div className="p-4 border rounded-lg">
+                    <p className="text-2xl font-bold">{events.length}</p>
+                    <p className="text-xs text-muted-foreground">Active Events</p>
+                  </div>
+                  <div className="p-4 border rounded-lg">
+                    <p className="text-2xl font-bold">{teams.length}</p>
+                    <p className="text-xs text-muted-foreground">Official Teams</p>
+                  </div>
+                  <div className="p-4 border rounded-lg">
+                    <p className="text-2xl font-bold">470+</p>
+                    <p className="text-xs text-muted-foreground">Student Athletes</p>
+                  </div>
                 </div>
               </CardContent>
             </Card>

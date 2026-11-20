@@ -1,0 +1,109 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 350" fill="none">
+  <defs>
+    <radialGradient id="aiGlow" cx="50%" cy="40%" r="50%">
+      <stop offset="0%" stop-color="#38BDF8" stop-opacity="0.9"/>
+      <stop offset="40%" stop-color="#0284C7" stop-opacity="0.6"/>
+      <stop offset="80%" stop-color="#0F172A" stop-opacity="0.95"/>
+      <stop offset="100%" stop-color="#020617"/>
+    </radialGradient>
+    <linearGradient id="laptopBody" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#64748B"/>
+      <stop offset="100%" stop-color="#334155"/>
+    </linearGradient>
+    <linearGradient id="keyboardBase" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#475569"/>
+      <stop offset="100%" stop-color="#1E293B"/>
+    </linearGradient>
+    <filter id="neonGlow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="4" result="blur" />
+      <feMerge>
+        <feMergeNode in="blur" />
+        <feMergeNode in="SourceGraphic" />
+      </feMerge>
+    </filter>
+  </defs>
+
+  <!-- Laptop Screen Lid -->
+  <rect x="75" y="30" width="350" height="230" rx="14" fill="url(#laptopBody)" stroke="#94A3B8" stroke-width="2"/>
+  <!-- Bezel Interior -->
+  <rect x="85" y="40" width="330" height="205" rx="8" fill="#020617"/>
+  <!-- Display Screen -->
+  <rect x="92" y="46" width="316" height="193" rx="6" fill="url(#aiGlow)"/>
+
+  <!-- Screen Grid Lines -->
+  <g stroke="#38BDF8" stroke-opacity="0.15" stroke-width="1">
+    <line x1="92" y1="95" x2="408" y2="95"/>
+    <line x1="92" y1="145" x2="408" y2="145"/>
+    <line x1="92" y1="195" x2="408" y2="195"/>
+    <line x1="170" y1="46" x2="170" y2="239"/>
+    <line x1="250" y1="46" x2="250" y2="239"/>
+    <line x1="330" y1="46" x2="330" y2="239"/>
+  </g>
+
+  <!-- Neural Network Glowing Brain Hologram -->
+  <g filter="url(#neonGlow)" stroke="#38BDF8" stroke-width="2" fill="none">
+    <!-- Left Hemisphere -->
+    <path d="M250 85 C220 75 185 85 175 110 C165 130 170 150 160 165 C150 180 165 200 185 205 C205 210 230 195 250 200" stroke="#38BDF8" stroke-width="2.5"/>
+    <path d="M250 110 C230 110 205 120 195 135 C185 150 195 175 220 175 C235 175 245 185 250 190" stroke="#00E5FF"/>
+    
+    <!-- Right Hemisphere -->
+    <path d="M250 85 C280 75 315 85 325 110 C335 130 330 150 340 165 C350 180 335 200 315 205 C295 210 270 195 250 200" stroke="#38BDF8" stroke-width="2.5"/>
+    <path d="M250 110 C270 110 295 120 305 135 C315 150 305 175 280 175 C265 175 255 185 250 190" stroke="#00E5FF"/>
+
+    <!-- Central Neural Axis -->
+    <line x1="250" y1="85" x2="250" y2="200" stroke="#E0F2FE" stroke-width="2" stroke-dasharray="3 3"/>
+
+    <!-- Neural Synapse Nodes -->
+    <g fill="#FFFFFF" stroke="#0284C7" stroke-width="1.5">
+      <circle cx="250" cy="85" r="4.5"/>
+      <circle cx="175" cy="110" r="4"/>
+      <circle cx="325" cy="110" r="4"/>
+      <circle cx="160" cy="165" r="4"/>
+      <circle cx="340" cy="165" r="4"/>
+      <circle cx="185" cy="205" r="4"/>
+      <circle cx="315" cy="205" r="4"/>
+      <circle cx="250" cy="140" r="5" fill="#38BDF8"/>
+      <circle cx="215" cy="140" r="3.5"/>
+      <circle cx="285" cy="140" r="3.5"/>
+    </g>
+
+    <!-- Interconnecting Synaptic Rays -->
+    <line x1="175" y1="110" x2="215" y2="140" stroke="#38BDF8" stroke-width="1"/>
+    <line x1="325" y1="110" x2="285" y2="140" stroke="#38BDF8" stroke-width="1"/>
+    <line x1="215" y1="140" x2="250" y2="140" stroke="#7DD3FC" stroke-width="1.5"/>
+    <line x1="285" y1="140" x2="250" y2="140" stroke="#7DD3FC" stroke-width="1.5"/>
+    <line x1="160" y1="165" x2="215" y2="140" stroke="#38BDF8" stroke-width="1"/>
+    <line x1="340" y1="165" x2="285" y2="140" stroke="#38BDF8" stroke-width="1"/>
+    <line x1="185" y1="205" x2="250" y2="190" stroke="#38BDF8" stroke-width="1"/>
+    <line x1="315" y1="205" x2="250" y2="190" stroke="#38BDF8" stroke-width="1"/>
+  </g>
+
+  <!-- Holographic Floating UI Cards on Screen -->
+  <g fill="#0369A1" fill-opacity="0.4" stroke="#38BDF8" stroke-width="1" rx="4">
+    <rect x="105" y="60" width="35" height="40" rx="4"/>
+    <rect x="360" y="60" width="35" height="40" rx="4"/>
+  </g>
+
+  <!-- Laptop Base Platform -->
+  <!-- Hinge -->
+  <rect x="180" y="255" width="140" height="8" rx="3" fill="#1E293B"/>
+  <!-- Lower Chassis (Perspective) -->
+  <polygon points="40,305 460,305 425,260 75,260" fill="url(#keyboardBase)" stroke="#64748B" stroke-width="1.5"/>
+  <!-- Front Edge Lip -->
+  <rect x="40" y="305" width="420" height="12" rx="4" fill="url(#laptopBody)"/>
+  <!-- Trackpad Notch -->
+  <rect x="220" y="304" width="60" height="4" rx="2" fill="#94A3B8"/>
+
+  <!-- Glowing Keyboard Backlight Accent -->
+  <polygon points="95,295 405,295 385,267 115,267" fill="#0F172A" stroke="#0284C7" stroke-opacity="0.4" stroke-width="1"/>
+  <!-- Keyboard Keys Rows Impression -->
+  <g stroke="#38BDF8" stroke-opacity="0.3" stroke-width="1">
+    <line x1="112" y1="274" x2="388" y2="274"/>
+    <line x1="106" y1="281" x2="394" y2="281"/>
+    <line x1="100" y1="288" x2="400" y2="288"/>
+  </g>
+
+  <!-- Trackpad -->
+  <rect x="210" y="297" width="80" height="6" rx="2" fill="#334155" stroke="#475569" stroke-width="0.5"/>
+</svg>
+

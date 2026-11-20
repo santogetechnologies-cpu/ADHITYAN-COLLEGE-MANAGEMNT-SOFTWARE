@@ -7,18 +7,22 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { CalendarIcon, Upload } from 'lucide-react';
+import { CalendarIcon, Upload, Loader2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
+import { db } from '@/services/supabase/database';
+import { AlumniProfile } from '@/types/database.types';
 
 interface AddAlumniDialogProps {
   children: React.ReactNode;
+  onAlumniAdded?: (alumni: AlumniProfile) => void;
 }
 
-export function AddAlumniDialog({ children }: AddAlumniDialogProps) {
+export function AddAlumniDialog({ children, onAlumniAdded }: AddAlumniDialogProps) {
   const [open, setOpen] = useState(false);
   const [graduationDate, setGraduationDate] = useState<Date>();
+  const [submitting, setSubmitting] = useState(false);
   const { toast } = useToast();
 
   const [formData, setFormData] = useState({
@@ -40,7 +44,7 @@ export function AddAlumniDialog({ children }: AddAlumniDialogProps) {
     setFormData(prev => ({ ...prev, [field]: value }));
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     // Basic validation
     if (!formData.firstName || !formData.lastName || !formData.email) {
       toast({
@@ -51,31 +55,62 @@ export function AddAlumniDialog({ children }: AddAlumniDialogProps) {
       return;
     }
 
-    // Here you would typically send the data to your backend
-    // console.log('Alumni data:', { ...formData, graduationDate });
-    
-    toast({
-      title: "Success",
-      description: "Alumni profile has been created successfully",
-    });
+    setSubmitting(true);
 
-    // Reset form and close dialog
-    setFormData({
-      firstName: '',
-      lastName: '',
-      email: '',
-      phone: '',
-      rollNumber: '',
-      course: '',
-      department: '',
-      currentPosition: '',
-      company: '',
-      location: '',
-      linkedinUrl: '',
-      bio: ''
-    });
-    setGraduationDate(undefined);
-    setOpen(false);
+    try {
+      const payload: Omit<AlumniProfile, 'id' | 'created_at'> = {
+        first_name: formData.firstName,
+        last_name: formData.lastName,
+        email: formData.email,
+        phone: formData.phone,
+        roll_number: formData.rollNumber,
+        course: formData.course,
+        department: formData.department || 'Medical Laboratory Technology',
+        graduation_year: graduationDate ? graduationDate.getFullYear().toString() : '2023',
+        current_position: formData.currentPosition,
+        company: formData.company,
+        location: formData.location,
+        linkedin_url: formData.linkedinUrl,
+        bio: formData.bio,
+        status: 'Active'
+      };
+
+      const created = await db.createAlumniProfile(payload);
+      if (created && onAlumniAdded) {
+        onAlumniAdded(created);
+      }
+
+      toast({
+        title: "Success",
+        description: "Alumni profile has been created successfully",
+      });
+
+      // Reset form and close dialog
+      setFormData({
+        firstName: '',
+        lastName: '',
+        email: '',
+        phone: '',
+        rollNumber: '',
+        course: '',
+        department: '',
+        currentPosition: '',
+        company: '',
+        location: '',
+        linkedinUrl: '',
+        bio: ''
+      });
+      setGraduationDate(undefined);
+      setOpen(false);
+    } catch (err: any) {
+      toast({
+        title: "Failed to create profile",
+        description: err.message || "An error occurred",
+        variant: "destructive"
+      });
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -156,14 +191,14 @@ export function AddAlumniDialog({ children }: AddAlumniDialogProps) {
                     <SelectValue placeholder="Select course" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="btech">B.Tech</SelectItem>
-                    <SelectItem value="mtech">M.Tech</SelectItem>
-                    <SelectItem value="bsc">B.Sc</SelectItem>
-                    <SelectItem value="msc">M.Sc</SelectItem>
-                    <SelectItem value="ba">B.A</SelectItem>
-                    <SelectItem value="ma">M.A</SelectItem>
-                    <SelectItem value="bcom">B.Com</SelectItem>
-                    <SelectItem value="mcom">M.Com</SelectItem>
+                    <SelectItem value="B.Tech">B.Tech</SelectItem>
+                    <SelectItem value="M.Tech">M.Tech</SelectItem>
+                    <SelectItem value="B.Sc">B.Sc</SelectItem>
+                    <SelectItem value="M.Sc">M.Sc</SelectItem>
+                    <SelectItem value="B.A">B.A</SelectItem>
+                    <SelectItem value="M.A">M.A</SelectItem>
+                    <SelectItem value="B.Com">B.Com</SelectItem>
+                    <SelectItem value="M.Com">M.Com</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -177,14 +212,12 @@ export function AddAlumniDialog({ children }: AddAlumniDialogProps) {
                     <SelectValue placeholder="Select department" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="cse">Computer Science</SelectItem>
-                    <SelectItem value="ece">Electronics & Communication</SelectItem>
-                    <SelectItem value="me">Mechanical Engineering</SelectItem>
-                    <SelectItem value="ce">Civil Engineering</SelectItem>
-                    <SelectItem value="ee">Electrical Engineering</SelectItem>
-                    <SelectItem value="physics">Physics</SelectItem>
-                    <SelectItem value="chemistry">Chemistry</SelectItem>
-                    <SelectItem value="mathematics">Mathematics</SelectItem>
+                    <SelectItem value="Medical Laboratory Technology">Medical Laboratory Technology</SelectItem>
+                    <SelectItem value="Dialysis Technology">Dialysis Technology</SelectItem>
+                    <SelectItem value="Radiology & Imaging Technology">Radiology & Imaging Technology</SelectItem>
+                    <SelectItem value="Operation Theatre & Anaesthesia Technology">Operation Theatre & Anaesthesia Technology</SelectItem>
+                    <SelectItem value="Cardiac Care Technology">Cardiac Care Technology</SelectItem>
+                    <SelectItem value="Physician Assistant & Clinical Sciences">Physician Assistant & Clinical Sciences</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -292,8 +325,14 @@ export function AddAlumniDialog({ children }: AddAlumniDialogProps) {
             <Button variant="outline" onClick={() => setOpen(false)}>
               Cancel
             </Button>
-            <Button onClick={handleSubmit}>
-              Add Alumni
+            <Button onClick={handleSubmit} disabled={submitting}>
+              {submitting ? (
+                <span className="flex items-center gap-2">
+                  <Loader2 className="w-4 h-4 animate-spin" /> Adding...
+                </span>
+              ) : (
+                'Add Alumni'
+              )}
             </Button>
           </div>
         </div>

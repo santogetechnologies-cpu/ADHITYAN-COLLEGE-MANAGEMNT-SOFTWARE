@@ -162,33 +162,34 @@ export const UploadResourceDialog = ({ onResourceAdded }: UploadResourceDialogPr
                   <SelectValue placeholder="Select subject" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="Mathematics">Mathematics</SelectItem>
-                  <SelectItem value="Physics">Physics</SelectItem>
-                  <SelectItem value="Chemistry">Chemistry</SelectItem>
-                  <SelectItem value="Biology">Biology</SelectItem>
-                  <SelectItem value="English">English</SelectItem>
-                  <SelectItem value="History">History</SelectItem>
-                  <SelectItem value="Geography">Geography</SelectItem>
-                  <SelectItem value="Computer Science">Computer Science</SelectItem>
-                  <SelectItem value="Economics">Economics</SelectItem>
-                  <SelectItem value="Political Science">Political Science</SelectItem>
+                  <SelectItem value="Clinical Anatomy">Clinical Anatomy</SelectItem>
+                  <SelectItem value="Physiology">Physiology</SelectItem>
+                  <SelectItem value="Biochemistry">Biochemistry</SelectItem>
+                  <SelectItem value="Pathology & Microbiology">Pathology & Microbiology</SelectItem>
+                  <SelectItem value="Hematology">Hematology</SelectItem>
+                  <SelectItem value="Dialysis Technology">Dialysis Technology</SelectItem>
+                  <SelectItem value="Radiographic Positioning">Radiographic Positioning</SelectItem>
+                  <SelectItem value="Anaesthesia Techniques">Anaesthesia Techniques</SelectItem>
+                  <SelectItem value="Clinical Pharmacology">Clinical Pharmacology</SelectItem>
                 </SelectContent>
               </Select>
             </div>
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="class">Target Class/Grade</Label>
+            <Label htmlFor="class">Target Semester / Program</Label>
             <Select value={resourceData.class} onValueChange={(value) => setResourceData({ ...resourceData, class: value })}>
               <SelectTrigger>
-                <SelectValue placeholder="Select class" />
+                <SelectValue placeholder="Select semester" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="Class 9">Class 9</SelectItem>
-                <SelectItem value="Class 10">Class 10</SelectItem>
-                <SelectItem value="Class 11">Class 11</SelectItem>
-                <SelectItem value="Class 12">Class 12</SelectItem>
-                <SelectItem value="All Classes">All Classes</SelectItem>
+                <SelectItem value="Semester 1">Semester 1</SelectItem>
+                <SelectItem value="Semester 2">Semester 2</SelectItem>
+                <SelectItem value="Semester 3">Semester 3</SelectItem>
+                <SelectItem value="Semester 4">Semester 4</SelectItem>
+                <SelectItem value="Semester 5">Semester 5</SelectItem>
+                <SelectItem value="Semester 6">Semester 6</SelectItem>
+                <SelectItem value="All Semesters">All Semesters</SelectItem>
               </SelectContent>
             </Select>
           </div>

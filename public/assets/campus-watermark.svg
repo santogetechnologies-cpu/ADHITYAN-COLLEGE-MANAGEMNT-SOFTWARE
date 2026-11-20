@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 120" fill="none">
+  <g stroke="#94A3B8" stroke-width="1" opacity="0.35">
+    <!-- Pediment -->
+    <polygon points="150,15 90,40 210,40"/>
+    <circle cx="150" cy="28" r="5"/>
+    <!-- Central Portico Columns -->
+    <rect x="100" y="40" width="8" height="60"/>
+    <rect x="122" y="40" width="8" height="60"/>
+    <rect x="146" y="40" width="8" height="60"/>
+    <rect x="170" y="40" width="8" height="60"/>
+    <rect x="192" y="40" width="8" height="60"/>
+    <!-- Left Wing -->
+    <rect x="20" y="45" width="70" height="55"/>
+    <line x1="15" y1="45" x2="90" y2="45"/>
+    <rect x="30" y="55" width="10" height="15"/>
+    <rect x="50" y="55" width="10" height="15"/>
+    <rect x="70" y="55" width="10" height="15"/>
+    <rect x="30" y="78" width="10" height="15"/>
+    <rect x="50" y="78" width="10" height="15"/>
+    <rect x="70" y="78" width="10" height="15"/>
+    <!-- Right Wing -->
+    <rect x="210" y="45" width="70" height="55"/>
+    <line x1="210" y1="45" x2="285" y2="45"/>
+    <rect x="220" y="55" width="10" height="15"/>
+    <rect x="240" y="55" width="10" height="15"/>
+    <rect x="260" y="55" width="10" height="15"/>
+    <rect x="220" y="78" width="10" height="15"/>
+    <rect x="240" y="78" width="10" height="15"/>
+    <rect x="260" y="78" width="10" height="15"/>
+    <!-- Base steps -->
+    <line x1="0" y1="100" x2="300" y2="100"/>
+    <line x1="10" y1="105" x2="290" y2="105"/>
+    <line x1="20" y1="110" x2="280" y2="110"/>
+  </g>
+</svg>
+

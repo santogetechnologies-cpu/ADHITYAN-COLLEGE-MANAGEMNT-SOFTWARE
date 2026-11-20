@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Settings, User, Lock, Palette, Globe, Bell, HelpCircle } from 'lucide-react';
+import { useState, useRef } from 'react';
+import { Settings, User, Lock, Palette, Globe, Bell, HelpCircle, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -11,9 +11,15 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useAuth } from '@/context/AuthContext';
 import { toast } from '@/hooks/use-toast';
+import { storageService } from '@/services/supabase/storage';
+import { db } from '@/services/supabase/database';
 
 export function UserSettings() {
-  const { user } = useAuth();
+  const { user, updateUserProfile } = useAuth();
+  const avatarInputRef = useRef<HTMLInputElement>(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+
   const [settings, setSettings] = useState({
     profile: {
       name: user?.name || '',
@@ -41,11 +47,68 @@ export function UserSettings() {
     }
   });
 
-  const handleSave = (section: string) => {
-    toast({
-      title: "Settings Updated",
-      description: `Your ${section} settings have been saved successfully.`,
-    });
+  const handleAvatarFileSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !user) return;
+
+    setIsUploading(true);
+    const { url, error } = await storageService.uploadFile('avatars', user.id, file);
+    setIsUploading(false);
+
+    if (url) {
+      setSettings(prev => ({
+        ...prev,
+        profile: { ...prev.profile, avatar: url }
+      }));
+      await updateUserProfile({ avatar: url });
+      toast({
+        title: "Avatar Updated",
+        description: "Your profile picture has been updated successfully.",
+      });
+    } else {
+      toast({
+        title: "Upload Failed",
+        description: error?.message || "Could not upload profile picture.",
+        variant: "destructive"
+      });
+    }
+  };
+
+  const handleSave = async (section: string) => {
+    setIsSaving(true);
+    try {
+      if (section === 'profile' && user) {
+        await updateUserProfile({
+          name: settings.profile.name,
+          avatar: settings.profile.avatar,
+        });
+        await db.updateProfile(user.id, {
+          name: settings.profile.name,
+          avatar_url: settings.profile.avatar,
+          bio: settings.profile.bio,
+        });
+      } else if (user) {
+        await db.updateProfile(user.id, {
+          preferences: {
+            ...settings.preferences,
+            ...settings.notifications,
+          }
+        });
+      }
+
+      toast({
+        title: "Settings Updated",
+        description: `Your ${section} settings have been saved successfully.`,
+      });
+    } catch (err) {
+      toast({
+        title: "Update Error",
+        description: "Failed to save settings.",
+        variant: "destructive"
+      });
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   return (
@@ -95,11 +158,30 @@ export function UserSettings() {
                       </AvatarFallback>
                     </Avatar>
                     <div>
-                      <Button variant="outline" size="sm">
-                        Change Avatar
+                      <input 
+                        type="file" 
+                        ref={avatarInputRef} 
+                        className="hidden" 
+                        accept="image/*"
+                        onChange={handleAvatarFileSelected}
+                      />
+                      <Button 
+                        variant="outline" 
+                        size="sm"
+                        disabled={isUploading}
+                        onClick={() => avatarInputRef.current?.click()}
+                      >
+                        {isUploading ? (
+                          <>
+                            <Loader2 className="w-3 h-3 mr-2 animate-spin" />
+                            Uploading...
+                          </>
+                        ) : (
+                          'Change Avatar'
+                        )}
                       </Button>
                       <p className="text-xs text-muted-foreground mt-1">
-                        JPG, PNG or GIF. Max size 2MB.
+                        JPG, PNG or GIF. Max size 5MB.
                       </p>
                     </div>
                   </div>
@@ -121,11 +203,9 @@ export function UserSettings() {
                       <Input
                         id="email"
                         type="email"
+                        disabled
                         value={settings.profile.email}
-                        onChange={(e) => setSettings(prev => ({
-                          ...prev,
-                          profile: { ...prev.profile, email: e.target.value }
-                        }))}
+                        className="bg-muted cursor-not-allowed"
                       />
                     </div>
                   </div>
@@ -143,8 +223,8 @@ export function UserSettings() {
                     />
                   </div>
                   
-                  <Button onClick={() => handleSave('profile')}>
-                    Save Profile Changes
+                  <Button onClick={() => handleSave('profile')} disabled={isSaving}>
+                    {isSaving ? 'Saving...' : 'Save Profile Changes'}
                   </Button>
                 </CardContent>
               </Card>
@@ -226,7 +306,7 @@ export function UserSettings() {
                     />
                   </div>
                   
-                  <Button onClick={() => handleSave('notification')}>
+                  <Button onClick={() => handleSave('notification')} disabled={isSaving}>
                     Save Notification Settings
                   </Button>
                 </CardContent>
@@ -309,7 +389,7 @@ export function UserSettings() {
                     </Select>
                   </div>
                   
-                  <Button onClick={() => handleSave('preferences')}>
+                  <Button onClick={() => handleSave('preferences')} disabled={isSaving}>
                     Save Preferences
                   </Button>
                 </CardContent>
@@ -380,13 +460,7 @@ export function UserSettings() {
                     />
                   </div>
                   
-                  <div className="pt-4 border-t">
-                    <Button variant="outline" className="w-full">
-                      Change Password
-                    </Button>
-                  </div>
-                  
-                  <Button onClick={() => handleSave('privacy')}>
+                  <Button onClick={() => handleSave('privacy')} disabled={isSaving}>
                     Save Privacy Settings
                   </Button>
                 </CardContent>

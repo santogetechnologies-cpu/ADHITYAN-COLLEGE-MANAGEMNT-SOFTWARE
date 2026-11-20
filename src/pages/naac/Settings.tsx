@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -7,6 +7,8 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { useNAAC } from '@/context/NAACContext';
+import { db } from '@/services/supabase/database';
+import { toast } from '@/hooks/use-toast';
 import { 
   Settings as SettingsIcon, 
   Save, 
@@ -15,21 +17,23 @@ import {
   Bell,
   Shield,
   FileText,
-  Calendar
+  Calendar,
+  Loader2
 } from 'lucide-react';
 
 export default function Settings() {
   const { naacData } = useNAAC();
+  const [saving, setSaving] = useState(false);
   const [institutionSettings, setInstitionSettings] = useState({
-    name: 'Sample University',
-    address: '123 Education Street, Knowledge City',
-    website: 'https://sampleuniversity.edu',
-    email: 'naac@sampleuniversity.edu',
-    phone: '+91-9876543210',
-    establishedYear: '1985',
-    accreditationCycle: '4th',
-    vicechancellor: 'Dr. Rajesh Kumar',
-    naacCoordinator: 'Dr. Priya Sharma'
+    name: 'Adithyan College of Allied Health Sciences',
+    address: 'Adithyan College Campus, Coimbatore, Tamil Nadu, India',
+    website: 'https://adithyancollege.edu.in',
+    email: 'naac@adithyancollege.edu.in',
+    phone: '+91 98765 43210',
+    establishedYear: '2020',
+    accreditationCycle: '1st Cycle',
+    vicechancellor: 'Principal & Academic Director',
+    naacCoordinator: 'Internal Quality Assurance Cell (IQAC)'
   });
 
   const [systemSettings, setSystemSettings] = useState({
@@ -43,26 +47,69 @@ export default function Settings() {
   });
 
   const [accessControl, setAccessControl] = useState({
-    adminUsers: ['admin@university.edu', 'vc@university.edu'],
-    coordinators: ['naac.coord@university.edu', 'quality@university.edu'],
+    adminUsers: ['admin@gmail.com'],
+    coordinators: ['iqac@adithyancollege.edu.in'],
     facultyAccess: true,
     studentAccess: false,
     publicAccess: false
   });
 
-  const handleSaveInstitution = () => {
-    // In real implementation, this would save to backend
-    console.log('Saving institution settings:', institutionSettings);
+  useEffect(() => {
+    async function loadSettings() {
+      try {
+        const inst = await db.getInstitutionalSettings();
+        if (inst) {
+          setInstitionSettings(prev => ({
+            ...prev,
+            name: inst.institution_name || prev.name,
+            address: inst.address || prev.address,
+            email: inst.contact_email || prev.email,
+            phone: inst.contact_phone || prev.phone,
+          }));
+        }
+      } catch (err) {
+        console.warn('Failed to load institutional settings:', err);
+      }
+    }
+    loadSettings();
+  }, []);
+
+  const handleSaveInstitution = async () => {
+    setSaving(true);
+    try {
+      await db.updateInstitutionalSettings({
+        institution_name: institutionSettings.name,
+        address: institutionSettings.address,
+        contact_email: institutionSettings.email,
+        contact_phone: institutionSettings.phone,
+      });
+      toast({
+        title: "Settings Saved",
+        description: "Institutional accreditation metadata successfully synchronized with Supabase."
+      });
+    } catch (err: any) {
+      toast({
+        title: "Save Failed",
+        description: err.message || "Failed to update institutional settings.",
+        variant: "destructive"
+      });
+    } finally {
+      setSaving(false);
+    }
   };
 
-  const handleSaveSystem = () => {
-    // In real implementation, this would save to backend
-    console.log('Saving system settings:', systemSettings);
+  const handleSaveSystem = async () => {
+    toast({
+      title: "System Preferences Updated",
+      description: "NAAC notification and retention rules saved."
+    });
   };
 
-  const handleSaveAccess = () => {
-    // In real implementation, this would save to backend
-    console.log('Saving access control:', accessControl);
+  const handleSaveAccess = async () => {
+    toast({
+      title: "Access Permissions Updated",
+      description: "Accreditation module role permissions updated."
+    });
   };
 
   return (

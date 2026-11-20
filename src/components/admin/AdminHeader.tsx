@@ -27,16 +27,20 @@ export function AdminHeader() {
       case 'admin': return 'System Administrator';
       case 'principal': return 'Principal';
       case 'financier': return 'Financial Manager';
+      case 'finance_manager': return 'Finance Manager';
       case 'accountant': return 'Accountant';
       case 'storekeeper': return 'Store Manager';
+      case 'store_manager': return 'Store Manager';
       case 'driver': return 'Transport Manager';
+      case 'transport_driver': return 'Transport Driver';
+      case 'receptionist': return 'Receptionist';
       case 'naac_coordinator': return 'NAAC Coordinator';
       default: return role;
     }
   };
 
   return (
-    <header className="flex items-center justify-between p-4 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+    <header className="sticky top-0 z-20 flex items-center justify-between px-4 md:px-6 py-3 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <div className="flex items-center gap-4">
         <SidebarTrigger />
         <div>
@@ -73,7 +77,7 @@ export function AdminHeader() {
               <User className="mr-2 h-4 w-4" />
               <span>User Dashboard</span>
             </DropdownMenuItem>
-            <DropdownMenuItem>
+            <DropdownMenuItem onClick={() => navigate('/admin/settings')}>
               <Settings className="mr-2 h-4 w-4" />
               <span>Settings</span>
             </DropdownMenuItem>

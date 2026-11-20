@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { db } from '@/services/supabase/database';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -34,36 +35,32 @@ export const ExamDetailsDialog = ({ children, examData, mode }: ExamDetailsDialo
   const [activeTab, setActiveTab] = useState('details');
   const [editMode, setEditMode] = useState(mode === 'edit');
 
-  // Mock data for students
-  const [students] = useState([
-    {
-      id: 1,
-      rollNo: 'ST001',
-      name: 'John Smith',
-      status: 'Enrolled',
-      attendance: 'Present',
-      hallTicket: 'Generated',
-      seatNumber: 'A-01'
-    },
-    {
-      id: 2,
-      rollNo: 'ST002',
-      name: 'Emma Johnson',
-      status: 'Enrolled',
-      attendance: 'Absent',
-      hallTicket: 'Generated',
-      seatNumber: 'A-02'
-    },
-    {
-      id: 3,
-      rollNo: 'ST003',
-      name: 'Michael Brown',
-      status: 'Enrolled',
-      attendance: 'Present',
-      hallTicket: 'Pending',
-      seatNumber: 'A-03'
+  const [students, setStudents] = useState<any[]>([]);
+
+  useEffect(() => {
+    async function loadExamStudents() {
+      try {
+        const profiles = await db.getAllProfiles();
+        const stuProfiles = (profiles || []).filter(p => p.role === 'student');
+        if (stuProfiles.length > 0) {
+          setStudents(stuProfiles.map((s, idx) => ({
+            id: s.id,
+            rollNo: s.roll_number || 'ST' + String(idx + 1).padStart(3, '0'),
+            name: s.name,
+            status: 'Enrolled',
+            attendance: 'Present',
+            hallTicket: 'Generated',
+            seatNumber: String.fromCharCode(65 + Math.floor(idx / 20)) + '-' + String((idx % 20) + 1).padStart(2, '0')
+          })));
+        } else {
+          setStudents([]);
+        }
+      } catch (err) {
+        console.warn('Exam students load warning:', err);
+      }
     }
-  ]);
+    loadExamStudents();
+  }, [open]);
 
   const [examSettings, setExamSettings] = useState({
     allowLateEntry: false,
@@ -139,10 +136,14 @@ export const ExamDetailsDialog = ({ children, examData, mode }: ExamDetailsDialo
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="Mathematics">Mathematics</SelectItem>
-                          <SelectItem value="Physics">Physics</SelectItem>
-                          <SelectItem value="Chemistry">Chemistry</SelectItem>
-                          <SelectItem value="Biology">Biology</SelectItem>
+                          <SelectItem value="Clinical Biochemistry">Clinical Biochemistry</SelectItem>
+                          <SelectItem value="Pathology & Hematology">Pathology & Hematology</SelectItem>
+                          <SelectItem value="Microbiology & Infection Control">Microbiology & Infection Control</SelectItem>
+                          <SelectItem value="Anatomy & Physiology">Anatomy & Physiology</SelectItem>
+                          <SelectItem value="Dialysis Technology">Dialysis Technology</SelectItem>
+                          <SelectItem value="Radiographic Techniques">Radiographic Techniques</SelectItem>
+                          <SelectItem value="Cardiac Care Technology">Cardiac Care Technology</SelectItem>
+                          <SelectItem value="Hospital Administration">Hospital Administration</SelectItem>
                         </SelectContent>
                       </Select>
                     ) : (
@@ -153,17 +154,19 @@ export const ExamDetailsDialog = ({ children, examData, mode }: ExamDetailsDialo
 
                 <div className="grid grid-cols-3 gap-4">
                   <div className="space-y-2">
-                    <Label>Class</Label>
+                    <Label>Semester / Program</Label>
                     {editMode ? (
                       <Select defaultValue={examData.class}>
                         <SelectTrigger>
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="Class 9">Class 9</SelectItem>
-                          <SelectItem value="Class 10">Class 10</SelectItem>
-                          <SelectItem value="Class 11">Class 11</SelectItem>
-                          <SelectItem value="Class 12">Class 12</SelectItem>
+                          <SelectItem value="Semester 1">Semester 1</SelectItem>
+                          <SelectItem value="Semester 2">Semester 2</SelectItem>
+                          <SelectItem value="Semester 3">Semester 3</SelectItem>
+                          <SelectItem value="Semester 4">Semester 4</SelectItem>
+                          <SelectItem value="Semester 5">Semester 5</SelectItem>
+                          <SelectItem value="Semester 6">Semester 6</SelectItem>
                         </SelectContent>
                       </Select>
                     ) : (

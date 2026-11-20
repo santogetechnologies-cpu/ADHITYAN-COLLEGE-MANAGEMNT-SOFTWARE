@@ -29,11 +29,13 @@ export function NAACHeader() {
             </Link>
           </Button>
           <div className="flex items-center space-x-3">
-            <div className="w-10 h-10 bg-gradient-primary rounded-lg flex items-center justify-center">
-              <Award className="w-6 h-6 text-primary-foreground" />
-            </div>
+            <img
+              src="/lovable-uploads/8ea95178-bb37-43e2-ae4d-595e31707954.png"
+              alt="Adithyan College"
+              className="w-10 h-10 object-contain rounded-lg bg-white p-0.5 border shadow-sm"
+            />
             <div>
-              <h1 className="text-xl font-bold text-foreground">Adhithyan - NAAC System</h1>
+              <h1 className="text-xl font-bold text-foreground">Adithyan College - NAAC System</h1>
               <p className="text-xs text-muted-foreground">AI&MCP Automated Assessment & Reporting</p>
             </div>
           </div>
