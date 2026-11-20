@@ -278,7 +278,7 @@ Legend: ✅ done & verified as stated · 🟡 written, not runnable here · ⬜ 
 |------|--------|----------|
 | Registration rules, rooms, seating generation, invigilators, hall-ticket integration | ✅ SQL | 13 smoke checks (311 total) incl. neighbour-class rule, no double seats, capacity refusal |
 | COE "Seating" tab (registration controls, rooms, per-session generate/print/export, invigilation duty); student card to register/withdraw and see own seat | 🟡 UI | build |
-| Student photo on seating sheets | ⬜ | |
+| Student photo on seating sheets | ✅ (073) | |
 
 ## Online payments (066)
 | Item | Status | Evidence |
@@ -300,7 +300,7 @@ Legend: ✅ done & verified as stated · 🟡 written, not runnable here · ⬜ 
 |------|--------|----------|
 | Window, request, decision with history, supplementary creation/papers/eligibility | ✅ SQL | 19 smoke checks (358 total) |
 | COE "Revaluation" tab (window, requests, decide, supplementary + paper generation); student card to request and see outcomes | 🟡 UI | build |
-| Revaluation fee through the fee engine; second-valuer assignment | ⬜ | |
+| Revaluation fee through the fee ledger; blind second valuer | ✅ (073) | |
 
 ## Type-check clean-up
 | Item | Status | Evidence |
@@ -314,3 +314,9 @@ Legend: ✅ done & verified as stated · 🟡 written, not runnable here · ⬜ 
 | Part/per-fee refunds (online + counter), settlement import, store order payment/refund | ✅ SQL | 18 smoke checks (395 total) |
 | Finance: refund dialog with per-fee amounts, partial counter reversal, settlement CSV import; student: "Pay online" and "Cancel order" on store orders | 🟡 UI | build |
 | Store order display showed `NaN` totals per item (orders store `unit_price`, the screen read `price`) | fixed | |
+
+## Revaluation fee, second valuer, seating photos (073)
+| Item | Status | Evidence |
+|------|--------|----------|
+| Fee on ledger, pay-before-decision, blind valuer, refund flag, photo on seating rows | ✅ SQL | 14 smoke checks (409 total) |
+| COE tab: fee field, valuer assignment, refund-due flag; teacher view of blind scripts; photos on printed seating sheets | 🟡 UI | build |

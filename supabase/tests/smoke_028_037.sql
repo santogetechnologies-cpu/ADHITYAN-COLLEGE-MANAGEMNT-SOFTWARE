@@ -970,6 +970,42 @@ SELECT pg_temp.chk('a paid store order cannot be paid twice', (public.payment_or
 CREATE TEMP TABLE _sr AS SELECT public.payment_order_refund_apply((SELECT (r->>'order_id')::uuid FROM _sp),'Customer cancelled','c0000000-0000-0000-0000-000000000008','rfnd_ST1') AS r;
 SELECT pg_temp.chk('refunding a store payment cancels the order and restocks', (SELECT (r->>'success')='true' FROM _sr) AND (SELECT status='Cancelled' AND payment_status='Refunded' FROM public.store_orders WHERE id=(SELECT (r->>'order_id')::uuid FROM _so2)) AND (SELECT stock=5 FROM public.store_products WHERE id='c9300000-0000-0000-0000-000000000001'));
 
+-- ---- 073 revaluation fee / valuer / photos ----
+SET LOCAL ROLE authenticated;
+SELECT set_config('request.jwt.claim.sub','c0000000-0000-0000-0000-000000000008',true);
+SELECT pg_temp.chk('the fee is set when the window opens', (public.exam_revaluation_set('c9800000-0000-0000-0000-000000000001', true, CURRENT_DATE+5, 50)->>'success')='true');
+SELECT pg_temp.chk('a negative fee is refused', (public.exam_revaluation_set('c9800000-0000-0000-0000-000000000001', true, CURRENT_DATE+5, -1)->>'code')='INVALID_FEE');
+SELECT set_config('request.jwt.claim.sub','c0000000-0000-0000-0000-0000000000c1',true);
+SELECT pg_temp.chk('requesting revaluation raises the fee on the ledger', (public.exam_revaluation_request('c9800000-0000-0000-0000-000000000001','Anatomy','Marks for question 2 seem to be missing')->>'success')='true');
+RESET ROLE;
+SELECT pg_temp.chk('the fee row exists, unpaid, linked', (SELECT f.total_due=50 AND f.status='pending' AND f.description LIKE 'Revaluation fee%' FROM public.exam_revaluation_requests q JOIN public.student_fees f ON f.id=q.fee_id WHERE q.subject='Anatomy'));
+SET LOCAL ROLE authenticated;
+SELECT set_config('request.jwt.claim.sub','c0000000-0000-0000-0000-000000000008',true);
+CREATE TEMP TABLE _anat AS SELECT id FROM public.exam_revaluation_requests WHERE subject='Anatomy';
+GRANT SELECT ON _anat TO authenticated;
+SELECT pg_temp.chk('a teacher is assigned as second valuer', (public.exam_revaluation_assign((SELECT id FROM _anat),'c0000000-0000-0000-0000-000000000009')->>'success')='true');
+SELECT pg_temp.chk('the COE cannot decide before the fee is paid', (public.exam_revaluation_decide((SELECT id FROM _anat),'Revise',NULL,'recheck done')->>'code')='FEE_UNPAID');
+RESET ROLE;
+UPDATE public.student_fees SET status='paid', paid_amount=50, total_due=0 WHERE id=(SELECT fee_id FROM public.exam_revaluation_requests WHERE subject='Anatomy');
+SET LOCAL ROLE authenticated;
+SELECT set_config('request.jwt.claim.sub','c0000000-0000-0000-0000-000000000008',true);
+SELECT pg_temp.chk('...nor before the valuer has marked', (public.exam_revaluation_decide((SELECT id FROM _anat),'Revise',NULL,'recheck done')->>'code')='VALUATION_PENDING');
+SELECT set_config('request.jwt.claim.sub','c0000000-0000-0000-0000-000000000009',true);
+SELECT pg_temp.chk('the valuer sees a blind entry (no student, no original marks)', (SELECT (public.exam_my_valuations()->'items'->0) ? 'script' AND NOT ((public.exam_my_valuations()->'items'->0) ? 'student_name') AND NOT ((public.exam_my_valuations()->'items'->0) ? 'original_marks')));
+SELECT pg_temp.chk('marks above the maximum are refused', (public.exam_revaluation_value((SELECT id FROM _anat),101)->>'code')='INVALID_MARKS');
+SELECT pg_temp.chk('the valuer records marks', (public.exam_revaluation_value((SELECT id FROM _anat),92,'Q2 missing 7 marks')->>'success')='true');
+SELECT set_config('request.jwt.claim.sub','c0000000-0000-0000-0000-0000000000a3',true);
+SELECT pg_temp.chk('another teacher cannot value it', (public.exam_revaluation_value((SELECT id FROM _anat),50)->>'code')='NOT_FOUND');
+SELECT set_config('request.jwt.claim.sub','c0000000-0000-0000-0000-000000000008',true);
+CREATE TEMP TABLE _rv2 AS SELECT public.exam_revaluation_decide((SELECT id FROM _anat),'Revise',NULL,'Second valuer awarded 92') AS r;
+SELECT pg_temp.chk('the decision uses the valuer marks and flags the fee for refund', (SELECT (r->>'status')='Revised' AND (r->>'fee_refund_due')='true' FROM _rv2));
+RESET ROLE;
+SELECT pg_temp.chk('Anatomy is now 92', (SELECT marks_obtained=92 FROM public.exam_results WHERE subject='Anatomy' AND student_id='c0000000-0000-0000-0000-0000000000c1' AND exam_id='c9800000-0000-0000-0000-000000000001'));
+UPDATE public.profiles SET avatar_url='https://example.test/p101.jpg' WHERE id='c0000000-0000-0000-0000-000000000101';
+INSERT INTO public.exam_seating (exam_id, exam_date, start_time, student_id, class_name, subject, student_name, roll_number, room_id, seat_no)
+VALUES ('c9900000-0000-0000-0000-000000000001', CURRENT_DATE+9, '14:00', 'c0000000-0000-0000-0000-000000000101', 'SeatA', 'Math', 'Seat Student 1', 'SEAT-1', 'c9a00000-0000-0000-0000-000000000002', 1);
+SELECT pg_temp.chk('the seating row carries the student photo', (SELECT photo_url='https://example.test/p101.jpg' FROM public.exam_seating WHERE exam_date=CURRENT_DATE+9));
+
 SELECT name, CASE WHEN ok THEN 'PASS' ELSE 'FAIL' END AS result FROM _r ORDER BY ok, name;
 DO $$ BEGIN
   IF EXISTS (SELECT 1 FROM _r WHERE NOT ok) THEN RAISE EXCEPTION 'SMOKE TEST FAILED'; END IF;

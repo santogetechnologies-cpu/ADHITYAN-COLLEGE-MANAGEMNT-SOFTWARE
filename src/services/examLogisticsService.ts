@@ -9,13 +9,16 @@ const rpc = async (fn: string, args: Record<string, unknown>) => {
 };
 
 export interface ExamRoom { id: string; name: string; block: string | null; capacity: number; active: boolean }
-export interface SeatRow { id: string; exam_date: string; start_time: string; student_id: string; class_name: string | null; subject: string | null; room_id: string; seat_no: number; student_name: string | null; roll_number: string | null }
+export interface SeatRow { id: string; exam_date: string; start_time: string; student_id: string; class_name: string | null; subject: string | null; room_id: string; seat_no: number; photo_url?: string | null; student_name: string | null; roll_number: string | null }
 export interface Invigilator { id: string; exam_date: string; start_time: string; room_id: string; teacher_id: string; teacher_name: string | null }
 
-export interface RevalRequest { id: string; exam_id: string; student_id: string; student_name: string | null; class_name: string | null; subject: string; original_marks: number; max_marks: number; reason: string; status: string; revised_marks: number | null; decision_note: string | null; requested_at: string }
+export interface RevalRequest { fee_id: string | null; fee_refund_due: boolean; valuer_id: string | null; valuer_name: string | null; valuer_marks: number | null; id: string; exam_id: string; student_id: string; student_name: string | null; class_name: string | null; subject: string; original_marks: number; max_marks: number; reason: string; status: string; revised_marks: number | null; decision_note: string | null; requested_at: string }
 
 export const examLogisticsService = {
-  setRevaluation: (examId: string, open: boolean, deadline: string | null) => rpc('exam_revaluation_set', { p_exam: examId, p_open: open, p_deadline: deadline }),
+  setRevaluation: (examId: string, open: boolean, deadline: string | null, fee = 0) => rpc('exam_revaluation_set', { p_exam: examId, p_open: open, p_deadline: deadline, p_fee: fee }),
+  assignValuer: (id: string, teacherId: string) => rpc('exam_revaluation_assign', { p_id: id, p_teacher: teacherId }),
+  async myValuations(): Promise<Array<{ id: string; script: string; exam: string; subject: string; max_marks: number; my_marks: number | null; my_note: string | null }>> { return (await rpc('exam_my_valuations', {})).items; },
+  submitValuation: (id: string, marks: number, note: string) => rpc('exam_revaluation_value', { p_id: id, p_marks: marks, p_note: note }),
   requestRevaluation: (examId: string, subject: string, reason: string) => rpc('exam_revaluation_request', { p_exam: examId, p_subject: subject, p_reason: reason }),
   decideRevaluation: (id: string, decision: 'Revise' | 'Keep' | 'Reject', newMarks: number | null, note: string) => rpc('exam_revaluation_decide', { p_id: id, p_decision: decision, p_new_marks: newMarks, p_note: note }),
   async revaluations(examId?: string): Promise<RevalRequest[]> {

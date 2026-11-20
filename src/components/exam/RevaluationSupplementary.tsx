@@ -24,6 +24,10 @@ export function RevaluationSupplementary() {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [deadline, setDeadline] = useState('');
+  const [fee, setFee] = useState('0');
+  const [teachers, setTeachers] = useState<Array<{ id: string; name: string }>>([]);
+  const [valuations, setValuations] = useState<Array<{ id: string; script: string; exam: string; subject: string; max_marks: number; my_marks: number | null; my_note: string | null }>>([]);
+  const isValuer = ['teacher', 'hod'].includes(user?.role ?? '');
   const [dlg, setDlg] = useState<{ req: RevalRequest; decision: 'Revise' | 'Keep' | 'Reject'; marks: string; note: string } | null>(null);
   const [sup, setSup] = useState({ name: '', start: '', end: '' });
   const [paper, setPaper] = useState({ exam: '', first: '', st: '09:00', en: '12:00', room: '' });
@@ -37,8 +41,11 @@ export function RevaluationSupplementary() {
   }, []);   // eslint-disable-line react-hooks/exhaustive-deps
   const loadReqs = useCallback(async () => { if (examId) try { setReqs(await examLogisticsService.revaluations(examId)); } catch { setReqs([]); } }, [examId]);
   useEffect(() => { void load(); }, [load]);
+  useEffect(() => { if (canManage) examLogisticsService.teachers().then(setTeachers).catch(() => setTeachers([])); }, [canManage]);
+  const loadValuations = useCallback(async () => { if (isValuer) try { setValuations(await examLogisticsService.myValuations()); } catch { setValuations([]); } }, [isValuer]);
+  useEffect(() => { void loadValuations(); }, [loadValuations]);
   useEffect(() => { void loadReqs(); }, [loadReqs]);
-  useEffect(() => { setDeadline(exam?.revaluation_deadline ?? ''); }, [examId, exam?.revaluation_deadline]);
+  useEffect(() => { setDeadline(exam?.revaluation_deadline ?? ''); setFee(String(exam?.revaluation_fee ?? 0)); }, [examId, exam?.revaluation_deadline, exam?.revaluation_fee]);
 
   const run = async (fn: () => Promise<any>, ok: string) => {
     setBusy(true);
@@ -46,6 +53,14 @@ export function RevaluationSupplementary() {
     catch (e: any) { toast({ title: 'Not done', description: e.message, variant: 'destructive' }); }
     finally { setBusy(false); }
   };
+
+  if (isValuer && !canManage) return (
+    <Card><CardHeader><CardTitle>Scripts for second valuation</CardTitle><CardDescription>Blind valuation: you see the paper, not the student or the earlier marks. Enter the marks you award.</CardDescription></CardHeader>
+      <CardContent className="space-y-2">
+        {valuations.length === 0 ? <p className="text-sm text-muted-foreground py-6 text-center">Nothing is assigned to you.</p> : valuations.map((v) => (
+          <div key={v.id} className="flex items-center justify-between p-3 border rounded-lg"><div><div className="font-medium text-sm">{v.script} — {v.subject}</div><div className="text-xs text-muted-foreground">{v.exam} • out of {v.max_marks}{v.my_marks != null ? ` • you awarded ${v.my_marks}` : ''}</div></div>
+            <Button size="sm" variant={v.my_marks != null ? 'outline' : 'default'} onClick={async () => { const m = window.prompt(`Marks for ${v.script} (0–${v.max_marks}):`, v.my_marks != null ? String(v.my_marks) : ''); if (m === null || m === '') return; const n = window.prompt('Note (optional):', v.my_note ?? '') ?? ''; try { await examLogisticsService.submitValuation(v.id, Number(m), n); toast({ title: 'Marks recorded' }); await loadValuations(); } catch (e: any) { toast({ title: 'Not saved', description: e.message, variant: 'destructive' }); } }}>{v.my_marks != null ? 'Change marks' : 'Enter marks'}</Button></div>))}
+      </CardContent></Card>);
 
   if (loading) return <div className="flex justify-center py-12"><Loader2 className="w-6 h-6 animate-spin text-muted-foreground" /></div>;
   if (exams.length === 0) return <Card><CardContent className="p-10 text-center text-sm text-muted-foreground">No examinations yet.</CardContent></Card>;
@@ -62,17 +77,21 @@ export function RevaluationSupplementary() {
             <Badge variant="outline">{exam?.revaluation_open ? 'Window open' : 'Window closed'}</Badge>
             {canManage && <>
               <Input type="date" className="w-44" value={deadline} onChange={(e) => setDeadline(e.target.value)} title="Last date to request" />
-              <Button size="sm" disabled={busy || !exam?.is_published} onClick={() => void run(() => examLogisticsService.setRevaluation(examId, true, deadline || null), 'Revaluation window opened')}>Open window</Button>
-              <Button size="sm" variant="outline" disabled={busy} onClick={() => void run(() => examLogisticsService.setRevaluation(examId, false, deadline || null), 'Revaluation window closed')}>Close</Button>
+              <Input type="number" min="0" className="w-28" value={fee} onChange={(e) => setFee(e.target.value)} title="Fee per subject (₹)" placeholder="Fee ₹" />
+              <Button size="sm" disabled={busy || !exam?.is_published} onClick={() => void run(() => examLogisticsService.setRevaluation(examId, true, deadline || null, Number(fee) || 0), 'Revaluation window opened')}>Open window</Button>
+              <Button size="sm" variant="outline" disabled={busy} onClick={() => void run(() => examLogisticsService.setRevaluation(examId, false, deadline || null, Number(fee) || 0), 'Revaluation window closed')}>Close</Button>
               {!exam?.is_published && <span className="text-xs text-muted-foreground">Publish the results first.</span>}</>}
           </div>
           <Table><TableHeader><TableRow><TableHead>Student</TableHead><TableHead>Subject</TableHead><TableHead className="text-right">Marks</TableHead><TableHead>Reason</TableHead><TableHead>Status</TableHead><TableHead /></TableRow></TableHeader><TableBody>
             {reqs.length === 0 ? <TableRow><TableCell colSpan={6} className="text-center py-6 text-sm text-muted-foreground">No revaluation requests.</TableCell></TableRow> : reqs.map((r) => (
               <TableRow key={r.id}><TableCell className="font-medium">{r.student_name}<div className="text-[11px] text-muted-foreground">{r.class_name}</div></TableCell><TableCell>{r.subject}</TableCell>
-                <TableCell className="text-right font-mono">{r.original_marks}/{r.max_marks}{r.revised_marks != null ? ` → ${r.revised_marks}` : ''}</TableCell><TableCell className="text-xs max-w-64">{r.reason}{r.decision_note && <div className="text-muted-foreground mt-1">Decision: {r.decision_note}</div>}</TableCell>
+                <TableCell className="text-right font-mono">{r.original_marks}/{r.max_marks}{r.revised_marks != null ? ` → ${r.revised_marks}` : ''}</TableCell><TableCell className="text-xs max-w-64">{r.reason}{r.decision_note && <div className="text-muted-foreground mt-1">Decision: {r.decision_note}</div>}
+                  {r.fee_id && <div className="text-muted-foreground mt-1">Fee {r.fee_refund_due ? <b className="text-amber-700">— refund due (marks went up)</b> : 'on the ledger'}</div>}
+                  {r.valuer_name && <div className="text-muted-foreground mt-1">Second valuer: {r.valuer_name}{r.valuer_marks != null ? ` → ${r.valuer_marks}` : ' (pending)'}</div>}</TableCell>
                 <TableCell><Badge variant={r.status === 'Requested' ? 'secondary' : 'default'}>{r.status}</Badge></TableCell>
                 <TableCell className="text-right whitespace-nowrap">{canManage && r.status === 'Requested' && <>
-                  <Button size="sm" variant="outline" onClick={() => setDlg({ req: r, decision: 'Revise', marks: String(r.original_marks), note: '' })}>Revise</Button>
+                  <Select value={r.valuer_id ?? ''} onValueChange={(v) => void run(() => examLogisticsService.assignValuer(r.id, v), 'Second valuer assigned')}><SelectTrigger className="h-8 w-36 inline-flex"><SelectValue placeholder="Valuer" /></SelectTrigger><SelectContent>{teachers.map((t) => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}</SelectContent></Select>
+                  <Button size="sm" variant="outline" className="ml-1" onClick={() => setDlg({ req: r, decision: 'Revise', marks: r.valuer_marks != null ? String(r.valuer_marks) : String(r.original_marks), note: '' })}>Revise</Button>
                   <Button size="sm" variant="ghost" className="ml-1" onClick={() => setDlg({ req: r, decision: 'Keep', marks: '', note: '' })}>Keep</Button>
                   <Button size="sm" variant="ghost" onClick={() => setDlg({ req: r, decision: 'Reject', marks: '', note: '' })}>Reject</Button></>}</TableCell></TableRow>))}
           </TableBody></Table>

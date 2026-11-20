@@ -34,6 +34,7 @@ export interface ExamItem {
   registration_deadline?: string | null;
   revaluation_open?: boolean;
   revaluation_deadline?: string | null;
+  revaluation_fee?: number;
   parent_exam_id?: string | null;
 }
 
@@ -118,6 +119,7 @@ export const examService = {
         registration_deadline: e.registration_deadline ?? null,
         revaluation_open: e.revaluation_open === true,
         revaluation_deadline: e.revaluation_deadline ?? null,
+        revaluation_fee: Number(e.revaluation_fee ?? 0),
         parent_exam_id: e.parent_exam_id ?? null,
       }));
     } catch (error) {

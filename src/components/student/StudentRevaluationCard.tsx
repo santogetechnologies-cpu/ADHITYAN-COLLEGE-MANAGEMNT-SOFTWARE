@@ -42,7 +42,7 @@ export function StudentRevaluationCard() {
   const asked = new Set(mine.map((r) => `${r.exam_id}|${r.subject}`));
   return (
     <Card>
-      <CardHeader className="pb-2"><CardTitle className="text-base">Revaluation</CardTitle><CardDescription>Ask for a re-check of a published mark while the window is open. The marks can go up or down.</CardDescription></CardHeader>
+      <CardHeader className="pb-2"><CardTitle className="text-base">Revaluation</CardTitle><CardDescription>Ask for a re-check of a published mark while the window is open. The marks can go up or down. {open.some(({ exam }) => (exam.revaluation_fee ?? 0) > 0) ? 'A fee applies and appears under Fees & Receipts; the request is decided after it is paid.' : ''}</CardDescription></CardHeader>
       <CardContent className="space-y-3 text-sm">
         {open.map(({ exam, results }) => (
           <div key={exam.id}><div className="font-medium">{exam.title} <span className="text-xs text-muted-foreground">until {exam.revaluation_deadline ?? 'further notice'}</span></div>
