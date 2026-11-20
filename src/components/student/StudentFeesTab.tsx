@@ -26,6 +26,7 @@ import { db } from '@/services/supabase/database';
 import { useAuth } from '@/context/AuthContext';
 import { useRealtimeSubscription } from '@/hooks/useRealtimeSubscription';
 import { StudentFee, FeeReceipt, ScholarshipMaster, ScholarshipApplication } from '@/types/database.types';
+import { OnlinePayDialog } from '@/components/shared/OnlinePayDialog';
 import { FeeReceiptModal } from '@/components/shared/FeeReceiptModal';
 import { useToast } from '@/hooks/use-toast';
 
@@ -50,7 +51,7 @@ export function StudentFeesTab() {
 
   // Scholarship Application Form
   const [selectedScholarshipId, setSelectedScholarshipId] = useState<string>('');
-  const [requestedAmount, setRequestedAmount] = useState<number>(25000);
+  const [requestedAmount, setRequestedAmount] = useState<number>(0);
   const [remarks, setRemarks] = useState<string>('');
 
   const loadData = useCallback(async () => {
@@ -299,29 +300,7 @@ export function StudentFeesTab() {
         </div>
       )}
 
-      {/* Pay Semester Fee Dialog */}
-      {/* How to pay: online self-service payment is not enabled (no payment gateway configured) */}
-      <Dialog open={payModalOpen} onOpenChange={setPayModalOpen}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle className="text-base font-bold">Pay Semester Fee</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-3 text-xs">
-            <div className="rounded-xl border bg-amber-50 border-amber-200 p-3">
-              <div className="text-[11px] text-amber-800">Outstanding dues</div>
-              <div className="text-2xl font-bold text-amber-700">₹{totalFeeDue.toLocaleString('en-IN')}</div>
-            </div>
-            <p className="text-slate-600">
-              Online payment is not enabled yet. Please pay at the college accounts desk (cash, UPI, card, bank transfer or
-              cheque). Your receipt will appear in the receipt list on this page once the accounts office
-              records your payment.
-            </p>
-          </div>
-          <DialogFooter className="pt-2">
-            <Button size="sm" onClick={() => setPayModalOpen(false)} className="h-8 text-xs">Close</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <OnlinePayDialog open={payModalOpen} onOpenChange={setPayModalOpen} fees={fees} studentName={user?.name} onPaid={loadData} />
 
       {/* Apply Scholarship Dialog */}
       <Dialog open={scholarshipModalOpen} onOpenChange={setScholarshipModalOpen}>

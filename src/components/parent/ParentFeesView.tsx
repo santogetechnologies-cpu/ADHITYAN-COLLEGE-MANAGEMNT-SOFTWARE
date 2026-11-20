@@ -1,3 +1,4 @@
+import { OnlinePayDialog } from '@/components/shared/OnlinePayDialog';
 import React, { useState, useEffect, useCallback } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -190,34 +191,7 @@ export function ParentFeesView({ student }: ParentFeesViewProps) {
         </CardContent>
       </Card>
 
-      {/* How to pay: online self-service payment is not enabled (no payment gateway configured) */}
-      <Dialog open={isPayOpen} onOpenChange={setIsPayOpen}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <CreditCard className="w-5 h-5 text-[#1D61E7]" />
-              Pay Academic Fees
-            </DialogTitle>
-            <DialogDescription className="text-xs">
-              For {student.name} ({student.student_id || student.roll_number})
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-3 py-2 text-sm">
-            <div className="rounded-lg border bg-amber-50 border-amber-200 p-3">
-              <div className="text-xs text-amber-800">Outstanding balance</div>
-              <div className="text-2xl font-bold font-mono text-amber-700">₹{pendingBalance.toLocaleString('en-IN')}</div>
-            </div>
-            <p className="text-xs text-muted-foreground">
-              Online payment is not enabled yet. Please pay at the college accounts desk (cash, UPI, card, bank transfer or
-              cheque). Your official receipt appears in the receipt list on this page as soon as the accounts
-              office records the payment.
-            </p>
-          </div>
-          <DialogFooter>
-            <Button onClick={() => setIsPayOpen(false)}>Close</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <OnlinePayDialog open={isPayOpen} onOpenChange={setIsPayOpen} fees={fees} studentName={student.name} onPaid={loadFeesAndReceipts} />
 
       {/* Receipt Viewer Modal */}
       <FeeReceiptModal

@@ -772,6 +772,54 @@ SELECT pg_temp.chk('seating refuses when capacity is short', (public.exam_genera
 RESET ROLE;
 SELECT pg_temp.chk('a refused regeneration keeps the old plan', (SELECT count(*)=4 FROM public.exam_seating WHERE exam_id='c9900000-0000-0000-0000-000000000001'));
 
+-- ---- 066 online payments ----
+INSERT INTO public.institutional_settings (institution_name) SELECT 'Smoke College' WHERE NOT EXISTS (SELECT 1 FROM public.institutional_settings);
+UPDATE public.institutional_settings SET online_payments_enabled = false;
+SELECT pg_temp.chk('online payment refuses when switched off', (public.payment_order_create('c0000000-0000-0000-0000-0000000000c1','[{"student_fee_id":"c9600000-0000-0000-0000-000000000001","amount":100}]'::jsonb)->>'code')='DISABLED');
+UPDATE public.institutional_settings SET online_payments_enabled = true;
+SELECT pg_temp.chk('amount above the balance is refused', (public.payment_order_create('c0000000-0000-0000-0000-0000000000c1','[{"student_fee_id":"c9600000-0000-0000-0000-000000000001","amount":9999}]'::jsonb)->>'code')='EXCEEDS_BALANCE');
+SELECT pg_temp.chk('someone else''s fee cannot be paid', (public.payment_order_create('c0000000-0000-0000-0000-0000000000c1',jsonb_build_array(jsonb_build_object('student_fee_id',(SELECT id FROM public.student_fees WHERE student_id='c0000000-0000-0000-0000-00000000000e' LIMIT 1),'amount',10)))->>'code')='NOT_YOUR_FEE');
+SELECT pg_temp.chk('a failed order leaves no order behind', (SELECT count(*)=0 FROM public.payment_orders));
+CREATE TEMP TABLE _po AS SELECT public.payment_order_create('c0000000-0000-0000-0000-0000000000c1','[{"student_fee_id":"c9600000-0000-0000-0000-000000000001","amount":200}]'::jsonb) AS r;
+SELECT pg_temp.chk('student creates an order priced by the server', (SELECT (r->>'success')='true' AND (r->>'amount_paise')::bigint=20000 FROM _po));
+SELECT public.payment_order_attach((SELECT (r->>'order_id')::uuid FROM _po), 'order_SMOKE1');
+CREATE TEMP TABLE _s1 AS SELECT public.payment_order_settle('order_SMOKE1','pay_SMOKE1',19999,'evt_1','payment.captured','{}'::jsonb) AS r;
+SELECT pg_temp.chk('a wrong amount goes to review and applies nothing', (SELECT r->>'code'='AMOUNT_MISMATCH' FROM _s1) AND (SELECT total_due=600 FROM public.student_fees WHERE id='c9600000-0000-0000-0000-000000000001'));
+CREATE TEMP TABLE _po2 AS SELECT public.payment_order_create('c0000000-0000-0000-0000-0000000000c1','[{"student_fee_id":"c9600000-0000-0000-0000-000000000001","amount":200}]'::jsonb) AS r;
+SELECT public.payment_order_attach((SELECT (r->>'order_id')::uuid FROM _po2), 'order_SMOKE2');
+CREATE TEMP TABLE _s2 AS SELECT public.payment_order_settle('order_SMOKE2','pay_SMOKE2',20000,'evt_2','payment.captured','{}'::jsonb) AS r;
+SELECT pg_temp.chk('the gateway confirmation settles the fee and issues a receipt', (SELECT (r->>'success')='true' FROM _s2)
+  AND (SELECT total_due=400 AND paid_amount=200 FROM public.student_fees WHERE id='c9600000-0000-0000-0000-000000000001')
+  AND (SELECT count(*)=1 FROM public.fee_payments WHERE transaction_reference='pay_SMOKE2' AND payment_mode='Online_Gateway'));
+CREATE TEMP TABLE _s2b AS SELECT public.payment_order_settle('order_SMOKE2','pay_SMOKE2',20000,'evt_2','payment.captured','{}'::jsonb) AS r;
+SELECT pg_temp.chk('the same event twice changes nothing', (SELECT r->>'duplicate'='true' FROM _s2b) AND (SELECT total_due=400 FROM public.student_fees WHERE id='c9600000-0000-0000-0000-000000000001'));
+CREATE TEMP TABLE _s2c AS SELECT public.payment_order_settle('order_SMOKE2','pay_SMOKE2',20000,'evt_2b','verify','{}'::jsonb) AS r;
+SELECT pg_temp.chk('the browser callback after the webhook is also a no-op', (SELECT r->>'duplicate'='true' FROM _s2c) AND (SELECT count(*)=1 FROM public.fee_payments WHERE transaction_reference='pay_SMOKE2'));
+CREATE TEMP TABLE _po3 AS SELECT public.payment_order_create('c0000000-0000-0000-0000-0000000000c1','[{"student_fee_id":"c9600000-0000-0000-0000-000000000001","amount":400}]'::jsonb) AS r;
+SELECT public.payment_order_attach((SELECT (r->>'order_id')::uuid FROM _po3), 'order_SMOKE3');
+UPDATE public.student_fees SET total_due=0, status='paid' WHERE id='c9600000-0000-0000-0000-000000000001';
+CREATE TEMP TABLE _s3 AS SELECT public.payment_order_settle('order_SMOKE3','pay_SMOKE3',40000,'evt_3','payment.captured','{}'::jsonb) AS r;
+SELECT pg_temp.chk('money for an already-cleared fee goes to review, not lost', (SELECT r->>'code'='NEEDS_REVIEW' FROM _s3) AND (SELECT status='Review' FROM public.payment_orders WHERE gateway_order_id='order_SMOKE3'));
+UPDATE public.student_fees SET total_due=400, status='partially_paid' WHERE id='c9600000-0000-0000-0000-000000000001';
+CREATE TEMP TABLE _po4 AS SELECT public.payment_order_create('c0000000-0000-0000-0000-0000000000c1','[{"student_fee_id":"c9600000-0000-0000-0000-000000000001","amount":50}]'::jsonb) AS r;
+SELECT public.payment_order_attach((SELECT (r->>'order_id')::uuid FROM _po4), 'order_SMOKE4');
+SELECT public.payment_order_fail('order_SMOKE4','card declined','evt_4','{}'::jsonb);
+SELECT pg_temp.chk('a failed payment marks the order failed', (SELECT status='Failed' FROM public.payment_orders WHERE gateway_order_id='order_SMOKE4'));
+SELECT pg_temp.chk('signed-in users cannot call the payment functions', has_function_privilege('authenticated','public.payment_order_settle(text,text,bigint,text,text,jsonb)','EXECUTE')=false AND has_function_privilege('authenticated','public.payment_order_create(uuid,jsonb)','EXECUTE')=false);
+SET LOCAL ROLE authenticated;
+SELECT set_config('request.jwt.claim.sub','c0000000-0000-0000-0000-000000000001',true);   -- a different student
+SELECT pg_temp.chk('other students cannot see the orders', (SELECT count(*)=0 FROM public.payment_orders));
+SELECT set_config('request.jwt.claim.sub','c0000000-0000-0000-0000-0000000000c1',true);
+SELECT pg_temp.chk('the payer sees their own orders', (SELECT count(*)=4 FROM public.payment_orders));
+RESET ROLE;
+SET LOCAL ROLE authenticated;
+SELECT set_config('request.jwt.claim.sub','c0000000-0000-0000-0000-000000000001',true);
+SELECT pg_temp.chk('a student cannot change payment settings', (public.payment_flags_set(true,true)->>'code')='FORBIDDEN');
+SELECT set_config('request.jwt.claim.sub','c0000000-0000-0000-0000-000000000008',true);
+SELECT pg_temp.chk('admin switches online payment and the exam fee rule', (public.payment_flags_set(false,true)->>'success')='true');
+RESET ROLE;
+SELECT pg_temp.chk('the flags took effect', (SELECT online_payments_enabled=false AND exam_requires_fee_clearance=true FROM public.institutional_settings LIMIT 1));
+
 SELECT name, CASE WHEN ok THEN 'PASS' ELSE 'FAIL' END AS result FROM _r ORDER BY ok, name;
 DO $$ BEGIN
   IF EXISTS (SELECT 1 FROM _r WHERE NOT ok) THEN RAISE EXCEPTION 'SMOKE TEST FAILED'; END IF;

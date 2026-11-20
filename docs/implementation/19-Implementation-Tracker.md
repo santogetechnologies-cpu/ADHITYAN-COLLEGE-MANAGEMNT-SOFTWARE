@@ -278,3 +278,11 @@ Legend: ✅ done & verified as stated · 🟡 written, not runnable here · ⬜ 
 | Registration rules, rooms, seating generation, invigilators, hall-ticket integration | ✅ SQL | 13 smoke checks (311 total) incl. neighbour-class rule, no double seats, capacity refusal |
 | COE "Seating" tab (registration controls, rooms, per-session generate/print/export, invigilation duty); student card to register/withdraw and see own seat | 🟡 UI | build |
 | Revaluation / supplementary exam workflow; student photo on seating sheets | ⬜ | |
+
+## Online payments (066)
+| Item | Status | Evidence |
+|------|--------|----------|
+| Order creation priced and validated server-side, ownership (student / verified parent), amount cross-check, idempotent settlement through `record_fee_payment`, review queue for unapplicable money | ✅ SQL | 17 smoke checks (328 total) |
+| Gateway adapter (Razorpay): checkout + webhook HMAC verification, order creation, payment re-read | ✅ unit (11 signature checks in `test-edge-gate.sh`), ⚠️ not run against the live gateway | needs your keys |
+| Student/parent "Pay online" dialog (select fees, partial amounts), Finance "Online payments" tab (switches + recent orders + review alert) | 🟡 UI | build |
+| Refunds, payment links, instalment reminders, reconciliation report against the gateway settlement file | ⬜ | |

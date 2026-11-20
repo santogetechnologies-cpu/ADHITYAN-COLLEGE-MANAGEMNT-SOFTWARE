@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
+import { PaymentSettings } from './PaymentSettings';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -100,10 +101,12 @@ export const FeeSetup = () => {
           <TabsTrigger value="plans">Fee plans</TabsTrigger>
           <TabsTrigger value="heads">Fee types</TabsTrigger>
           <TabsTrigger value="history">History</TabsTrigger>
+          <TabsTrigger value="payments">Online payments</TabsTrigger>
         </TabsList>
         <TabsContent value="bill" className="mt-4"><BillFees plans={plans} heads={heads} departments={departments} classes={classes} quotas={quotas} onDone={load} /></TabsContent>
         <TabsContent value="plans" className="mt-4"><Plans plans={plans} items={items} heads={heads} headById={headById} departments={departments} classes={classes} quotas={quotas} onChange={load} /></TabsContent>
         <TabsContent value="heads" className="mt-4"><Heads heads={heads} onChange={load} /></TabsContent>
+        <TabsContent value="payments" className="mt-4"><PaymentSettings /></TabsContent>
         <TabsContent value="history" className="mt-4"><History runs={runs} planById={planById} headById={headById} onChange={load} /></TabsContent>
       </Tabs>
     </div>
