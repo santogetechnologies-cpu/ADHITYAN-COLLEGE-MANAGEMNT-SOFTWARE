@@ -25,6 +25,7 @@ import { db } from '@/services/supabase/database';
 import { Exam, ExamSchedule, ExamResult, HallTicket } from '@/types/database.types';
 import { useAuth } from '@/context/AuthContext';
 import { useRealtimeSubscription } from '@/hooks/useRealtimeSubscription';
+import { StudentExamRegistrationCard } from './StudentExamRegistrationCard';
 import { PrintableHallTicket } from './PrintableHallTicket';
 import { getCourseTotalSemesters } from '@/constants/courses';
 import { useToast } from '@/hooks/use-toast';
@@ -218,6 +219,7 @@ export function StudentExams() {
 
   return (
     <div className="space-y-6 max-w-6xl mx-auto pb-12">
+      <StudentExamRegistrationCard />
       {/* 1. Header Banner */}
       <div className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="space-y-1">

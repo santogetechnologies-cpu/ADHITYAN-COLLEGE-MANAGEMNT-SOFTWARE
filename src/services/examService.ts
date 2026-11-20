@@ -29,6 +29,9 @@ export interface ExamItem {
   is_published?: boolean;
   timetable_published?: boolean;
   hall_ticket_published?: boolean;
+  registration_required?: boolean;
+  registration_open?: boolean;
+  registration_deadline?: string | null;
 }
 
 export interface ExamScheduleItem {
@@ -107,6 +110,9 @@ export const examService = {
         is_published: e.results_published === true,
         timetable_published: e.timetable_published === true,
         hall_ticket_published: e.hall_ticket_published === true,
+        registration_required: e.registration_required === true,
+        registration_open: e.registration_open === true,
+        registration_deadline: e.registration_deadline ?? null,
       }));
     } catch (error) {
       throw handleSupabaseError(error, 'Failed to fetch examinations');

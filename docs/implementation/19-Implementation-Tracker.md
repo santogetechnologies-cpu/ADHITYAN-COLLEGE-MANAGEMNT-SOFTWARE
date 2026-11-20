@@ -271,3 +271,10 @@ Legend: ✅ done & verified as stated · 🟡 written, not runnable here · ⬜ 
 | Grade scale, credits, SGPA/CGPA, arrears, class report, placement integration | ✅ SQL | 9 smoke checks (298 total) incl. the arithmetic (9×4 + 0×2)/6 = 6.00 |
 | COE "Grades & GPA" tab (edit scale, SGPA report + CSV), credits field on papers, GPA card in student Performance and parent Results | 🟡 UI | build |
 | Existing stored grades are not rewritten when the scale changes (new marks use the new scale) | note | |
+
+## Exam registration, seating, invigilation (065)
+| Item | Status | Evidence |
+|------|--------|----------|
+| Registration rules, rooms, seating generation, invigilators, hall-ticket integration | ✅ SQL | 13 smoke checks (311 total) incl. neighbour-class rule, no double seats, capacity refusal |
+| COE "Seating" tab (registration controls, rooms, per-session generate/print/export, invigilation duty); student card to register/withdraw and see own seat | 🟡 UI | build |
+| Revaluation / supplementary exam workflow; student photo on seating sheets | ⬜ | |

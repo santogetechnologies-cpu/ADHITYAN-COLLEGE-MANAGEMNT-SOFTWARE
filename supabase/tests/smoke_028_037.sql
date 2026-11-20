@@ -736,6 +736,42 @@ SELECT pg_temp.chk('admin changes the scale', (public.grade_scale_save('[{"min_p
 SELECT pg_temp.chk('new scale is used for new grades', public.exam_grade(90, true)='X' AND public.exam_grade(61, true)='M' AND public.exam_grade(90, false)='F');
 RESET ROLE;
 
+-- ---- 065 exam registration / seating / invigilation ----
+INSERT INTO auth.users(id,email) SELECT ('c0000000-0000-0000-0000-0000000001' || lpad(n::text,2,'0'))::uuid, 'seat'||n||'@example.test' FROM generate_series(1,5) n;
+INSERT INTO public.profiles(id,email,name,role,class_name,roll_number,status) SELECT ('c0000000-0000-0000-0000-0000000001' || lpad(n::text,2,'0'))::uuid, 'seat'||n||'@example.test','Seat Student '||n,'student', CASE WHEN n<=2 THEN 'SeatA' WHEN n<=4 THEN 'SeatB' ELSE 'SeatC' END, 'SEAT-'||n, 'active' FROM generate_series(1,5) n;
+INSERT INTO public.exams (id, name, term, academic_year, start_date, end_date, status) VALUES ('c9900000-0000-0000-0000-000000000001','Smoke Seating Exam','T1','2026-27',CURRENT_DATE+5,CURRENT_DATE+6,'Scheduled');
+INSERT INTO public.exam_schedules (exam_id, subject, class_name, exam_date, start_time, end_time, room, max_marks) VALUES
+ ('c9900000-0000-0000-0000-000000000001','Math','SeatA',CURRENT_DATE+5,'09:00','12:00','TBA',100),
+ ('c9900000-0000-0000-0000-000000000001','Physics','SeatB',CURRENT_DATE+5,'09:00','12:00','TBA',100);
+INSERT INTO public.exam_rooms (id, name, capacity) VALUES ('c9a00000-0000-0000-0000-000000000001','Hall 1',3),('c9a00000-0000-0000-0000-000000000002','Hall 2',2);
+SET LOCAL ROLE authenticated;
+SELECT set_config('request.jwt.claim.sub','c0000000-0000-0000-0000-000000000008',true);   -- admin
+SELECT pg_temp.chk('registration can be opened', (public.exam_registration_set('c9900000-0000-0000-0000-000000000001', true, true, CURRENT_DATE+3)->>'success')='true');
+SELECT set_config('request.jwt.claim.sub','c0000000-0000-0000-0000-000000000101',true);   -- SeatA student
+SELECT pg_temp.chk('a student registers', (public.exam_register('c9900000-0000-0000-0000-000000000001')->>'status')='Registered');
+SELECT set_config('request.jwt.claim.sub','c0000000-0000-0000-0000-000000000105',true);   -- SeatC (no paper)
+SELECT pg_temp.chk('a class with no paper cannot register', (public.exam_register('c9900000-0000-0000-0000-000000000001')->>'code')='NOT_ELIGIBLE');
+SELECT set_config('request.jwt.claim.sub','c0000000-0000-0000-0000-000000000008',true);
+SELECT pg_temp.chk('staff register whole classes', (public.exam_register_class('c9900000-0000-0000-0000-000000000001','SeatA')->>'registered')='2' AND (public.exam_register_class('c9900000-0000-0000-0000-000000000001','SeatB')->>'registered')='2');
+SELECT pg_temp.chk('a class without papers cannot be registered by staff', (public.exam_register_class('c9900000-0000-0000-0000-000000000001','SeatC')->>'code')='NO_PAPERS');
+SELECT pg_temp.chk('seating generated for 4 students in 5 seats', (public.exam_generate_seating('c9900000-0000-0000-0000-000000000001',CURRENT_DATE+5,'09:00')->>'seated')='4');
+RESET ROLE;
+SELECT pg_temp.chk('neighbouring seats belong to different classes', NOT EXISTS (SELECT 1 FROM public.exam_seating a JOIN public.exam_seating b ON a.exam_id=b.exam_id AND a.exam_date=b.exam_date AND a.start_time=b.start_time AND a.room_id=b.room_id AND b.seat_no=a.seat_no+1 AND a.class_name=b.class_name WHERE a.exam_id='c9900000-0000-0000-0000-000000000001'));
+SELECT pg_temp.chk('no seat is used twice', (SELECT count(*)=count(DISTINCT (room_id, seat_no)) FROM public.exam_seating WHERE exam_id='c9900000-0000-0000-0000-000000000001'));
+SET LOCAL ROLE authenticated;
+SELECT set_config('request.jwt.claim.sub','c0000000-0000-0000-0000-000000000101',true);
+SELECT pg_temp.chk('a student sees no seat before hall tickets are published', (SELECT count(*)=0 FROM public.exam_seating));
+SELECT set_config('request.jwt.claim.sub','c0000000-0000-0000-0000-000000000008',true);
+SELECT pg_temp.chk('invigilator assigned to an occupied room', (public.exam_assign_invigilator('c9900000-0000-0000-0000-000000000001',CURRENT_DATE+5,'09:00',(SELECT room_id FROM public.exam_seating WHERE exam_id='c9900000-0000-0000-0000-000000000001' LIMIT 1),'c0000000-0000-0000-0000-000000000009')->>'success')='true');
+SELECT pg_temp.chk('the same teacher cannot be in two rooms', (public.exam_assign_invigilator('c9900000-0000-0000-0000-000000000001',CURRENT_DATE+5,'09:00',(SELECT room_id FROM public.exam_seating WHERE exam_id='c9900000-0000-0000-0000-000000000001' ORDER BY room_id DESC LIMIT 1),'c0000000-0000-0000-0000-000000000009')->>'code')='CLASH');
+RESET ROLE;
+UPDATE public.exam_rooms SET active=false WHERE name='Hall 1';
+SET LOCAL ROLE authenticated;
+SELECT set_config('request.jwt.claim.sub','c0000000-0000-0000-0000-000000000008',true);
+SELECT pg_temp.chk('seating refuses when capacity is short', (public.exam_generate_seating('c9900000-0000-0000-0000-000000000001',CURRENT_DATE+5,'09:00')->>'code')='NO_CAPACITY');
+RESET ROLE;
+SELECT pg_temp.chk('a refused regeneration keeps the old plan', (SELECT count(*)=4 FROM public.exam_seating WHERE exam_id='c9900000-0000-0000-0000-000000000001'));
+
 SELECT name, CASE WHEN ok THEN 'PASS' ELSE 'FAIL' END AS result FROM _r ORDER BY ok, name;
 DO $$ BEGIN
   IF EXISTS (SELECT 1 FROM _r WHERE NOT ok) THEN RAISE EXCEPTION 'SMOKE TEST FAILED'; END IF;
