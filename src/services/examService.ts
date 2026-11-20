@@ -32,6 +32,9 @@ export interface ExamItem {
   registration_required?: boolean;
   registration_open?: boolean;
   registration_deadline?: string | null;
+  revaluation_open?: boolean;
+  revaluation_deadline?: string | null;
+  parent_exam_id?: string | null;
 }
 
 export interface ExamScheduleItem {
@@ -113,6 +116,9 @@ export const examService = {
         registration_required: e.registration_required === true,
         registration_open: e.registration_open === true,
         registration_deadline: e.registration_deadline ?? null,
+        revaluation_open: e.revaluation_open === true,
+        revaluation_deadline: e.revaluation_deadline ?? null,
+        parent_exam_id: e.parent_exam_id ?? null,
       }));
     } catch (error) {
       throw handleSupabaseError(error, 'Failed to fetch examinations');

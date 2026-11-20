@@ -55,6 +55,7 @@ back-fills of NULLs and a de-duplication of `super_admin_releases` rows with the
 | 065_exam_registration_seating.sql | **New:** optional exam registration (open/close, deadline, class registration, fee clearance), exam rooms with capacity, seating generated per session (classes interleaved, capacity checked, previous plan kept on refusal), invigilator assignment without double-booking, seating visible to students only after hall tickets are published; hall tickets honour registration and carry hall/seat; fee-dues check also finds fees attached to the student record | 046 |
 | 066_online_payments.sql | **New:** online fee payments — `payment_orders`/items/events, service-role-only `payment_order_create/attach/settle/fail` (server prices the order, amount re-checked on settlement, idempotent by gateway event, applies money through `record_fee_payment`, parks unapplicable money in `Review`), `institutional_settings.online_payments_enabled`, audited `payment_flags_set` (online switch + exam fee-clearance rule) | 035, 040 |
 | 067_refunds_reconciliation.sql | **New:** payment reversal (ledger restored, receipt voided, finance entry, audited; counter payments by finance, online payments only via the gateway refund so money actually returns), `payments-refund` edge function, `payment_refunds`, daily reconciliation report with exceptions (orders in review / stuck / online payments without an order) | 066 |
+| 068_revaluation_supplementary.sql | **New:** revaluation (window set by COE after publication; student request with reason; COE decides Revise/Keep/Reject with a note; revision recomputes grade/pass-fail, kept in `exam_result_history`, flows into GPA) and supplementary examinations (linked to a parent exam; only students who failed/were absent can register; papers generated from failed subjects) | 045, 064, 065 |
 | 036_reconcile_legacy_columns.sql | `timetables.session_type`, `exam_schedules.day_of_week`, `student_attendance.*`, reception columns | 029 |
 
 **Behaviour changes to expect after 032:** buckets `documents`, `attachments`, `student_documents`, `staff_documents`
@@ -68,7 +69,7 @@ Not carried over on purpose: multi-college tables (`colleges`, `college_*`, `pla
 ```bash
 psql "$STAGING_DB_URL" -v ON_ERROR_STOP=1 -f supabase/tests/smoke_028_037.sql   # synthetic data, rolls back
 ```
-All lines must read PASS (339 checks). Edge-function checks: `scripts/test-edge-gate.sh` (type-check + authorization/validation cases; needs no database). Then in the SQL editor: `select count(*) from public.profiles where role is null;` (must be 0).
+All lines must read PASS (358 checks). Edge-function checks: `scripts/test-edge-gate.sh` (type-check + authorization/validation cases; needs no database). Then in the SQL editor: `select count(*) from public.profiles where role is null;` (must be 0).
 
 ### Rollback
 Each file is one transaction, so a failure leaves nothing half-applied. To undo a *successful* run use the backup/PITR from

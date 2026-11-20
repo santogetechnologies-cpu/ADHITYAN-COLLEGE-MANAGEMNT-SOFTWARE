@@ -26,6 +26,7 @@ import { Exam, ExamSchedule, ExamResult, HallTicket } from '@/types/database.typ
 import { useAuth } from '@/context/AuthContext';
 import { useRealtimeSubscription } from '@/hooks/useRealtimeSubscription';
 import { StudentExamRegistrationCard } from './StudentExamRegistrationCard';
+import { StudentRevaluationCard } from './StudentRevaluationCard';
 import { PrintableHallTicket } from './PrintableHallTicket';
 import { getCourseTotalSemesters } from '@/constants/courses';
 import { useToast } from '@/hooks/use-toast';
@@ -220,6 +221,7 @@ export function StudentExams() {
   return (
     <div className="space-y-6 max-w-6xl mx-auto pb-12">
       <StudentExamRegistrationCard />
+      <StudentRevaluationCard />
       {/* 1. Header Banner */}
       <div className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="space-y-1">
@@ -491,13 +493,7 @@ export function StudentExams() {
                   {hasHallTicket ? (
                     <Button
                       size="sm"
-                      onClick={() => {
-                        if (studentTicket.file_url) {
-                          window.open(studentTicket.file_url, '_blank');
-                        } else {
-                          setHallTicketModalData({ exam, ticket: studentTicket });
-                        }
-                      }}
+                      onClick={() => setHallTicketModalData({ exam, ticket: studentTicket })}
                       className="h-9 text-xs font-bold bg-[#1D61E7] hover:bg-blue-700 text-white rounded-xl shadow-2xs"
                     >
                       <Download className="w-3.5 h-3.5 mr-1" />

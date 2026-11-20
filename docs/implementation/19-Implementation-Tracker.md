@@ -277,7 +277,7 @@ Legend: ✅ done & verified as stated · 🟡 written, not runnable here · ⬜ 
 |------|--------|----------|
 | Registration rules, rooms, seating generation, invigilators, hall-ticket integration | ✅ SQL | 13 smoke checks (311 total) incl. neighbour-class rule, no double seats, capacity refusal |
 | COE "Seating" tab (registration controls, rooms, per-session generate/print/export, invigilation duty); student card to register/withdraw and see own seat | 🟡 UI | build |
-| Revaluation / supplementary exam workflow; student photo on seating sheets | ⬜ | |
+| Student photo on seating sheets | ⬜ | |
 
 ## Online payments (066)
 | Item | Status | Evidence |
@@ -293,3 +293,10 @@ Legend: ✅ done & verified as stated · 🟡 written, not runnable here · ⬜ 
 | Reverse/refund with ledger restoration, void receipts, idempotent, finance-only; reconciliation exceptions | ✅ SQL | 11 smoke checks (339 total) |
 | Finance "Online payments" tab: refund online orders, reverse counter payments, 30-day reconciliation | 🟡 UI | build |
 | Partial refunds, refund of one fee within a multi-fee order, gateway settlement-file import | ⬜ | |
+
+## Revaluation and supplementary exams (068)
+| Item | Status | Evidence |
+|------|--------|----------|
+| Window, request, decision with history, supplementary creation/papers/eligibility | ✅ SQL | 19 smoke checks (358 total) |
+| COE "Revaluation" tab (window, requests, decide, supplementary + paper generation); student card to request and see outcomes | 🟡 UI | build |
+| Revaluation fee through the fee engine; second-valuer assignment | ⬜ | |

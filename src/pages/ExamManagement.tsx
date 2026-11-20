@@ -8,6 +8,7 @@ import { ExamWorkflows } from '@/components/exam/ExamWorkflows';
 import { GradingInterface } from '@/components/exam/GradingInterface';
 import { ResultPublishing } from '@/components/exam/ResultPublishing';
 import { ExamRegistrationSeating } from '@/components/exam/ExamRegistrationSeating';
+import { RevaluationSupplementary } from '@/components/exam/RevaluationSupplementary';
 import { GradeScaleAndGpa } from '@/components/exam/GradeScaleAndGpa';
 import { ExamAnalytics } from '@/components/exam/ExamAnalytics';
 import { Calendar, FileText, CheckSquare, GraduationCap, BarChart3, Settings } from 'lucide-react';
@@ -23,7 +24,7 @@ const ExamManagement = () => {
         </div>
 
         <Tabs defaultValue="scheduling" className="w-full">
-          <TabsList className="grid w-full grid-cols-8">
+          <TabsList className="grid w-full grid-cols-9">
             <TabsTrigger value="scheduling" className="flex items-center gap-2">
               <Calendar className="h-4 w-4" />
               <span className="hidden sm:inline">Scheduling</span>
@@ -47,6 +48,10 @@ const ExamManagement = () => {
             <TabsTrigger value="seating" className="flex items-center gap-2">
               <Calendar className="h-4 w-4" />
               <span className="hidden sm:inline">Seating</span>
+            </TabsTrigger>
+            <TabsTrigger value="reval" className="flex items-center gap-2">
+              <BarChart3 className="h-4 w-4" />
+              <span className="hidden sm:inline">Revaluation</span>
             </TabsTrigger>
             <TabsTrigger value="gpa" className="flex items-center gap-2">
               <BarChart3 className="h-4 w-4" />
@@ -80,6 +85,10 @@ const ExamManagement = () => {
 
           <TabsContent value="seating" className="mt-6">
             <ExamRegistrationSeating />
+          </TabsContent>
+
+          <TabsContent value="reval" className="mt-6">
+            <RevaluationSupplementary />
           </TabsContent>
 
           <TabsContent value="gpa" className="mt-6">

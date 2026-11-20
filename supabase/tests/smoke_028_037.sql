@@ -840,6 +840,46 @@ SELECT set_config('request.jwt.claim.sub','c0000000-0000-0000-0000-000000000001'
 SELECT pg_temp.chk('students cannot reconcile or reverse', (public.payment_reconciliation(CURRENT_DATE-1, CURRENT_DATE)->>'code')='FORBIDDEN' AND (public.fee_payment_reverse((SELECT id FROM public.fee_payments LIMIT 1),'trying to cheat')->>'code')='FORBIDDEN');
 RESET ROLE;
 
+-- ---- 068 revaluation / supplementary ----
+SET LOCAL ROLE authenticated;
+SELECT set_config('request.jwt.claim.sub','c0000000-0000-0000-0000-000000000008',true);   -- admin acts as COE
+SELECT pg_temp.chk('revaluation cannot open before results are published', (public.exam_revaluation_set('c9800000-0000-0000-0000-000000000001', true, CURRENT_DATE+5)->>'code')='NOT_PUBLISHED');
+SELECT pg_temp.chk('supplementary needs a name and dates', (public.exam_supplementary_create('c9800000-0000-0000-0000-000000000001','',CURRENT_DATE,CURRENT_DATE)->>'code')='INVALID');
+CREATE TEMP TABLE _sup AS SELECT public.exam_supplementary_create('c9800000-0000-0000-0000-000000000001','Smoke Supplementary',CURRENT_DATE+20,CURRENT_DATE+25) AS r;
+SELECT pg_temp.chk('supplementary exam created for the failed student', (SELECT (r->>'success')='true' AND (r->>'eligible_students')::int=1 FROM _sup));
+SELECT pg_temp.chk('papers generated only for the failed subject', (public.exam_supplementary_papers((SELECT (r->>'exam_id')::uuid FROM _sup), CURRENT_DATE+20, '09:00','12:00','Hall X')->>'papers')='1');
+SELECT pg_temp.chk('supplementary registration opens', (public.exam_registration_set((SELECT (r->>'exam_id')::uuid FROM _sup), true, true, CURRENT_DATE+10)->>'success')='true');
+SELECT set_config('request.jwt.claim.sub','c0000000-0000-0000-0000-000000000101',true);   -- a student who passed
+SELECT pg_temp.chk('a student who did not fail cannot register for the supplementary', (public.exam_register((SELECT (r->>'exam_id')::uuid FROM _sup))->>'code')='NOT_ELIGIBLE');
+SELECT set_config('request.jwt.claim.sub','c0000000-0000-0000-0000-0000000000c1',true);   -- the student who failed Physiology
+SELECT pg_temp.chk('the student who failed registers', (public.exam_register((SELECT (r->>'exam_id')::uuid FROM _sup))->>'status')='Registered');
+SELECT set_config('request.jwt.claim.sub','c0000000-0000-0000-0000-000000000008',true);
+RESET ROLE;
+UPDATE public.exams SET results_published = true WHERE id='c9800000-0000-0000-0000-000000000001';
+SET LOCAL ROLE authenticated;
+SELECT set_config('request.jwt.claim.sub','c0000000-0000-0000-0000-000000000008',true);
+SELECT pg_temp.chk('revaluation opens once results are published', (public.exam_revaluation_set('c9800000-0000-0000-0000-000000000001', true, CURRENT_DATE+5)->>'success')='true');
+SELECT set_config('request.jwt.claim.sub','c0000000-0000-0000-0000-0000000000c1',true);
+SELECT pg_temp.chk('a reason is required', (public.exam_revaluation_request('c9800000-0000-0000-0000-000000000001','Physiology','short')->>'code')='REASON_REQUIRED');
+SELECT pg_temp.chk('the student requests revaluation of Physiology', (public.exam_revaluation_request('c9800000-0000-0000-0000-000000000001','Physiology','My answer on question 4 was not marked')->>'success')='true');
+SELECT pg_temp.chk('a second request for the same subject is refused', (public.exam_revaluation_request('c9800000-0000-0000-0000-000000000001','Physiology','Trying once more to get a re-check')->>'code')='ALREADY_REQUESTED');
+SELECT pg_temp.chk('no request without a published mark', (public.exam_revaluation_request('c9800000-0000-0000-0000-000000000001','Chemistry','There is no such paper at all')->>'code')='NO_RESULT');
+SELECT pg_temp.chk('students cannot decide', (public.exam_revaluation_decide((SELECT id FROM public.exam_revaluation_requests LIMIT 1),'Revise',60,'self service')->>'code')='FORBIDDEN');
+SELECT set_config('request.jwt.claim.sub','c0000000-0000-0000-0000-000000000008',true);
+SELECT pg_temp.chk('revised marks must be within the maximum', (public.exam_revaluation_decide((SELECT id FROM public.exam_revaluation_requests LIMIT 1),'Revise',150,'recheck')->>'code')='INVALID_MARKS');
+SELECT pg_temp.chk('a note is required', (public.exam_revaluation_decide((SELECT id FROM public.exam_revaluation_requests LIMIT 1),'Revise',45,'')->>'code')='NOTE_REQUIRED');
+CREATE TEMP TABLE _rv AS SELECT public.exam_revaluation_decide((SELECT id FROM public.exam_revaluation_requests LIMIT 1),'Revise',45,'Question 4 missed 10 marks') AS r;
+SELECT pg_temp.chk('revision recomputes pass/grade', (SELECT r->>'result'='Pass' FROM _rv));
+RESET ROLE;
+SELECT pg_temp.chk('marks changed, history kept', (SELECT marks_obtained=45 AND result_status='Pass' FROM public.exam_results WHERE exam_id='c9800000-0000-0000-0000-000000000001' AND subject='Physiology' AND student_id='c0000000-0000-0000-0000-0000000000c1')
+  AND (SELECT count(*)=1 AND bool_and(old_marks=35 AND new_marks=45) FROM public.exam_result_history WHERE subject='Physiology'));
+SET LOCAL ROLE authenticated;
+SELECT set_config('request.jwt.claim.sub','c0000000-0000-0000-0000-0000000000c1',true);
+SELECT pg_temp.chk('the revision reaches GPA (no arrears left)', (public.student_gpa('c0000000-0000-0000-0000-0000000000c1')->>'arrears')::int=0);
+SELECT set_config('request.jwt.claim.sub','c0000000-0000-0000-0000-000000000008',true);
+SELECT pg_temp.chk('a decided request cannot be decided again', (public.exam_revaluation_decide((SELECT id FROM public.exam_revaluation_requests LIMIT 1),'Reject',NULL,'again')->>'code')='ALREADY_DECIDED');
+RESET ROLE;
+
 SELECT name, CASE WHEN ok THEN 'PASS' ELSE 'FAIL' END AS result FROM _r ORDER BY ok, name;
 DO $$ BEGIN
   IF EXISTS (SELECT 1 FROM _r WHERE NOT ok) THEN RAISE EXCEPTION 'SMOKE TEST FAILED'; END IF;

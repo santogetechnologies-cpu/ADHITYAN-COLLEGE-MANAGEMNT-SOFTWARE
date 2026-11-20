@@ -12,7 +12,19 @@ export interface ExamRoom { id: string; name: string; block: string | null; capa
 export interface SeatRow { id: string; exam_date: string; start_time: string; student_id: string; class_name: string | null; subject: string | null; room_id: string; seat_no: number; student_name: string | null; roll_number: string | null }
 export interface Invigilator { id: string; exam_date: string; start_time: string; room_id: string; teacher_id: string; teacher_name: string | null }
 
+export interface RevalRequest { id: string; exam_id: string; student_id: string; student_name: string | null; class_name: string | null; subject: string; original_marks: number; max_marks: number; reason: string; status: string; revised_marks: number | null; decision_note: string | null; requested_at: string }
+
 export const examLogisticsService = {
+  setRevaluation: (examId: string, open: boolean, deadline: string | null) => rpc('exam_revaluation_set', { p_exam: examId, p_open: open, p_deadline: deadline }),
+  requestRevaluation: (examId: string, subject: string, reason: string) => rpc('exam_revaluation_request', { p_exam: examId, p_subject: subject, p_reason: reason }),
+  decideRevaluation: (id: string, decision: 'Revise' | 'Keep' | 'Reject', newMarks: number | null, note: string) => rpc('exam_revaluation_decide', { p_id: id, p_decision: decision, p_new_marks: newMarks, p_note: note }),
+  async revaluations(examId?: string): Promise<RevalRequest[]> {
+    let q = sb.from('exam_revaluation_requests').select('*').order('requested_at', { ascending: false });
+    if (examId) q = q.eq('exam_id', examId);
+    const { data, error } = await q; if (error) throw new Error(error.message); return data || [];
+  },
+  createSupplementary: (parentId: string, name: string, start: string, end: string) => rpc('exam_supplementary_create', { p_parent: parentId, p_name: name, p_start: start, p_end: end }),
+  supplementaryPapers: (examId: string, firstDate: string, start: string, end: string, room: string) => rpc('exam_supplementary_papers', { p_exam: examId, p_first_date: firstDate, p_start: start, p_end: end, p_room: room }),
   setRegistration: (examId: string, required: boolean, open: boolean, deadline: string | null) => rpc('exam_registration_set', { p_exam: examId, p_required: required, p_open: open, p_deadline: deadline }),
   register: (examId: string, withdraw = false) => rpc('exam_register', { p_exam: examId, p_withdraw: withdraw }),
   registerClass: (examId: string, className: string) => rpc('exam_register_class', { p_exam: examId, p_class: className }),
