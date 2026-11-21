@@ -23,6 +23,7 @@ import { db } from '@/services/supabase/database';
 import { HostelRoom, HostelOutPass, Profile } from '@/types/database.types';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/context/AuthContext';
+import { HostelRoomsPanel } from '@/components/hostel/HostelRoomsPanel';
 
 const IS_UUID = (v?: string | null): v is string => !!v && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v);
 
@@ -252,6 +253,8 @@ export default function HostelWardenDashboard() {
           </CardContent>
         </Card>
       </div>
+
+      <HostelRoomsPanel canManage={canAct} onChanged={loadData} />
 
       {/* Out-Passes Table */}
       <Card className="bg-white border-slate-200/80 shadow-2xs">

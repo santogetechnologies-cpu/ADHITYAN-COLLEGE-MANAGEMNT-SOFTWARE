@@ -324,3 +324,11 @@ Legend: ✅ done & verified as stated · 🟡 written, not runnable here · ⬜ 
 ## Remaining "not built" list — status
 All items from the previous list are now built: partial/per-fee refunds, settlement import, store-order payments, revaluation fee, second valuer, seating photos, type-check clean-up (48 errors left, all in the deprecated multi-college customizer and tests). A new-product dialog in the store invented a 4.8 rating for every product; removed.
 Still open (new ideas, not regressions): gateway adapters other than Razorpay; automatic instalment reminders; GST invoices for store sales; a real end-to-end browser test suite with a seeded Supabase.
+
+## Whole-app scan — operations gaps (074)
+| Item | Status | Notes |
+|---|---|---|
+| Hostel room allotment, vacate, transfer, room admin | ✅ (074) | Warden desk → "Rooms & Allotment". `allocateHostelRoom` (client-side counter, now blocked by RLS) removed. |
+| Year-end promotion / graduation with undo | ✅ (074) | `/student-promotion` (admin, principal). Dues start unticked. |
+| Audit-log viewer with search, date filter, CSV | ✅ (074) | `/audit-log` (admin, principal). |
+| Still open from the scan | ⬜ | Transport route/stop admin & student allocation, student leave requests, announcements/events management, instalment reminders, global search, data export |

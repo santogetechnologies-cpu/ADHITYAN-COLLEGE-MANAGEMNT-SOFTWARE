@@ -33,7 +33,7 @@ export const ROLE_CONFIGS: Record<UserRole, RoleConfig> = {
     role: 'admin',
     label: 'Institutional Administrator',
     home: '/admin',
-    allowedRoutes: ['/admin', '/dashboard', '/exam-management', '/library-management', '/admission-management', '/alumni-management', '/medical-management', '/certificate-generation', '/sports-management', '/disciplinary-management', '/store', '/report-concern', '/admin/account-provisioning', '/account-provisioning'],
+    allowedRoutes: ['/admin', '/dashboard', '/exam-management', '/library-management', '/admission-management', '/alumni-management', '/medical-management', '/student-promotion', '/audit-log', '/certificate-generation', '/sports-management', '/disciplinary-management', '/store', '/report-concern', '/admin/account-provisioning', '/account-provisioning'],
     navItems: [
       { label: 'Admin Overview', path: '/admin' },
       { label: 'User Directory', path: '/admin/users' },
@@ -47,7 +47,7 @@ export const ROLE_CONFIGS: Record<UserRole, RoleConfig> = {
     role: 'principal',
     label: 'Principal / Dean',
     home: '/dashboard/principal',
-    allowedRoutes: ['/dashboard', '/principal', '/admission-management', '/dashboard/principal', '/admin/departments', '/admin/timetable', '/admin/teachers', '/admin/naac', '/disciplinary-management', '/certificate-generation', '/exam-management', '/report-concern', '/admin/account-provisioning', '/account-provisioning'],
+    allowedRoutes: ['/dashboard', '/principal', '/admission-management', '/dashboard/principal', '/admin/departments', '/admin/timetable', '/admin/teachers', '/admin/naac', '/student-promotion', '/audit-log', '/disciplinary-management', '/certificate-generation', '/exam-management', '/report-concern', '/admin/account-provisioning', '/account-provisioning'],
     navItems: [
       { label: 'Executive Dashboard', path: '/dashboard/principal' },
       { label: 'Departments', path: '/admin/departments' },

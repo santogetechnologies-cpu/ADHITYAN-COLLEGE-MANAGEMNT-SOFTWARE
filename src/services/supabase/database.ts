@@ -5513,41 +5513,6 @@ export const db = {
     }
   },
 
-  async allocateHostelRoom(roomId: string): Promise<{ success: boolean; message: string }> {
-    try {
-      let client: any = supabase;
-      let { data: room, error } = await client.from('hostel_rooms').select('*').eq('id', roomId).single();
-      if (error || !room) {
-        const admin = await getAdminClient();
-        if (admin) {
-          const res = await admin.from('hostel_rooms').select('*').eq('id', roomId).single();
-          if (!res.error && res.data) {
-            room = res.data;
-            client = admin;
-          }
-        }
-      }
-      if (!room) return { success: false, message: 'Room not found' };
-
-      const current = room.current_occupancy || 0;
-      const capacity = room.capacity || 3;
-      if (current >= capacity) {
-        return { success: false, message: `Room ${room.room_number} is already at full capacity (${current}/${capacity})` };
-      }
-
-      const nextOcc = current + 1;
-      const nextStatus = nextOcc >= capacity ? 'Occupied' : 'Available';
-      await client.from('hostel_rooms').update({
-        current_occupancy: nextOcc,
-        status: nextStatus
-      }).eq('id', roomId);
-
-      return { success: true, message: `Allocated to Room ${room.room_number}. New occupancy: ${nextOcc}/${capacity}` };
-    } catch (err: any) {
-      return { success: false, message: err?.message || 'Failed to allocate room' };
-    }
-  },
-
   async createPlacementDrive(drive: Partial<T.PlacementDrive>): Promise<T.PlacementDrive | null> {
     try {
       const payload: any = {

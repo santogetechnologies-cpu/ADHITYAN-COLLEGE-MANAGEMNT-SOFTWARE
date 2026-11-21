@@ -1006,6 +1006,52 @@ INSERT INTO public.exam_seating (exam_id, exam_date, start_time, student_id, cla
 VALUES ('c9900000-0000-0000-0000-000000000001', CURRENT_DATE+9, '14:00', 'c0000000-0000-0000-0000-000000000101', 'SeatA', 'Math', 'Seat Student 1', 'SEAT-1', 'c9a00000-0000-0000-0000-000000000002', 1);
 SELECT pg_temp.chk('the seating row carries the student photo', (SELECT photo_url='https://example.test/p101.jpg' FROM public.exam_seating WHERE exam_date=CURRENT_DATE+9));
 
+-- ===== 074: hostel allotment, promotion, audit viewer =====
+INSERT INTO auth.users(id,email) VALUES
+ ('c0000000-0000-0000-0000-0000000000e1','e1.admin@example.test'),('c0000000-0000-0000-0000-0000000000e2','e2.warden@example.test'),
+ ('c0000000-0000-0000-0000-0000000000e3','e3.stu@example.test'),('c0000000-0000-0000-0000-0000000000e4','e4.stu@example.test'),('c0000000-0000-0000-0000-0000000000e5','e5.stu@example.test');
+INSERT INTO public.profiles(id,email,name,role,class_name) VALUES
+ ('c0000000-0000-0000-0000-0000000000e1','e1.admin@example.test','E Admin','admin',NULL),('c0000000-0000-0000-0000-0000000000e2','e2.warden@example.test','E Warden','hostel_warden',NULL),
+ ('c0000000-0000-0000-0000-0000000000e3','e3.stu@example.test','E Stu3','student','PROMO'),('c0000000-0000-0000-0000-0000000000e4','e4.stu@example.test','E Stu4','student','PROMO'),
+ ('c0000000-0000-0000-0000-0000000000e5','e5.stu@example.test','E Stu5','student','PROMO');
+INSERT INTO public.hostel_rooms(id,block_name,room_number,capacity) VALUES ('c9b00000-0000-0000-0000-000000000001','TB','T1',1),('c9b00000-0000-0000-0000-000000000002','TB','T2',2);
+CREATE TEMP TABLE _promo_ids(id uuid); GRANT ALL ON _promo_ids TO PUBLIC;
+INSERT INTO _promo_ids SELECT id FROM public.students WHERE class_name='PROMO';
+UPDATE public.students SET current_semester=7 WHERE user_id='c0000000-0000-0000-0000-0000000000e5';
+SET LOCAL ROLE authenticated;
+SELECT set_config('request.jwt.claim.sub','c0000000-0000-0000-0000-0000000000e3',true);
+SELECT pg_temp.chk('a student cannot allot rooms', (public.hostel_allot('c0000000-0000-0000-0000-0000000000e3','c9b00000-0000-0000-0000-000000000001')->>'code')='FORBIDDEN');
+SELECT pg_temp.chk('a student cannot promote', (public.students_promote(ARRAY[(SELECT id FROM _promo_ids LIMIT 1)],'promote')->>'code')='FORBIDDEN');
+SELECT pg_temp.chk('a student cannot read the audit log', (public.audit_log_search()->>'total')='0');
+SELECT set_config('request.jwt.claim.sub','c0000000-0000-0000-0000-0000000000e2',true);
+SELECT pg_temp.chk('warden allots a room', (public.hostel_allot('c0000000-0000-0000-0000-0000000000e3','c9b00000-0000-0000-0000-000000000001')->>'success')='true');
+SELECT pg_temp.chk('a full room refuses another student', (public.hostel_allot('c0000000-0000-0000-0000-0000000000e4','c9b00000-0000-0000-0000-000000000001')->>'code')='ROOM_FULL');
+SELECT pg_temp.chk('one room per student', (public.hostel_allot('c0000000-0000-0000-0000-0000000000e3','c9b00000-0000-0000-0000-000000000002')->>'code')='ALREADY_ALLOTTED');
+SELECT pg_temp.chk('a non-student cannot be allotted', (public.hostel_allot('c0000000-0000-0000-0000-0000000000e1','c9b00000-0000-0000-0000-000000000002')->>'code')='NOT_A_STUDENT');
+SELECT pg_temp.chk('transfer moves the student', (public.hostel_transfer('c0000000-0000-0000-0000-0000000000e3','c9b00000-0000-0000-0000-000000000002')->>'success')='true');
+SELECT pg_temp.chk('occupancy follows: T1 empty, T2 one', (SELECT (SELECT current_occupancy FROM public.hostel_rooms WHERE room_number='T1' AND block_name='TB')=0 AND (SELECT current_occupancy FROM public.hostel_rooms WHERE room_number='T2' AND block_name='TB')=1));
+SELECT pg_temp.chk('the occupancy view lists the occupant', (SELECT (r->'occupants'->0->>'name')='E Stu3' FROM jsonb_array_elements(public.hostel_occupancy()->'rooms') r WHERE r->>'room'='T2'));
+SELECT pg_temp.chk('capacity cannot drop below occupancy', (public.hostel_room_save('c9b00000-0000-0000-0000-000000000002','TB',1,'T2',0,'AC',100)->>'code')='INVALID');
+SELECT pg_temp.chk('vacate frees the bed', (public.hostel_vacate((SELECT id FROM public.hostel_allotments WHERE student_id='c0000000-0000-0000-0000-0000000000e3' AND status='Active'))->>'success')='true');
+SELECT pg_temp.chk('rooms cannot be edited directly', (SELECT NOT has_table_privilege('authenticated','public.hostel_rooms','UPDATE')));
+SELECT set_config('request.jwt.claim.sub','c0000000-0000-0000-0000-0000000000e1',true);
+SELECT pg_temp.chk('the preview lists the batch', (SELECT jsonb_array_length(public.promotion_preview(NULL,'PROMO',NULL)->'items'))=3);
+CREATE TEMP TABLE _promo1 AS SELECT public.students_promote((SELECT array_agg(id) FROM _promo_ids),'promote',8,'2026-27') AS r;
+GRANT SELECT ON _promo1 TO authenticated;
+SELECT pg_temp.chk('promotion moves everyone who can move', (SELECT (r->>'moved')='3' FROM _promo1));
+SELECT pg_temp.chk('semester 7 became 8, others +1', (SELECT (SELECT current_semester FROM public.students WHERE user_id='c0000000-0000-0000-0000-0000000000e5')=8 AND (SELECT current_semester FROM public.students WHERE user_id='c0000000-0000-0000-0000-0000000000e3')=2));
+CREATE TEMP TABLE _promo2 AS SELECT public.students_promote((SELECT array_agg(id) FROM _promo_ids),'promote',8,'2026-27') AS r;
+GRANT SELECT ON _promo2 TO authenticated;
+SELECT pg_temp.chk('final-semester student is skipped, not promoted past the maximum', (SELECT (r->>'moved')='2' AND (r->>'skipped')='1' FROM _promo2));
+SELECT pg_temp.chk('graduate call succeeds', (public.students_promote(ARRAY[(SELECT id FROM public.students WHERE user_id='c0000000-0000-0000-0000-0000000000e5')],'graduate')->>'success')='true');
+SELECT pg_temp.chk('graduating marks the student graduated', (SELECT status='graduated' FROM public.students WHERE user_id='c0000000-0000-0000-0000-0000000000e5'));
+SELECT pg_temp.chk('undo restores semester', (public.students_promotion_undo((SELECT (r->>'batch_id')::uuid FROM _promo1))->>'success')='true');
+SELECT pg_temp.chk('undo cannot repeat', (public.students_promotion_undo((SELECT (r->>'batch_id')::uuid FROM _promo1))->>'code')='ALREADY_UNDONE');
+SELECT pg_temp.chk('history lists the batches', (SELECT jsonb_array_length(public.promotion_history()->'items'))>=3);
+SELECT pg_temp.chk('audit search finds hostel actions', (public.audit_log_search('hostel_allotted')->>'total')::int>=1);
+SELECT pg_temp.chk('audit search hides ip addresses', NOT ((public.audit_log_search('hostel')->'items'->0) ? 'ip_address'));
+RESET ROLE;
+
 SELECT name, CASE WHEN ok THEN 'PASS' ELSE 'FAIL' END AS result FROM _r ORDER BY ok, name;
 DO $$ BEGIN
   IF EXISTS (SELECT 1 FROM _r WHERE NOT ok) THEN RAISE EXCEPTION 'SMOKE TEST FAILED'; END IF;

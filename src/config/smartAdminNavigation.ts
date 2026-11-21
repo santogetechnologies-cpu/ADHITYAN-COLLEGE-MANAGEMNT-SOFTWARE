@@ -463,6 +463,30 @@ export const ALL_SMART_MODULES: SmartNavModule[] = [
     keywords: ['discipline', 'grievance', 'anti ragging', 'inquiry', 'concern']
   },
   {
+    id: 'student-promotion',
+    title: 'Year-End Promotion & Graduation',
+    shortTitle: 'Promotion',
+    url: '/student-promotion',
+    icon: GraduationCap,
+    description: 'Promote classes to the next semester or graduate the final batch, with undo',
+    category: 'governance',
+    department: 'modules',
+    roles: ['admin', 'principal'],
+    keywords: ['promotion', 'promote', 'graduate', 'semester', 'year end', 'rollover']
+  },
+  {
+    id: 'audit-log',
+    title: 'Audit Log',
+    shortTitle: 'Audit Log',
+    url: '/audit-log',
+    icon: FileText,
+    description: 'Searchable record of who changed what, and when',
+    category: 'governance',
+    department: 'modules',
+    roles: ['admin', 'principal'],
+    keywords: ['audit', 'log', 'history', 'changes', 'security']
+  },
+  {
     id: 'alumni-network',
     title: 'Paramedical Alumni Network',
     shortTitle: 'Alumni Network',

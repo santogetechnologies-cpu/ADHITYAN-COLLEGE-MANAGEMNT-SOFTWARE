@@ -46,6 +46,8 @@ import ExamManagement from '@/pages/ExamManagement';
 import LibraryManagement from '@/pages/LibraryManagement';
 import AdmissionManagement from '@/pages/AdmissionManagement';
 import AlumniManagement from '@/pages/AlumniManagement';
+import StudentPromotion from '@/pages/StudentPromotion';
+import AuditLogViewer from '@/pages/AuditLogViewer';
 import MedicalManagement from '@/pages/MedicalManagement';
 import CertificateGeneration from '@/pages/CertificateGeneration';
 import SportsManagement from '@/pages/SportsManagement';
@@ -230,6 +232,22 @@ const App = () => (
                   element={
                     <ProtectedRoute allowedRoles={['admin', 'principal', 'receptionist']}>
                       <AdmissionManagement />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/student-promotion"
+                  element={
+                    <ProtectedRoute allowedRoles={['admin', 'principal']}>
+                      <StudentPromotion />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/audit-log"
+                  element={
+                    <ProtectedRoute allowedRoles={['admin', 'principal']}>
+                      <AuditLogViewer />
                     </ProtectedRoute>
                   }
                 />

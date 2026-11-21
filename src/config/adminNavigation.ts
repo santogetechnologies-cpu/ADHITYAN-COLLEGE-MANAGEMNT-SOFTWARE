@@ -108,6 +108,20 @@ export const ADMIN_HUBS: AdminNavHub[] = [
         roles: ['admin', 'receptionist'],
       },
       {
+        title: 'Year-End Promotion',
+        icon: GraduationCap,
+        url: '/student-promotion',
+        description: 'Promote classes to the next semester or graduate the final batch',
+        roles: ['admin', 'principal'],
+      },
+      {
+        title: 'Audit Log',
+        icon: FileCheck,
+        url: '/audit-log',
+        description: 'Tamper-proof record of who changed what, and when',
+        roles: ['admin', 'principal'],
+      },
+      {
         title: 'Alumni Network',
         icon: GraduationCap,
         url: '/alumni-management',
