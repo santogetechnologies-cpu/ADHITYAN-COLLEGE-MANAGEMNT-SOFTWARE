@@ -9,6 +9,7 @@ import { useExams, useExamResults, usePublishExam } from '@/hooks/queries/useExa
 import { DataState } from '@/components/shared/DataState';
 import { createMutationToast } from '@/lib/mutationToast';
 import { exportToCSV, printDocument } from '@/lib/exportUtils';
+import { askConfirm, askText } from '@/lib/dialogs';
 
 export const ResultPublishing = () => {
   const { data: exams = [], isLoading: examsLoading, refetch: refetchExams } = useExams();
@@ -18,14 +19,14 @@ export const ResultPublishing = () => {
   const { data: results = [], isLoading: resultsLoading, refetch: refetchResults } = useExamResults(activeExamId);
   const publishMutation = usePublishExam();
 
-  const handleTogglePublish = (examId: string, currentStatus: boolean) => {
+  const handleTogglePublish = async (examId: string, currentStatus: boolean) => {
     let reason: string | undefined;
     if (currentStatus) {
       // withdrawing published results needs a recorded reason
-      const answer = window.prompt('Why are these results being withdrawn? (required, saved in the audit log)');
-      if (!answer || answer.trim().length < 3) return;
-      reason = answer.trim();
-    } else if (!window.confirm('Publish these results? Students and parents will be able to see their marks immediately.')) {
+      const answer = await askText('Why are these results being withdrawn?\nThe reason is saved in the audit log.', { title: 'Withdraw results', required: true, minLength: 3, confirmLabel: 'Withdraw results', destructive: true });
+      if (!answer) return;
+      reason = answer;
+    } else if (!(await askConfirm('Publish these results? Students and parents will be able to see their marks immediately.', { title: 'Publish results', confirmLabel: 'Publish' }))) {
       return;
     }
     publishMutation.mutate(

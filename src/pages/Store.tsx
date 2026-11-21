@@ -40,6 +40,7 @@ import { useAuth } from '@/context/AuthContext';
 import { db } from '@/services/supabase/database';
 import { StoreProduct, StoreOrder } from '@/types/database.types';
 import { ROLE_CONFIGS } from '@/config/roles';
+import { InstitutionName } from '@/lib/institution';
 
 const CATEGORY_IMAGES: Record<string, string> = {
   'Textbooks': 'https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?w=600&auto=format&fit=crop&q=80',
@@ -398,7 +399,7 @@ const Store = () => {
               <div>
                 <div className="flex items-center gap-2">
                   <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-foreground">
-                    Adithyan College Store
+                    <InstitutionName /> Store
                   </h1>
                   {isStoreAdmin && (
                     <Badge variant="outline" className="hidden sm:inline-flex items-center gap-1 bg-primary/10 text-primary border-primary/20 text-xs">

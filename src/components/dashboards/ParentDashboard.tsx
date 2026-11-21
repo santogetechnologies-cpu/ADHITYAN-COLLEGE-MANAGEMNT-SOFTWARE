@@ -562,7 +562,7 @@ export function ParentDashboard() {
                   <Badge className="bg-primary text-white">Current Stop (08:00 AM)</Badge>
                 </div>
                 <div className="flex items-center justify-between p-2 rounded bg-muted/30">
-                  <span className="font-medium">5. Adithyan Paramedical Campus Bay</span>
+                  <span className="font-medium">5. Campus Bay</span>
                   <Badge variant="outline">Upcoming (08:25 AM)</Badge>
                 </div>
               </div>

@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import { db } from '@/services/supabase/database';
 import { LibraryCirculation, LibraryBook, Profile } from '@/types/database.types';
+import { InstitutionName } from '@/lib/institution';
 
 const IS_UUID = (v?: string | null): v is string => !!v && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v);
 
@@ -158,7 +159,7 @@ export default function LibrarianDashboard() {
               </Badge>
             </div>
             <p className="text-xs text-slate-500">
-              Adhityan Institution of Paramedical Sciences | Central Medical & Clinical Resource Library
+              <InstitutionName /> | Central Medical & Clinical Resource Library
             </p>
           </div>
         </div>

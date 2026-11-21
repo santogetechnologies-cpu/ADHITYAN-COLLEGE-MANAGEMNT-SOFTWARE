@@ -559,7 +559,7 @@ export function ComprehensiveAdmissionDialog({
               </div>
               <div>
                 <DialogTitle className="text-xl font-bold tracking-tight">
-                  Adithyan Paramedical Admission Form
+                  Admission Form
                 </DialogTitle>
                 <p className="text-xs text-muted-foreground mt-0.5">
                   Complete official candidate enrollment, academic qualifications, document uploads & counter fee registry

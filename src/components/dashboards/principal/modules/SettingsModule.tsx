@@ -20,6 +20,7 @@ import {
   Award
 } from 'lucide-react';
 import { Profile } from '@/types/database.types';
+import { InstitutionName } from '@/lib/institution';
 
 interface SettingsModuleProps {
   principalProfile?: Profile | null;
@@ -124,7 +125,7 @@ export function SettingsModule({ principalProfile }: SettingsModuleProps) {
               <Label className="text-[11px] text-muted-foreground font-medium">Institution</Label>
               <div className="p-2 rounded-md bg-slate-50 border border-slate-200 font-semibold text-slate-800 flex items-center space-x-1.5">
                 <Building2 className="w-3.5 h-3.5 text-blue-600" />
-                <span>Adithyan College of Paramedical Sciences</span>
+                <span><InstitutionName /></span>
               </div>
             </div>
 

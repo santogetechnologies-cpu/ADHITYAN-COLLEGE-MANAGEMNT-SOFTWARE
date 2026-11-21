@@ -64,6 +64,7 @@ import { supabase } from '@/lib/supabase';
 import { useRealtimeSubscription } from '@/hooks/useRealtimeSubscription';
 import { usePresence } from '@/context/PresenceContext';
 import { toast } from '@/hooks/use-toast';
+import { InstitutionName } from '@/lib/institution';
 
 // The 13 official project roles
 export const ALL_13_ROLES: { id: UserRole; title: string; category: 'student' | 'parent' | 'staff'; icon: any }[] = [
@@ -626,7 +627,7 @@ export default function UserManagement() {
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Institutional User Management</h1>
           <p className="text-xs text-muted-foreground mt-0.5">
-            Centralized directory for Students, Parents, and 11 Staff Roles across Adithyan College of Paramedical Sciences
+            Centralized directory for Students, Parents, and 11 Staff Roles across <InstitutionName />
           </p>
         </div>
 

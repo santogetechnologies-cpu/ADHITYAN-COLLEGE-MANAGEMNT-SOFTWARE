@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
-import { BookOpen, Search, Plus, Edit, Eye, Download, FileText, Video, Music, Loader2 } from 'lucide-react';
+import { BookOpen, Search, Plus, Eye, Download, FileText, Video, Music, Loader2 } from 'lucide-react';
 import { db } from '@/services/supabase/database';
 import { useToast } from '@/hooks/use-toast';
 import { LibraryBook } from '@/types/database.types';
@@ -443,9 +443,6 @@ export const DigitalCatalog = () => {
                     <div className="flex gap-2 ml-4">
                       <Button variant="outline" size="sm" onClick={() => toast({ title: "View Resource", description: `Viewing ${book.title}` })}>
                         <Eye className="h-4 w-4" />
-                      </Button>
-                      <Button variant="outline" size="sm">
-                        <Edit className="h-4 w-4" />
                       </Button>
                       {book.type === 'Digital' && (
                         <Button variant="outline" size="sm" onClick={() => toast({ title: "Downloading Resource", description: `Downloading ${book.title} eBook` })}>

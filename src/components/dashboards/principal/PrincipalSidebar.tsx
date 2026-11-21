@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { InstitutionName } from '@/lib/institution';
 
 export type PrincipalView = 
   | 'dashboard'
@@ -130,7 +131,7 @@ export function PrincipalSidebar({
               </div>
               <div className="min-w-0">
                 <h2 className="text-sm font-bold text-white tracking-tight truncate">
-                  Adithyan College
+                  <InstitutionName />
                 </h2>
                 <div className="flex items-center space-x-1.5 mt-0.5">
                   <span className="text-[10px] text-blue-200 uppercase tracking-wider font-semibold">

@@ -12,6 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { AlertTriangle, Loader2, Plus, Trash2 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useToast } from '@/hooks/use-toast';
+import { askConfirm, askText } from '@/lib/dialogs';
 
 // Writes go through an untyped alias: the generated Database typings in this repo do not resolve
 // insert/update payloads for any table (project-wide).
@@ -297,7 +298,7 @@ function FieldsCard({ fields, courses, onChange, toast }: { fields: Field[]; cou
     await onChange();
   };
   const remove = async (id: string) => {
-    if (!window.confirm('Delete this field? Answers already saved on applications are kept.')) return;
+    if (!(await askConfirm('Delete this field? Answers already saved on applications are kept.', { title: 'Delete field', confirmLabel: 'Delete', destructive: true }))) return;
     const { error } = await sb.from('admission_form_fields').delete().eq('id', id);
     if (error) failToast(toast, 'Not removed', error);
     await onChange();

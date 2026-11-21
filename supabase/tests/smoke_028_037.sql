@@ -1186,6 +1186,28 @@ SELECT pg_temp.chk('scheduler is idempotent the same day', (public.fee_reminders
 SELECT pg_temp.chk('a scheduled reminder is also queued for e-mail', EXISTS (SELECT 1 FROM public.notification_outbox WHERE user_id='c0000000-0000-0000-0000-ee0000000001' AND subject='Fee due soon'));
 SELECT pg_temp.chk('the run is audited as the system', EXISTS (SELECT 1 FROM public.audit_logs WHERE action='fee_reminders_auto' AND user_role='system'));
 
+-- ===== 078: announcements by class =====
+INSERT INTO auth.users(id,email) VALUES ('c0000000-0000-0000-0000-ff0000000001','cls.a@example.test'),('c0000000-0000-0000-0000-ff0000000002','cls.b@example.test'),('c0000000-0000-0000-0000-ff0000000003','cls.parent@example.test');
+INSERT INTO public.profiles(id,email,name,role,class_name,department) VALUES
+ ('c0000000-0000-0000-0000-ff0000000001','cls.a@example.test','Cls A','student','CLSA','DX'),('c0000000-0000-0000-0000-ff0000000002','cls.b@example.test','Cls B','student','CLSB','DX'),
+ ('c0000000-0000-0000-0000-ff0000000003','cls.parent@example.test','Cls Parent','parent',NULL,NULL);
+INSERT INTO public.parent_student_links(parent_id,student_id) VALUES ('c0000000-0000-0000-0000-ff0000000003','c0000000-0000-0000-0000-ff0000000001');
+SET LOCAL ROLE authenticated;
+SELECT set_config('request.jwt.claim.sub','c0000000-0000-0000-0000-0000000000e1',true);
+SELECT pg_temp.chk('a class with nobody in it is refused', (public.announcement_publish('Room change','Hall moved to B2','Exam','High','All','NOCLASS',NULL)->>'code')='NO_RECIPIENTS');
+SELECT pg_temp.chk('class announcement reaches the class and its parents', (public.announcement_publish('Room change','Hall moved to B2','Exam','High','All','CLSA',NULL)->>'recipients')='2');
+SELECT pg_temp.chk('department announcement reaches that department only', (public.announcement_publish('Dept meet','Friday at 3','Event','Normal','Students',NULL,'DX')->>'recipients')::int>=2);
+SELECT set_config('request.jwt.claim.sub','c0000000-0000-0000-0000-ff0000000001',true);
+SELECT pg_temp.chk('student of the class sees the class notice', EXISTS (SELECT 1 FROM public.institutional_broadcasts WHERE title='Room change'));
+SELECT set_config('request.jwt.claim.sub','c0000000-0000-0000-0000-ff0000000002',true);
+SELECT pg_temp.chk('student of another class does not', NOT EXISTS (SELECT 1 FROM public.institutional_broadcasts WHERE title='Room change'));
+SELECT pg_temp.chk('...but sees the department notice', EXISTS (SELECT 1 FROM public.institutional_broadcasts WHERE title='Dept meet'));
+SELECT set_config('request.jwt.claim.sub','c0000000-0000-0000-0000-ff0000000003',true);
+SELECT pg_temp.chk('the parent of a student in the class sees it', EXISTS (SELECT 1 FROM public.institutional_broadcasts WHERE title='Room change'));
+SELECT pg_temp.chk('...but the students-only department notice is not theirs', NOT EXISTS (SELECT 1 FROM public.institutional_broadcasts WHERE title='Dept meet'));
+RESET ROLE;
+SELECT pg_temp.chk('notifications went only to the class', EXISTS (SELECT 1 FROM public.notifications WHERE title='Room change' AND user_id='c0000000-0000-0000-0000-ff0000000001') AND NOT EXISTS (SELECT 1 FROM public.notifications WHERE title='Room change' AND user_id='c0000000-0000-0000-0000-ff0000000002'));
+
 SELECT name, CASE WHEN ok THEN 'PASS' ELSE 'FAIL' END AS result FROM _r ORDER BY ok, name;
 DO $$ BEGIN
   IF EXISTS (SELECT 1 FROM _r WHERE NOT ok) THEN RAISE EXCEPTION 'SMOKE TEST FAILED'; END IF;

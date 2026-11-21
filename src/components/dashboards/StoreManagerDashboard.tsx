@@ -47,6 +47,7 @@ import { db } from '@/services/supabase/database';
 import { InventoryItem, InventoryTransaction, StoreProduct, StoreOrder } from '@/types/database.types';
 import { useToast } from '@/hooks/use-toast';
 import { StudentSearchSelect } from '@/components/shared/StudentSearchSelect';
+import { askConfirm, askText } from '@/lib/dialogs';
 
 export default function StoreManagerDashboard() {
   const { toast } = useToast();
@@ -666,14 +667,14 @@ export default function StoreManagerDashboard() {
                         {['pending', 'processing'].includes(po.status) && (<>
                           <Button size="sm" variant="outline" onClick={async () => {
                             const left = po.quantity - ((po as any).received_qty || 0);
-                            const v = window.prompt(`How many units arrived? (up to ${left})`, String(left));
+                            const v = await askText(`How many units arrived? (up to ${left})`, { title: 'Receive delivery', inputType: 'number', defaultValue: String(left), required: true, confirmLabel: 'Record delivery' });
                             if (!v) return;
                             const r = await db.receivePurchaseOrder(po.id, Number(v));
                             toast(r.success ? { title: r.complete ? 'Order complete' : 'Partial delivery recorded', description: 'Stock updated.' } : { title: 'Not received', description: r.error, variant: 'destructive' });
                             if (r.success) loadStoreData();
                           }}>Receive</Button>
                           <Button size="sm" variant="ghost" onClick={async () => {
-                            const why = window.prompt('Reason for cancelling this order:');
+                            const why = await askText('Reason for cancelling this order', { title: 'Cancel order', required: true, minLength: 3, confirmLabel: 'Cancel order', destructive: true });
                             if (!why) return;
                             const r = await db.cancelPurchaseOrder(po.id, why);
                             toast(r.success ? { title: 'Order cancelled' } : { title: 'Not cancelled', description: r.error, variant: 'destructive' });

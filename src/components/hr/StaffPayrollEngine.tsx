@@ -14,6 +14,7 @@ import { PrintablePayslip } from './PrintablePayslip';
 import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import { exportToCSV } from '@/lib/exportUtils';
+import { askConfirm, askText } from '@/lib/dialogs';
 
 const inr = (n: number | null | undefined) => `₹ ${Number(n || 0).toLocaleString('en-IN')}`;
 const STATUS_STYLE: Record<string, string> = {
@@ -133,8 +134,8 @@ export function StaffPayrollEngine() {
               {selected && <div className="flex gap-2">
                 <Button size="sm" variant="outline" onClick={exportBank} disabled={!items.length || !['Approved', 'Disbursed'].includes(selected.status)}><Download className="w-4 h-4 mr-1" />Bank advice</Button>
                 {canApprove && selected.status === 'Draft' && <Button size="sm" disabled={busy} onClick={() => void act(() => payrollService.approve(selected.id), 'Payroll approved', selected.id)}>Approve</Button>}
-                {canPay && selected.status === 'Approved' && <Button size="sm" disabled={busy} onClick={() => { const ref = window.prompt('Enter the bank batch / transaction reference after the transfer is made:'); if (ref) void act(() => payrollService.disburse(selected.id, ref), 'Marked as paid', selected.id); }}>Mark as paid</Button>}
-                {canPrepare && ['Draft', 'Approved'].includes(selected.status) && <Button size="sm" variant="outline" disabled={busy} onClick={() => { const reason = window.prompt('Reason for cancelling this run:'); if (reason) void act(() => payrollService.cancel(selected.id, reason), 'Run cancelled'); }}>Cancel run</Button>}
+                {canPay && selected.status === 'Approved' && <Button size="sm" disabled={busy} onClick={async () => { const ref = await askText('Enter the bank batch or transaction reference after the transfer is made.', { title: 'Mark payroll as paid', required: true, minLength: 3, confirmLabel: 'Mark as paid' }); if (ref) void act(() => payrollService.disburse(selected.id, ref), 'Marked as paid', selected.id); }}>Mark as paid</Button>}
+                {canPrepare && ['Draft', 'Approved'].includes(selected.status) && <Button size="sm" variant="outline" disabled={busy} onClick={async () => { const reason = await askText('Reason for cancelling this run', { title: 'Cancel payroll run', required: true, minLength: 3, confirmLabel: 'Cancel run', destructive: true }); if (reason) void act(() => payrollService.cancel(selected.id, reason), 'Run cancelled'); }}>Cancel run</Button>}
               </div>}
             </div>
           </CardHeader>

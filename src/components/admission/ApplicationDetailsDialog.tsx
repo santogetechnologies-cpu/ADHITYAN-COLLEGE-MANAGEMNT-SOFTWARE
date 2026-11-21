@@ -14,6 +14,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import { actionsFor, STATUS_STYLE, type AdmissionAction, type AdmissionStatus } from '@/lib/admissionWorkflow';
+import { askConfirm, askText } from '@/lib/dialogs';
 import { 
   CheckCircle2, 
   XCircle, 
@@ -57,7 +58,7 @@ export const ApplicationDetailsDialog = ({
       toast({ title: 'A reason is required', description: `Enter the reason in the remarks box to ${action.label.toLowerCase()}.`, variant: 'destructive' });
       return;
     }
-    if (action.confirm && !window.confirm(action.confirm)) return;
+    if (action.confirm && !(await askConfirm(action.confirm, { title: action.label }))) return;
     setBusyAction(action.id);
     const ok = await onAction(application, action, remarks.trim() || undefined);
     setBusyAction(null);

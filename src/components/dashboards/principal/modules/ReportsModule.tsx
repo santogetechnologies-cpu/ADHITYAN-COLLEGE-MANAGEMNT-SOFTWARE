@@ -25,6 +25,7 @@ import {
   ScholarshipApplication,
   ExamResult 
 } from '@/types/database.types';
+import { InstitutionName, getInstitutionName } from '@/lib/institution';
 
 interface ReportsModuleProps {
   students: Profile[];
@@ -225,7 +226,7 @@ export function ReportsModule({
       getData: () => {
         const headers = ['Institutional Metric', 'Current Statistic', 'Notes & Accreditations'];
         const rows = [
-          ['Institution Name', 'Adithyan College of Paramedical Sciences', 'Affiliated Paramedical & Allied Health'],
+          ['Institution Name', getInstitutionName(), 'Affiliated Paramedical & Allied Health'],
           ['Total Enrolled Students', students.length, 'Central Supabase Profile Registry'],
           ['Total Teaching & Clinical Faculty', faculty.length, 'Verified Faculty Accounts'],
           ['Academic Departments / Programs', departments.length, 'B.Voc / Diploma Programs'],
@@ -371,7 +372,7 @@ export function ReportsModule({
                     <span>{selectedReport.title}</span>
                   </DialogTitle>
                   <DialogDescription className="text-xs text-muted-foreground mt-0.5">
-                    Adithyan College of Paramedical Sciences • Office of the Principal • Official Institutional Record
+                    <InstitutionName /> • Office of the Principal • Official Institutional Record
                   </DialogDescription>
                 </div>
                 <Badge variant="outline" className="text-xs">

@@ -110,7 +110,7 @@ export function ParentStudentProfileView({
                 <div className="space-y-1">
                   <span className="text-muted-foreground block">Verification Authority:</span>
                   <span className="text-emerald-600 font-semibold flex items-center gap-1">
-                    <ShieldCheck className="w-3.5 h-3.5" /> Adithyan Institutional Registrar
+                    <ShieldCheck className="w-3.5 h-3.5" /> Institutional Registrar
                   </span>
                 </div>
               </div>

@@ -21,6 +21,7 @@ import { toast } from 'sonner';
 import { db } from '@/services/supabase/database';
 import { StaffLeaveApplication, Profile } from '@/types/database.types';
 import { useAuth } from '@/context/AuthContext';
+import { askConfirm, askText } from '@/lib/dialogs';
 
 const IS_UUID = (v?: string | null): v is string => !!v && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v);
 
@@ -74,8 +75,8 @@ export function StaffLeaveManager() {
       const approverId = IS_UUID(user?.id) ? user.id : undefined;
       let reason: string | undefined;
       if (newStatus === 'Rejected') {
-        reason = window.prompt('Reason for rejecting this leave (required):') ?? undefined;
-        if (!reason || reason.trim().length < 3) return;
+        reason = (await askText('Reason for rejecting this leave', { title: 'Reject leave', required: true, minLength: 3, confirmLabel: 'Reject', destructive: true })) ?? undefined;
+        if (!reason) return;
       }
       await db.updateStaffLeaveStatus(id, newStatus, approverId, reason?.trim());
       toast.success(newStatus === 'Rejected' ? 'Leave rejected' : 'Leave approved');

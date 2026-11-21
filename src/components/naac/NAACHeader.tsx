@@ -10,6 +10,7 @@ import {
   Award,
   ArrowLeft
 } from 'lucide-react';
+import { InstitutionName } from '@/lib/institution';
 
 export function NAACHeader() {
   const { user, logout } = useAuth();
@@ -34,7 +35,7 @@ export function NAACHeader() {
               className="w-10 h-10 object-contain rounded-lg bg-white p-0.5 border shadow-sm"
             />
             <div>
-              <h1 className="text-xl font-bold text-foreground">Adithyan College - NAAC System</h1>
+              <h1 className="text-xl font-bold text-foreground"><InstitutionName /> - NAAC System</h1>
               <p className="text-xs text-muted-foreground">AI&MCP Automated Assessment & Reporting</p>
             </div>
           </div>

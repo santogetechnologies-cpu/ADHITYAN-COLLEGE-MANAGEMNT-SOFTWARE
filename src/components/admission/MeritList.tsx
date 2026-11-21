@@ -11,6 +11,7 @@ import { db } from '@/services/supabase/database';
 import { useToast } from '@/hooks/use-toast';
 import { STATUS_STYLE, type AdmissionStatus } from '@/lib/admissionWorkflow';
 import { supabase } from '@/lib/supabase';
+import { askConfirm, askText } from '@/lib/dialogs';
 
 const ANY_QUOTA = '__all__';
 
@@ -83,7 +84,7 @@ export const MeritList = () => {
       toast({ title: 'Check the inputs', description: seatsBlank ? 'Leave seats blank only when a quota and an academic year are chosen (seats then come from the seat matrix). Otherwise enter the number of seats.' : 'Seats must be a whole number of at least 1 and the weight a whole number from 0 to 100.', variant: 'destructive' });
       return;
     }
-    if (rows.length > 0 && !window.confirm(`This replaces the current merit list for ${course}. Continue?`)) return;
+    if (rows.length > 0 && !(await askConfirm(`This replaces the current merit list for ${course}. Continue?`, { title: 'Replace merit list', confirmLabel: 'Replace' }))) return;
     setGenerating(true);
     try {
       const r = await db.publishMeritList({ course, academicYear: year === 'all' ? undefined : year, seats: seatsBlank ? undefined : seatsNum, weightQualifying: wq, quota: quota === ANY_QUOTA ? undefined : quota });
@@ -102,7 +103,7 @@ export const MeritList = () => {
   };
 
   const apply = async () => {
-    if (!window.confirm('Selected applicants will be marked Approved and the rest Waitlisted. Continue?')) return;
+    if (!(await askConfirm('Selected applicants will be marked Approved and the rest Waitlisted. Continue?', { title: 'Apply merit decisions', confirmLabel: 'Apply' }))) return;
     setApplying(true);
     try {
       const r = await db.applyMeritDecisions({ course, academicYear: year === 'all' ? undefined : year, quota: quota === ANY_QUOTA ? undefined : quota });

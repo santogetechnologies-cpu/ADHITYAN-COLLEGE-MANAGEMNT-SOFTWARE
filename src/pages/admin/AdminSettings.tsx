@@ -17,17 +17,18 @@ import {
   CheckCircle2,
   Loader2
 } from 'lucide-react';
+import { setInstitutionName as cacheInstitutionName } from '@/lib/institution';
 
 export default function AdminSettings() {
   const [loading, setLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
 
-  const [institutionName, setInstitutionName] = useState('Adithyan College');
-  const [institutionCode, setInstitutionCode] = useState('ADITHYAN-2026');
-  const [academicYear, setAcademicYear] = useState('2025-2026');
-  const [contactEmail, setContactEmail] = useState('admin@adithyan.edu.in');
-  const [contactPhone, setContactPhone] = useState('+91 98765 43210');
-  const [address, setAddress] = useState('Adithyan College Campus, Coimbatore, Tamil Nadu, India');
+  const [institutionName, setInstitutionName] = useState('');
+  const [institutionCode, setInstitutionCode] = useState('');
+  const [academicYear, setAcademicYear] = useState(`${new Date().getFullYear()}-${new Date().getFullYear() + 1}`);
+  const [contactEmail, setContactEmail] = useState('');
+  const [contactPhone, setContactPhone] = useState('');
+  const [address, setAddress] = useState('');
   const [minAttendance, setMinAttendance] = useState('75');
   const [passingMark, setPassingMark] = useState('40');
   
@@ -65,6 +66,10 @@ export default function AdminSettings() {
   useRealtimeSubscription({ table: 'institutional_settings', onChange: loadSettings, onReconnect: loadSettings });
 
   const handleSave = async () => {
+    if (!institutionName.trim() || !institutionCode.trim()) {
+      toast({ title: 'Name and code are required', description: 'Enter the institution name and a short code (letters and digits) before saving.', variant: 'destructive' });
+      return;
+    }
     setIsSaving(true);
     try {
       const success = await db.updateInstitutionalSettings({
@@ -81,6 +86,7 @@ export default function AdminSettings() {
         maintenance_mode: maintenanceMode,
       });
 
+      if (success) cacheInstitutionName(institutionName);
       if (success) {
         toast({
           title: "Settings Saved Successfully",

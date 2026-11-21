@@ -15,6 +15,7 @@ import { sportsService, type SportsEvent, type SportsTeam } from '@/services/spo
 import { exportToCSV } from '@/lib/exportUtils';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/context/AuthContext';
+import { askConfirm, askText } from '@/lib/dialogs';
 
 const STATUSES = ['Upcoming', 'Registrations Open', 'Ongoing', 'Completed'];
 const nonNeg = (v: string) => v === '' ? 0 : Math.max(0, Math.floor(Number(v)));
@@ -91,7 +92,7 @@ export default function SportsManagement() {
                   <TableCell className="text-right">{e.participants}</TableCell><TableCell className="text-right">{e.teams}</TableCell>
                   <TableCell className="text-right whitespace-nowrap">{canEdit && <>
                     <Button variant="ghost" size="sm" title="Edit" onClick={() => { setEv({ id: e.id, name: e.name, sport: e.sport, date: e.date, status: e.status, participants: String(e.participants), teams: String(e.teams) }); setEvOpen(true); }}><Pencil className="w-4 h-4" /></Button>
-                    <Button variant="ghost" size="sm" title="Delete" onClick={() => { if (window.confirm(`Delete "${e.name}"?`)) void run(() => sportsService.deleteEvent(e.id), 'Event deleted'); }}><Trash2 className="w-4 h-4" /></Button></>}</TableCell></TableRow>))}
+                    <Button variant="ghost" size="sm" title="Delete" onClick={async () => { if (await askConfirm(`Delete "${e.name}"?`, { title: 'Delete event', confirmLabel: 'Delete', destructive: true })) void run(() => sportsService.deleteEvent(e.id), 'Event deleted'); }}><Trash2 className="w-4 h-4" /></Button></>}</TableCell></TableRow>))}
             </TableBody></Table></CardContent></Card></TabsContent>
 
           <TabsContent value="teams"><Card><CardHeader><div className="flex items-start justify-between"><div><CardTitle>Teams</CardTitle><CardDescription>Squads, captains and coaches.</CardDescription></div>
@@ -102,7 +103,7 @@ export default function SportsManagement() {
                   <TableCell>{t.achievements?.length ? t.achievements.join(', ') : '—'}</TableCell>
                   <TableCell className="text-right whitespace-nowrap">{canEdit && <>
                     <Button variant="ghost" size="sm" title="Edit" onClick={() => { setTm({ id: t.id, sport: t.sport, category: t.category, captain: t.captain, coach: t.coach, members: String(t.members_count), achievements: (t.achievements || []).join(', ') }); setTmOpen(true); }}><Pencil className="w-4 h-4" /></Button>
-                    <Button variant="ghost" size="sm" title="Delete" onClick={() => { if (window.confirm(`Delete the ${t.sport} ${t.category} team?`)) void run(() => sportsService.deleteTeam(t.id), 'Team deleted'); }}><Trash2 className="w-4 h-4" /></Button></>}</TableCell></TableRow>))}
+                    <Button variant="ghost" size="sm" title="Delete" onClick={async () => { if (await askConfirm(`Delete the ${t.sport} ${t.category} team?`, { title: 'Delete team', confirmLabel: 'Delete', destructive: true })) void run(() => sportsService.deleteTeam(t.id), 'Team deleted'); }}><Trash2 className="w-4 h-4" /></Button></>}</TableCell></TableRow>))}
             </TableBody></Table></CardContent></Card></TabsContent>
 
           <TabsContent value="summary"><Card><CardHeader><CardTitle>Participation by sport</CardTitle></CardHeader><CardContent>

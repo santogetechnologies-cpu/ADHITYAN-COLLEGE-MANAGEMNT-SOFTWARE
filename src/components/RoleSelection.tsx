@@ -24,6 +24,7 @@ import {
   LogIn,
   CheckCircle2
 } from 'lucide-react';
+import { InstitutionName } from '@/lib/institution';
 
 interface RoleSelectionProps {
   onSelectRole: (role?: UserRole) => void;
@@ -239,7 +240,7 @@ export function RoleSelection({ onSelectRole }: RoleSelectionProps) {
               </div>
               <div>
                 <h1 className="text-lg font-bold text-foreground tracking-tight leading-none">
-                  Adithyan College
+                  <InstitutionName />
                 </h1>
                 <p className="text-[11px] text-muted-foreground">College Management ERP & LMS</p>
               </div>
@@ -463,7 +464,7 @@ export function RoleSelection({ onSelectRole }: RoleSelectionProps) {
 
       {/* Footer */}
       <footer className="border-t bg-card py-6 text-center text-xs text-muted-foreground">
-        <p>© 2026 Adithyan College. Secure Role-Based ERP & LMS.</p>
+        <p>© {new Date().getFullYear()} <InstitutionName />. Secure Role-Based ERP & LMS.</p>
       </footer>
     </div>
   );

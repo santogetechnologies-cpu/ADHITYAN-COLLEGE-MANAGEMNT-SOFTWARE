@@ -341,3 +341,12 @@ Still open (new ideas, not regressions): gateway adapters other than Razorpay; a
 | E-mail and SMS channels with opt-out, retry and admin status | ✅ (077) | Needs Resend / Twilio keys; untested against the real providers. |
 | Parent view of child leave | ✅ | Parent dashboard → Attendance tab. |
 | Still open | ⬜ | Real-provider test of e-mail/SMS, WhatsApp, per-class announcements
+
+## Friendliness and configurability pass
+| Item | Status | Notes |
+|---|---|---|
+| Browser `prompt`/`confirm` replaced by in-app dialogs (`src/lib/dialogs.tsx`) | ✅ | ~30 call sites; legacy super-admin/platform screens still use native confirms. |
+| Announcements by class / department | ✅ (078) | |
+| College name comes from Settings (`src/lib/institution.tsx`), not code | ✅ | Headers, receipts, hall tickets, payslips, login, reports; placeholder contact details removed from Settings. |
+| Hard-coded default temporary password removed | ✅ | Random one-time password per account (`src/lib/tempPassword.ts`). |
+| Non-working buttons: expenses filter/export, catalogue "Edit" | ✅ | Edit button removed (no edit flow existed); filter and CSV export now work. |

@@ -16,6 +16,7 @@ import { naacService, type NaacMetric } from '@/services/naacService';
 import { EvidenceActions } from '@/components/naac/EvidenceActions';
 import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/hooks/use-toast';
+import { askConfirm, askText } from '@/lib/dialogs';
 
 interface CriterionTemplateProps { criterionNumber: number; title: string; description: string; icon: React.ElementType }
 const STATUSES: NaacMetric['status'][] = ['Pending', 'In progress', 'Completed'];
@@ -109,7 +110,7 @@ export function CriterionTemplate({ criterionNumber, title, description, icon: I
                       <TableCell>{m.updated_at?.slice(0, 10)}</TableCell>
                       <TableCell className="text-right whitespace-nowrap">{canEdit && <>
                         <Button variant="ghost" size="sm" title="Record data" onClick={() => setEdit(m)}><Pencil className="w-4 h-4" /></Button>
-                        <Button variant="ghost" size="sm" title="Delete metric" onClick={() => { if (window.confirm(`Delete metric ${m.metric_code}? Its evidence files stay in the repository.`)) void run(() => naacService.deleteMetric(m.id), 'Metric deleted'); }}><Trash2 className="w-4 h-4" /></Button></>}</TableCell>
+                        <Button variant="ghost" size="sm" title="Delete metric" onClick={async () => { if (await askConfirm(`Delete metric ${m.metric_code}? Its evidence files stay in the repository.`, { title: 'Delete metric', confirmLabel: 'Delete', destructive: true })) void run(() => naacService.deleteMetric(m.id), 'Metric deleted'); }}><Trash2 className="w-4 h-4" /></Button></>}</TableCell>
                     </TableRow>))}
                 </TableBody>
               </Table>

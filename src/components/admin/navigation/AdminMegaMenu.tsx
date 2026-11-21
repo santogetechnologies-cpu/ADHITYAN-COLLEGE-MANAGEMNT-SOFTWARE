@@ -34,6 +34,7 @@ import {
   getStoredRecentModules
 } from '@/config/smartAdminNavigation';
 import { useAuth } from '@/context/AuthContext';
+import { InstitutionName } from '@/lib/institution';
 
 interface AdminMegaMenuProps {
   isOpen?: boolean;
@@ -295,7 +296,7 @@ export function AdminMegaMenu({ isOpen, onOpenChange, triggerButton }: AdminMega
         {/* Footer */}
         <div className="px-5 py-2.5 bg-slate-50 dark:bg-slate-900 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-xs text-slate-400">
           <span>Tip: Hover any module to click the star (★) and bookmark it for quick access</span>
-          <span className="font-medium text-slate-500 dark:text-slate-400">Adithyan Group of Institutions</span>
+          <span className="font-medium text-slate-500 dark:text-slate-400"><InstitutionName /></span>
         </div>
       </DropdownMenuContent>
     </DropdownMenu>

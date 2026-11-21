@@ -19,6 +19,7 @@ import {
   CheckCircle2
 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
+import { getInstitutionName } from '@/lib/institution';
 
 interface ChatMessage {
   id: string;
@@ -79,7 +80,7 @@ export function TeacherAIAssistant() {
       {
         id: '1',
         sender: 'ai',
-        text: `Hello Professor ${user?.name || ''}! 👋 I am your Academic AI Assistant at Adithyan College.\n\nI can generate structured 45-minute lesson plans, formulate clinical viva & examination questions, analyze student performance trends, or prepare remedial strategies for your ${departmentName} classes. How may I assist your teaching today?`,
+        text: `Hello Professor ${user?.name || ''}! 👋 I am your Academic AI Assistant at ${getInstitutionName()}.\n\nI can generate structured 45-minute lesson plans, formulate clinical viva & examination questions, analyze student performance trends, or prepare remedial strategies for your ${departmentName} classes. How may I assist your teaching today?`,
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       }
     ];

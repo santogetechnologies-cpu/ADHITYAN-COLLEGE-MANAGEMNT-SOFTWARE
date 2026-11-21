@@ -3,6 +3,7 @@ import { Download, Eye, Trash2 } from 'lucide-react';
 import { naacService } from '@/services/naacService';
 import { useNAAC, type NAACDocument } from '@/context/NAACContext';
 import { useToast } from '@/hooks/use-toast';
+import { askConfirm, askText } from '@/lib/dialogs';
 
 /** View / download (short-lived signed link) / delete (coordinators only) for one evidence file. */
 export function EvidenceActions({ doc }: { doc: NAACDocument }) {
@@ -16,7 +17,7 @@ export function EvidenceActions({ doc }: { doc: NAACDocument }) {
     } catch (e: any) { toast({ title: 'Could not open the file', description: e.message, variant: 'destructive' }); }
   };
   const remove = async () => {
-    if (!window.confirm(`Delete "${doc.title}"? The file will be removed permanently.`)) return;
+    if (!(await askConfirm(`Delete "${doc.title}"? The file will be removed permanently.`, { title: 'Delete document', confirmLabel: 'Delete', destructive: true }))) return;
     try { await naacService.deleteEvidence(doc.id, doc.fileUrl); toast({ title: 'Document deleted' }); await reload(); }
     catch (e: any) { toast({ title: 'Not deleted', description: e.message, variant: 'destructive' }); }
   };

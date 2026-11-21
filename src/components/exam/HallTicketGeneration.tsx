@@ -12,6 +12,7 @@ import { useRealtimeSubscription } from '@/hooks/useRealtimeSubscription';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/context/AuthContext';
 import { printDocument } from '@/lib/exportUtils';
+import { askConfirm, askText } from '@/lib/dialogs';
 
 const esc = (v: unknown) => String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c] as string));
 
@@ -87,9 +88,9 @@ export const HallTicketGeneration = () => {
   };
 
   const release = async (t: HallTicketRow) => {
-    const reason = window.prompt(`Release ${t.student_name}'s ticket although it was withheld (${t.detention_reason || 'ineligible'}).\nEnter the reason (required, audited):`);
-    if (!reason || reason.trim().length < 3) return;
-    try { await examService.releaseHallTicket(t.id, reason.trim()); toast({ title: 'Ticket released', description: t.student_name }); await loadTickets(); }
+    const reason = await askText(`Release ${t.student_name}'s ticket although it was withheld (${t.detention_reason || 'ineligible'}).\nThe reason is required and audited.`, { title: 'Release withheld ticket', required: true, minLength: 3, confirmLabel: 'Release ticket' });
+    if (!reason) return;
+    try { await examService.releaseHallTicket(t.id, reason); toast({ title: 'Ticket released', description: t.student_name }); await loadTickets(); }
     catch (err: any) { toast({ title: 'Not released', description: err?.message, variant: 'destructive' }); }
   };
 

@@ -47,6 +47,7 @@ import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
+import { askConfirm, askText } from '@/lib/dialogs';
 import { 
   Menu, 
   RefreshCw, 
@@ -57,6 +58,7 @@ import {
   Loader2, 
   ShieldCheck 
 } from 'lucide-react';
+import { InstitutionName } from '@/lib/institution';
 
 export default function PrincipalDashboard() {
   const { user, logout } = useAuth();
@@ -310,9 +312,9 @@ export default function PrincipalDashboard() {
   const handleRejectScholarship = async (id: string) => {
     setActionLoadingId(id);
     try {
-      const reason = window.prompt('Reason for declining this scholarship (required):');
-      if (!reason || reason.trim().length < 3) { setActionLoadingId(null); return; }
-      const ok = await db.updateScholarshipStatus(id, 'Rejected', 0, principalProfile?.id, reason.trim());
+      const reason = await askText('Reason for declining this scholarship', { title: 'Decline scholarship', required: true, minLength: 3, confirmLabel: 'Decline', destructive: true });
+      if (!reason) { setActionLoadingId(null); return; }
+      const ok = await db.updateScholarshipStatus(id, 'Rejected', 0, principalProfile?.id, reason);
       if (ok) {
         setScholarships(prev => prev.map(s => s.id === id ? { ...s, status: 'Rejected' } : s));
         toast({
@@ -400,9 +402,9 @@ export default function PrincipalDashboard() {
   const handleRejectCertificate = async (id: string) => {
     setActionLoadingId(id);
     try {
-      const reason = window.prompt('Reason for declining this certificate (required):');
-      if (!reason || reason.trim().length < 3) { setActionLoadingId(null); return; }
-      const ok = await db.updateCertificateStatus(id, 'Rejected', reason.trim());
+      const reason = await askText('Reason for declining this certificate', { title: 'Decline certificate', required: true, minLength: 3, confirmLabel: 'Decline', destructive: true });
+      if (!reason) { setActionLoadingId(null); return; }
+      const ok = await db.updateCertificateStatus(id, 'Rejected', reason);
       if (ok) {
         setCertificates(prev => prev.map(c => c.id === id ? { ...c, status: 'Rejected' } : c));
         toast({
@@ -748,7 +750,7 @@ export default function PrincipalDashboard() {
             <div>
               <div className="flex items-center space-x-2">
                 <span className="text-sm font-bold text-slate-900">
-                  Adithyan College of Paramedical Sciences
+                  <InstitutionName />
                 </span>
                 <Badge variant="outline" className="hidden sm:inline-flex text-[10px] font-semibold border-blue-200 text-blue-700 bg-blue-50">
                   Principal & Dean

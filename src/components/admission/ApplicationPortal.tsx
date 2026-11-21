@@ -17,6 +17,7 @@ import { AlertTriangle, Wallet } from 'lucide-react';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { FeeReceiptModal } from '@/components/shared/FeeReceiptModal';
+import { askConfirm, askText } from '@/lib/dialogs';
 
 export const ApplicationPortal = () => {
   const { toast } = useToast();
@@ -148,13 +149,13 @@ export const ApplicationPortal = () => {
     }
   };
 
-  const startAction = (app: any, action: AdmissionAction) => {
+  const startAction = async (app: any, action: AdmissionAction) => {
     if (action.reasonRequired) {
       setReasonText('');
       setReasonFor({ app, action });
       return;
     }
-    if (action.confirm && !window.confirm(action.confirm)) return;
+    if (action.confirm && !(await askConfirm(action.confirm, { title: action.label }))) return;
     void runAction(app, action);
   };
 

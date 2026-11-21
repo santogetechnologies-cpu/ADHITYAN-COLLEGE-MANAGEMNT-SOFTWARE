@@ -23,6 +23,7 @@ import { supabase } from '@/lib/supabase';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/context/AuthContext';
 import { PlacementDrive, PlacementApplication } from '@/types/database.types';
+import { InstitutionName } from '@/lib/institution';
 
 export default function PlacementOfficerDashboard() {
   const { toast } = useToast();
@@ -141,7 +142,7 @@ export default function PlacementOfficerDashboard() {
               </Badge>
             </div>
             <p className="text-xs text-slate-500">
-              Adhityan Institution of Paramedical Sciences | Multi-Speciality Hospital Clinical Rotations & Placements
+              <InstitutionName /> | Multi-Speciality Hospital Clinical Rotations & Placements
             </p>
           </div>
         </div>

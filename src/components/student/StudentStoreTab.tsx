@@ -33,6 +33,7 @@ import { useAuth } from '@/context/AuthContext';
 import { useRealtimeSubscription } from '@/hooks/useRealtimeSubscription';
 import { StoreProduct, StoreOrder } from '@/types/database.types';
 import { useToast } from '@/hooks/use-toast';
+import { askConfirm, askText } from '@/lib/dialogs';
 
 const CATEGORY_ICONS: Record<string, any> = {
   'Textbooks': BookOpen,
@@ -280,7 +281,7 @@ export function StudentStoreTab() {
     finally { setPayingId(null); }
   };
   const cancelOrder = async (orderId: string) => {
-    if (!window.confirm('Cancel this order? Its items go back to stock.')) return;
+    if (!(await askConfirm('Cancel this order? Its items go back to stock.', { title: 'Cancel order', confirmLabel: 'Cancel order', cancelLabel: 'Keep order', destructive: true }))) return;
     try { await db.updateStoreOrderStatus(orderId, 'Cancelled'); toast({ title: 'Order cancelled' }); await loadData(); }
     catch (e: any) { toast({ title: 'Not cancelled', description: e.message, variant: 'destructive' }); }
   };

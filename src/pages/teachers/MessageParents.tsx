@@ -14,6 +14,7 @@ import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useToast } from '@/hooks/use-toast';
+import { askConfirm, askText } from '@/lib/dialogs';
 import { 
   MessageCircle, 
   Send, 
@@ -510,10 +511,12 @@ export default function MessageParents() {
               <CardHeader>
                 <div className="flex items-center justify-between">
                   <CardTitle>Message Templates</CardTitle>
-                  <Button variant="outline" size="sm" onClick={() => {
-                    const customTitle = prompt('Template title:');
-                    const customSub = prompt('Template subject:');
-                    const customBody = prompt('Template body:');
+                  <Button variant="outline" size="sm" onClick={async () => {
+                    const customTitle = await askText('Give the template a name', { title: 'New template (1 of 3)', required: true });
+                    if (!customTitle) return;
+                    const customSub = await askText('Subject line', { title: 'New template (2 of 3)', required: true });
+                    if (!customSub) return;
+                    const customBody = await askText('Message text', { title: 'New template (3 of 3)', required: true, multiline: true });
                     if (customTitle && customSub && customBody) {
                       setSubject(customSub);
                       setMessageBody(customBody);

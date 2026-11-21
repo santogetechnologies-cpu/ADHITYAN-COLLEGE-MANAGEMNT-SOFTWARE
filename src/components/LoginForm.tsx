@@ -12,6 +12,7 @@ import { ROLE_CONFIGS } from '@/config/roles';
 import { parentLinkingService } from '@/services/parentLinkingService';
 import { studentParentAuthService } from '@/services/studentParentAuthService';
 import { FirstLoginDialog } from '@/components/auth/FirstLoginDialog';
+import { InstitutionName } from '@/lib/institution';
 
 interface LoginFormProps {
   role?: UserRole;
@@ -265,7 +266,7 @@ export function LoginForm({ role, onBack }: LoginFormProps) {
             />
           </div>
           <div>
-            <span className="text-[11px] font-bold uppercase tracking-widest text-primary block">Adithyan College</span>
+            <span className="text-[11px] font-bold uppercase tracking-widest text-primary block"><InstitutionName /></span>
             <CardTitle className="text-2xl font-bold mt-1">
               {currentRoleTitle}
             </CardTitle>

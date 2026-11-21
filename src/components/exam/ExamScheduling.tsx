@@ -14,6 +14,7 @@ import { supabase } from '@/lib/supabase';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/context/AuthContext';
 import { OFFICIAL_COURSES } from '@/constants/courses';
+import { askConfirm, askText } from '@/lib/dialogs';
 
 const sb: any = supabase;   // generated typings in this repo do not resolve update payloads
 
@@ -102,7 +103,7 @@ export const ExamScheduling = () => {
   };
 
   const removePaper = async (id: string) => {
-    if (!window.confirm('Remove this paper from the timetable?')) return;
+    if (!(await askConfirm('Remove this paper from the timetable?', { title: 'Remove paper', confirmLabel: 'Remove', destructive: true }))) return;
     try { await examService.deleteSchedule(id); await load(); }
     catch (err: any) { toast({ title: 'Paper not removed', description: err?.message, variant: 'destructive' }); }
   };

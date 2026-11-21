@@ -7,6 +7,7 @@ import { examLogisticsService, type RevalRequest } from '@/services/examLogistic
 import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/lib/supabase';
+import { askConfirm, askText } from '@/lib/dialogs';
 
 /** Revaluation requests for published marks while a window is open, and the outcome of earlier requests. */
 export function StudentRevaluationCard() {
@@ -32,9 +33,9 @@ export function StudentRevaluationCard() {
   useEffect(() => { void load(); }, [load]);
 
   const ask = async (examId: string, subject: string) => {
-    const reason = window.prompt(`Why do you want ${subject} re-checked? (at least 10 characters)`);
+    const reason = await askText(`Why do you want ${subject} re-checked?`, { title: 'Request re-checking', required: true, minLength: 10, confirmLabel: 'Request' });
     if (!reason) return;
-    try { await examLogisticsService.requestRevaluation(examId, subject, reason.trim()); toast({ title: 'Revaluation requested' }); await load(); }
+    try { await examLogisticsService.requestRevaluation(examId, subject, reason); toast({ title: 'Revaluation requested' }); await load(); }
     catch (e: any) { toast({ title: 'Not requested', description: e.message, variant: 'destructive' }); }
   };
 

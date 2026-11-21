@@ -11,6 +11,7 @@ import { Loader2 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useToast } from '@/hooks/use-toast';
 import { campusOpsService } from '@/services/campusOpsService';
+import { askConfirm, askText } from '@/lib/dialogs';
 
 const sb: any = supabase;
 const isoDay = (d: Date) => d.toISOString().slice(0, 10);
@@ -90,10 +91,10 @@ export function PaymentSettings() {
   };
   const reverse = async (p: any) => {
     const left = Number(p.amount) - Number(p.refunded_amount || 0);
-    const amt = window.prompt(`Amount to reverse (up to ₹${left}). Leave as is to reverse the whole remaining payment:`, String(left));
+    const amt = await askText(`Amount to reverse (up to ₹${left}).\nLeave as is to reverse the whole remaining payment.`, { title: 'Reverse payment', defaultValue: String(left), inputType: 'number', required: true, confirmLabel: 'Next' });
     if (!amt) return;
-    const reason = window.prompt('Reason for reversing this payment (required, e.g. entered against the wrong student):');
-    if (!reason || reason.trim().length < 5) return;
+    const reason = await askText('Reason for reversing this payment (for example: entered against the wrong student).', { title: 'Reason', required: true, minLength: 5, confirmLabel: 'Reverse payment', destructive: true });
+    if (!reason) return;
     setBusy(p.id);
     const { data, error } = await sb.rpc('fee_payment_reverse', { p_payment: p.id, p_reason: reason.trim(), p_amount: Number(amt) === left ? null : Number(amt) });
     setBusy(null);

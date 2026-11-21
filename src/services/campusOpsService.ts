@@ -84,8 +84,8 @@ export const campusOpsService = {
     return rows;
   },
 
-  announce: async (a: { title: string; message: string; category: string; priority: string; audience: string }) =>
-    ok(await rpc('announcement_publish', { p_title: a.title, p_message: a.message, p_category: a.category, p_priority: a.priority, p_audience: a.audience })),
+  announce: async (a: { title: string; message: string; category: string; priority: string; audience: string; className?: string; department?: string }) =>
+    ok(await rpc('announcement_publish', { p_title: a.title, p_message: a.message, p_category: a.category, p_priority: a.priority, p_audience: a.audience, p_class: a.className?.trim() || null, p_department: a.department?.trim() || null })),
   async announcements(): Promise<any[]> {
     const { data, error } = await sb.from('institutional_broadcasts').select('*').order('published_at', { ascending: false }).limit(50);
     if (error) throw new Error(error.message);

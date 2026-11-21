@@ -1,3 +1,4 @@
+import { getInstitutionName } from '@/lib/institution';
 /**
  * Universal ERP Export Utilities (CSV & Printable Reports)
  */
@@ -61,7 +62,7 @@ export function printDocument(title: string, bodyHtml: string): void {
         </div>
         ${bodyHtml}
         <div class="footer">
-          Confidential Institutional Document • Adhityan College ERP • Certified Record
+          Confidential Institutional Document • ${getInstitutionName()} • Certified Record
         </div>
         <script>
           window.onload = function() { window.print(); }

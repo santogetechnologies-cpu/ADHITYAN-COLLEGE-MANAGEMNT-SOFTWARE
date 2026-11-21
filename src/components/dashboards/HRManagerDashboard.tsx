@@ -29,6 +29,7 @@ import { useAuth } from '@/context/AuthContext';
 import { StaffPayrollEngine } from '../hr/StaffPayrollEngine';
 import { StaffLeaveManager } from '../hr/StaffLeaveManager';
 import { toast } from 'sonner';
+import { InstitutionName } from '@/lib/institution';
 
 export default function HRManagerDashboard() {
   const { user, logout } = useAuth();
@@ -179,7 +180,7 @@ export default function HRManagerDashboard() {
               </Badge>
             </div>
             <p className="text-xs text-slate-500">
-              Adhityan Institution of Paramedical Sciences | Logged in as: <span className="font-semibold text-slate-700">{user?.name || 'Director of HR'}</span>
+              <InstitutionName /> | Logged in as: <span className="font-semibold text-slate-700">{user?.name || 'Director of HR'}</span>
             </p>
           </div>
         </div>

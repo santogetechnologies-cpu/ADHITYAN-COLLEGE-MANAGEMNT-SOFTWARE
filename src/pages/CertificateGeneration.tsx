@@ -16,6 +16,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/context/AuthContext';
 import { exportToCSV, printDocument } from '@/lib/exportUtils';
 import { StudentRecordSearch } from '@/components/shared/StudentRecordSearch';
+import { askConfirm, askText } from '@/lib/dialogs';
 
 const TYPES = ['Bonafide Certificate', 'Character Certificate', 'Conduct Certificate', 'Transfer Certificate', 'Course Completion', 'Attendance Certificate', 'Medical Certificate', 'Scholarship Certificate'];
 const esc = (v: unknown) => String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c] as string));
@@ -74,9 +75,9 @@ export default function CertificateGeneration() {
     try {
       let note: string | undefined;
       if (!approve) {
-        const r = window.prompt('Reason for rejecting this request (required):');
-        if (!r || r.trim().length < 3) return;
-        note = r.trim();
+        const r = await askText('Reason for rejecting this request', { title: 'Reject request', required: true, minLength: 3, confirmLabel: 'Reject', destructive: true });
+        if (!r) return;
+        note = r;
       }
       await db.updateCertificateStatus(c.id, approve ? 'Issued' : 'Rejected', note);
       toast({ title: approve ? 'Certificate issued' : 'Request rejected' });

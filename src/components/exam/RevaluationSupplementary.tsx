@@ -13,6 +13,7 @@ import { examService, type ExamItem } from '@/services/examService';
 import { examLogisticsService, type RevalRequest } from '@/services/examLogisticsService';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/context/AuthContext';
+import { askConfirm, askText } from '@/lib/dialogs';
 
 export function RevaluationSupplementary() {
   const { toast } = useToast();
@@ -59,7 +60,7 @@ export function RevaluationSupplementary() {
       <CardContent className="space-y-2">
         {valuations.length === 0 ? <p className="text-sm text-muted-foreground py-6 text-center">Nothing is assigned to you.</p> : valuations.map((v) => (
           <div key={v.id} className="flex items-center justify-between p-3 border rounded-lg"><div><div className="font-medium text-sm">{v.script} — {v.subject}</div><div className="text-xs text-muted-foreground">{v.exam} • out of {v.max_marks}{v.my_marks != null ? ` • you awarded ${v.my_marks}` : ''}</div></div>
-            <Button size="sm" variant={v.my_marks != null ? 'outline' : 'default'} onClick={async () => { const m = window.prompt(`Marks for ${v.script} (0–${v.max_marks}):`, v.my_marks != null ? String(v.my_marks) : ''); if (m === null || m === '') return; const n = window.prompt('Note (optional):', v.my_note ?? '') ?? ''; try { await examLogisticsService.submitValuation(v.id, Number(m), n); toast({ title: 'Marks recorded' }); await loadValuations(); } catch (e: any) { toast({ title: 'Not saved', description: e.message, variant: 'destructive' }); } }}>{v.my_marks != null ? 'Change marks' : 'Enter marks'}</Button></div>))}
+            <Button size="sm" variant={v.my_marks != null ? 'outline' : 'default'} onClick={async () => { const m = await askText(`Marks for ${v.script} (0 to ${v.max_marks})`, { title: 'Enter marks', inputType: 'number', defaultValue: v.my_marks != null ? String(v.my_marks) : '', required: true, confirmLabel: 'Next' }); if (m === null || m === '') return; const n = (await askText('Note for the examiner (optional)', { title: 'Note', defaultValue: v.my_note ?? '', confirmLabel: 'Save marks' })) ?? ''; try { await examLogisticsService.submitValuation(v.id, Number(m), n); toast({ title: 'Marks recorded' }); await loadValuations(); } catch (e: any) { toast({ title: 'Not saved', description: e.message, variant: 'destructive' }); } }}>{v.my_marks != null ? 'Change marks' : 'Enter marks'}</Button></div>))}
       </CardContent></Card>);
 
   if (loading) return <div className="flex justify-center py-12"><Loader2 className="w-6 h-6 animate-spin text-muted-foreground" /></div>;

@@ -30,6 +30,7 @@ import { StudentRevaluationCard } from './StudentRevaluationCard';
 import { PrintableHallTicket } from './PrintableHallTicket';
 import { getCourseTotalSemesters } from '@/constants/courses';
 import { useToast } from '@/hooks/use-toast';
+import { InstitutionName } from '@/lib/institution';
 
 export function StudentExams() {
   const { user } = useAuth();
@@ -574,7 +575,7 @@ export function StudentExams() {
                   />
                   <div className="text-left">
                     <h1 className="text-lg sm:text-xl font-black text-slate-900 uppercase tracking-tight leading-none">
-                      Adithyan College
+                      <InstitutionName />
                     </h1>
                     <p className="text-[11px] text-slate-600 font-semibold mt-0.5">
                       Office of the Controller of Examinations (CoE) • Directorate of Technical Education
@@ -666,7 +667,7 @@ export function StudentExams() {
                 </ul>
                 <div className="pt-2 flex justify-between items-center text-[10px] font-bold text-slate-500 border-t border-slate-200">
                   <span>Certified by Controller of Examinations</span>
-                  <span>Adithyan Institute of Paramedical</span>
+                  <span><InstitutionName /></span>
                 </div>
               </div>
             </div>

@@ -19,6 +19,7 @@ import { supabase } from '@/lib/supabase';
 const sb: any = supabase;
 import { db } from '@/services/supabase/database';
 import { useToast } from '@/hooks/use-toast';
+import { askConfirm, askText } from '@/lib/dialogs';
 
 const ANY = '__any__';
 const CYCLES: Record<string, string> = { one_time: 'One-time', per_semester: 'Every semester', per_year: 'Every year' };
@@ -262,7 +263,7 @@ function Plans({ plans, items, heads, headById, departments, classes, quotas, on
 
   const setStatus = async (status: 'Published' | 'Archived') => {
     if (!selected) return;
-    if (status === 'Published' && !window.confirm('Publishing freezes this plan: its items can no longer be edited (you can clone it to make a new version). Publish?')) return;
+    if (status === 'Published' && !(await askConfirm('Publishing freezes this plan: its items can no longer be edited (you can clone it to make a new version). Publish?', { title: 'Publish fee plan', confirmLabel: 'Publish' }))) return;
     const { error } = await sb.from('fee_plans').update({ status }).eq('id', selected.id);
     if (error) return fail(status === 'Published' ? 'Plan not published' : 'Plan not archived', error);
     toast({ title: status === 'Published' ? 'Plan published' : 'Plan archived' });
@@ -594,7 +595,7 @@ function BillFees({ plans, heads, departments, classes, quotas, onDone }: {
                 </div>
               )}
               <Button className="w-full bg-emerald-600 hover:bg-emerald-700 text-white" disabled={busy || preview.to_create === 0}
-                onClick={() => { if (window.confirm(`Bill ${preview.to_create} fee(s), ${inr(preview.total_amount)} in total, to ${preview.students} student(s)?`)) void run(true); }}>
+                onClick={async () => { if (await askConfirm(`Bill ${preview.to_create} fee(s), ${inr(preview.total_amount)} in total, to ${preview.students} student(s)?`, { title: 'Bill students', confirmLabel: 'Bill now' })) void run(true); }}>
                 {busy ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : null}
                 {preview.to_create === 0 ? 'Nothing to bill' : `Bill ${preview.to_create} fees · ${inr(preview.total_amount)}`}
               </Button>

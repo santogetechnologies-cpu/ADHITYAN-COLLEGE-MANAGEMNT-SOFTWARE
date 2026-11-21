@@ -46,6 +46,7 @@ import ExamManagement from '@/pages/ExamManagement';
 import LibraryManagement from '@/pages/LibraryManagement';
 import AdmissionManagement from '@/pages/AdmissionManagement';
 import AlumniManagement from '@/pages/AlumniManagement';
+import { DialogHost } from '@/lib/dialogs';
 import StudentPromotion from '@/pages/StudentPromotion';
 import StudentLifecycle from '@/pages/StudentLifecycle';
 import StudentLeaveDesk from '@/pages/StudentLeaveDesk';
@@ -91,6 +92,7 @@ const App = () => (
             <PresenceProvider>
           <TooltipProvider>
             <Toaster />
+            <DialogHost />
             <Sonner />
             <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
               <Routes>
