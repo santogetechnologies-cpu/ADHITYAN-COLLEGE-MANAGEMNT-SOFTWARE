@@ -337,4 +337,7 @@ Still open (new ideas, not regressions): gateway adapters other than Razorpay; a
 | Announcements that notify by audience | ✅ (076) | `/announcements`. |
 | Fee-due reminders to students and parents | ✅ (076) | Finance → Payment settings → "Send due-fee reminders now". Not scheduled automatically. |
 | Global search and CSV export (audited) | ✅ (076) | `/data-centre`. |
-| Still open | ⬜ | Scheduled (automatic) reminders, SMS/email channels, parent view of child leave
+| Automatic (scheduled) fee reminders | ✅ (077) | pg_cron job or scheduled edge call; off until an admin enables it. |
+| E-mail and SMS channels with opt-out, retry and admin status | ✅ (077) | Needs Resend / Twilio keys; untested against the real providers. |
+| Parent view of child leave | ✅ | Parent dashboard → Attendance tab. |
+| Still open | ⬜ | Real-provider test of e-mail/SMS, WhatsApp, per-class announcements

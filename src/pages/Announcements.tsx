@@ -10,6 +10,7 @@ import { EmptyState } from '@/components/ui/empty-state';
 import { useToast } from '@/hooks/use-toast';
 import { Megaphone } from 'lucide-react';
 import { campusOpsService } from '@/services/campusOpsService';
+import { NotificationChannelsPanel } from '@/components/admin/NotificationChannelsPanel';
 
 export default function Announcements() {
   const { toast } = useToast();
@@ -42,6 +43,7 @@ export default function Announcements() {
             <div><Label>Priority</Label><select className={sel} value={f.priority} onChange={e => setF({ ...f, priority: e.target.value })}>{['Normal', 'High', 'Urgent'].map(x => <option key={x}>{x}</option>)}</select></div>
             <div className="sm:col-span-3"><Button disabled={busy || f.title.trim().length < 3 || f.message.trim().length < 3} onClick={publish}>{busy ? 'Publishing…' : 'Publish and notify'}</Button></div>
           </CardContent></Card>
+        <NotificationChannelsPanel />
         <Card><CardHeader><CardTitle className="text-base">Published</CardTitle></CardHeader>
           <CardContent>{list.length === 0 ? <EmptyState title="No announcements yet" size="sm" /> : <ul className="divide-y">{list.map(a => (
             <li key={a.id} className="py-3"><div className="flex items-center gap-2 text-sm font-medium">{a.title}<Badge variant="outline">{a.target_audience}</Badge>{a.priority !== 'Normal' && <Badge variant="outline" className="text-rose-700 border-rose-300">{a.priority}</Badge>}</div>

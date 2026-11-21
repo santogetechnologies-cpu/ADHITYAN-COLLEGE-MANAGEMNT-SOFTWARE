@@ -64,6 +64,7 @@ back-fills of NULLs and a de-duplication of `super_admin_releases` rows with the
 | 074_hostel_allotment_promotion_audit_viewer.sql | **New:** hostel allotment ledger (allot/vacate/transfer keep occupancy exact; rooms read-only to clients; `hostel_room_save`), year-end promotion/graduation with dues/arrears preview and undo (`students_promote`, `students_promotion_undo`), audit-log search RPC (admin/principal, no IPs) | 028, 033, 011 |
 | 075_transport_assignments.sql | **New:** permanent student↔bus/stop allocation (`transport_assign/unassign`, capacity-checked), admin fleet overview, daily roster generator for drivers; riders see their own bus before any trip log exists | 054, 001 |
 | 076_lifecycle_leave_announcements_reminders_search.sql | **New:** student discontinue/reinstate/transfer with history (releases hostel bed and bus seat, keeps dues, profile↔student status mirrored), student leave requests with class-teacher decisions + notifications, announcements that notify by audience, fee-due reminders (student + parents, de-duplicated), staff global search, audited CSV export datasets | 028, 057, 074, 075 |
+| 077_outbox_channels_scheduled_reminders.sql | **New:** e-mail/SMS outbox fed by a trigger on `notifications` (e-mail medium/high, SMS high; per-person opt-out via `profiles.preferences`), worker RPCs (service role only), automatic daily fee reminders (`fee_reminders_auto`, pg_cron job `erp-fee-reminders` created if the extension exists), notification settings RPC | 057, 076 |
 | 036_reconcile_legacy_columns.sql | `timetables.session_type`, `exam_schedules.day_of_week`, `student_attendance.*`, reception columns | 029 |
 
 **Behaviour changes to expect after 032:** buckets `documents`, `attachments`, `student_documents`, `staff_documents`
@@ -142,3 +143,16 @@ See `docs/audit/01-Executive-Audit.md` ("High / medium") and `19-Implementation-
    pay, confirm the receipt appears, replay the webhook from the Razorpay dashboard and confirm nothing is applied twice.
 5. Switch to live keys only after finance has reconciled a few test payments. Another gateway needs only a new adapter in
    `supabase/functions/_shared/gateway.ts`; the database side is gateway-agnostic.
+
+
+## E-mail / SMS delivery and automatic reminders — setup (077)
+1. Apply migration 077. In-app notices keep working with no further setup; the queue simply waits.
+2. Deploy: `supabase functions deploy notifications-dispatch --no-verify-jwt`
+3. Set secrets (`supabase secrets set ...`):
+   - `DISPATCH_SECRET` — any random string of 16+ characters (the scheduler sends it in the `x-dispatch-secret` header).
+   - E-mail (Resend): `RESEND_API_KEY`, `MAIL_FROM` (a verified sender, e.g. `College <noreply@yourcollege.edu>`).
+   - SMS (Twilio): `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM`. Indian transactional SMS usually needs DLT registration; a 10-digit number is sent as +91.
+   A channel without its secrets is skipped and its messages stay queued (they expire after 3 days).
+4. Schedule the function every 5 minutes (Dashboard → Edge Functions → the function → Schedule, or any cron) with header `x-dispatch-secret`.
+5. Automatic reminders: turn on pg_cron (Dashboard → Database → Extensions) and re-run the last block of 077, **or** schedule one daily call to the same function with body `{"task":"reminders"}`. Then enable "Automatic fee reminders" under Announcements → Delivery channels.
+6. Switch e-mail/SMS on in the same panel. Staff and students can opt out in their own settings.

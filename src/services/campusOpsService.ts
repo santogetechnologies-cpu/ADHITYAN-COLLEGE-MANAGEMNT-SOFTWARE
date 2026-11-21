@@ -25,6 +25,7 @@ export interface LifecycleEvent { id: string; student_id: string; name: string; 
 export interface StudentHit { id: string; name: string; student_id: string; class_name: string | null; department: string | null; status: string }
 export interface StaffHit { id: string; name: string; role: string; department: string | null; email: string }
 export interface LeaveRow { id: string; student_id: string; leave_type: string; from_date: string; to_date: string; reason: string; status: string; decision_note: string | null; created_at: string; student?: { name: string; class_name: string | null } | null }
+export interface ChannelStatus { allowed: boolean; settings: { email: boolean; sms: boolean; auto_reminders: boolean; reminder_days: number }; counts: Record<string, number>; recent_failures: { channel: string; to: string; error: string | null; at: string }[]; scheduler: boolean }
 export interface AuditRow { id: string; user_email: string; user_role: string | null; action: string; entity_type: string | null; entity_id: string | null; old_values: any; new_values: any; created_at: string }
 
 export const campusOpsService = {
@@ -96,6 +97,17 @@ export const campusOpsService = {
     return { students: r?.students ?? [], staff: r?.staff ?? [] };
   },
   exportDataset: async (name: string): Promise<Record<string, any>[]> => ok(await rpc('export_dataset', { p_name: name })).rows ?? [],
+
+  channelStatus: async (): Promise<ChannelStatus | null> => { const r = await rpc('notification_channel_status'); return r?.allowed ? r : null; },
+  saveChannelSettings: async (c: { email: boolean; sms: boolean; autoReminders: boolean; reminderDays: number }) =>
+    ok(await rpc('notification_settings_set', { p_email: c.email, p_sms: c.sms, p_auto_reminders: c.autoReminders, p_reminder_days: c.reminderDays })),
+  retryFailedMessages: async (): Promise<{ requeued: number }> => ok(await rpc('outbox_retry_failed')),
+  async leaveForStudents(studentIds: string[]): Promise<LeaveRow[]> {
+    if (!studentIds.length) return [];
+    const { data, error } = await sb.from('student_leave_requests').select('*').in('student_id', studentIds).order('from_date', { ascending: false }).limit(100);
+    if (error) throw new Error(error.message);
+    return data || [];
+  },
 
   promotionPreview: async (f: { department?: string; className?: string; semester?: number | null }): Promise<PromotionCandidate[]> =>
     (await rpc('promotion_preview', { p_department: f.department || null, p_class: f.className || null, p_semester: f.semester ?? null })).items ?? [],

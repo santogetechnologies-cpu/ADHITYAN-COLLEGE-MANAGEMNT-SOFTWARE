@@ -41,6 +41,7 @@ export function StudentSettingsTab({ onLogout }: { onLogout: () => void }) {
   // 5 Real Backend-Connected Notification Settings
   const userPrefs = user?.preferences || {};
   const [emailAlerts, setEmailAlerts] = useState<boolean>(userPrefs.email_notifications ?? true);
+  const [smsAlerts, setSmsAlerts] = useState<boolean>(userPrefs.sms_notifications ?? true);
   const [pushAlerts, setPushAlerts] = useState<boolean>(userPrefs.push_notifications ?? true);
   const [feeReminders, setFeeReminders] = useState<boolean>(userPrefs.fee_reminders ?? true);
   const [examUpdates, setExamUpdates] = useState<boolean>(userPrefs.exam_updates ?? true);
@@ -135,6 +136,7 @@ export function StudentSettingsTab({ onLogout }: { onLogout: () => void }) {
       const updatedPrefs = {
         ...(user?.preferences || {}),
         email_notifications: emailAlerts,
+        sms_notifications: smsAlerts,
         push_notifications: pushAlerts,
         fee_reminders: feeReminders,
         exam_updates: examUpdates,
@@ -361,6 +363,14 @@ export function StudentSettingsTab({ onLogout }: { onLogout: () => void }) {
                   checked={emailAlerts} 
                   onCheckedChange={setEmailAlerts} 
                 />
+              </div>
+
+              <div className="flex items-center justify-between pt-2 border-t border-slate-100">
+                <div className="space-y-0.5">
+                  <div className="font-semibold text-slate-800">Text messages (SMS)</div>
+                  <div className="text-[11px] text-slate-500">Only urgent alerts, sent to the phone number on your profile</div>
+                </div>
+                <Switch checked={smsAlerts} onCheckedChange={setSmsAlerts} />
               </div>
 
               {/* 2. Push Notifications */}

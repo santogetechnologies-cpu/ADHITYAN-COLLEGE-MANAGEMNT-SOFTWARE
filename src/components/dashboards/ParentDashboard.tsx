@@ -47,6 +47,7 @@ import { ParentExamTimetableView } from '@/components/parent/ParentExamTimetable
 import { ParentHallTicketsView } from '@/components/parent/ParentHallTicketsView';
 import { ParentExamMarksView } from '@/components/parent/ParentExamMarksView';
 import { ParentFeesView } from '@/components/parent/ParentFeesView';
+import { ParentLeaveView } from '@/components/parent/ParentLeaveView';
 import { ParentAssignmentsView } from '@/components/parent/ParentAssignmentsView';
 import { ParentAnnouncementsView } from '@/components/parent/ParentAnnouncementsView';
 import { ParentNotificationsView } from '@/components/parent/ParentNotificationsView';
@@ -445,10 +446,13 @@ export function ParentDashboard() {
       )}
 
       {activeTab === 'attendance' && activeChild && (
-        <ParentAttendanceView
-          studentId={activeChild.id}
-          studentName={activeChild.name}
-        />
+        <div className="space-y-6">
+          <ParentLeaveView studentId={activeChild.id} studentName={activeChild.name} />
+          <ParentAttendanceView
+            studentId={activeChild.id}
+            studentName={activeChild.name}
+          />
+        </div>
       )}
 
       {activeTab === 'results' && activeChild && (

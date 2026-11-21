@@ -1138,6 +1138,54 @@ SELECT pg_temp.chk('the student really got the notice', EXISTS (SELECT 1 FROM pu
 SELECT pg_temp.chk('the parent was reminded about the fee too', EXISTS (SELECT 1 FROM public.notifications WHERE title='Fee overdue' AND user_id='c0000000-0000-0000-0000-dd0000000004'));
 SELECT pg_temp.chk('the student was told about leave approval', EXISTS (SELECT 1 FROM public.notifications WHERE title='Leave approved' AND user_id='c0000000-0000-0000-0000-dd0000000001'));
 
+-- ===== 077: channels, scheduled reminders =====
+INSERT INTO public.institutional_settings(id) VALUES ('00000000-0000-0000-0000-000000000001') ON CONFLICT DO NOTHING;
+INSERT INTO auth.users(id,email) VALUES ('c0000000-0000-0000-0000-ee0000000001','real.student@college.org'),('c0000000-0000-0000-0000-ee0000000002','optout.student@college.org');
+INSERT INTO public.profiles(id,email,name,role,phone,class_name,preferences) VALUES
+ ('c0000000-0000-0000-0000-ee0000000001','real.student@college.org','Chan Stu1','student','+91 98765 43210','CH1','{}'::jsonb),
+ ('c0000000-0000-0000-0000-ee0000000002','optout.student@college.org','Chan Stu2','student','9876543211','CH1','{"email_notifications": false, "sms_notifications": false}'::jsonb);
+SET LOCAL ROLE authenticated;
+SELECT set_config('request.jwt.claim.sub','c0000000-0000-0000-0000-ee0000000001',true);
+SELECT pg_temp.chk('a student cannot change notification settings', (public.notification_settings_set(true,true,true,7)->>'code')='FORBIDDEN');
+SELECT pg_temp.chk('a student cannot see channel status', (public.notification_channel_status()->>'allowed')='false');
+SELECT set_config('request.jwt.claim.sub','c0000000-0000-0000-0000-0000000000e1',true);
+SELECT pg_temp.chk('window outside 0-30 is refused', (public.notification_settings_set(true,true,true,45)->>'code')='INVALID');
+SELECT pg_temp.chk('admin switches email, SMS and auto reminders on', (public.notification_settings_set(true,true,true,7)->>'success')='true');
+SELECT pg_temp.chk('status reports the settings', (public.notification_channel_status()->'settings'->>'sms')='true');
+CREATE TEMP TABLE _nt AS SELECT public.notify_users(ARRAY['c0000000-0000-0000-0000-ee0000000001'::uuid,'c0000000-0000-0000-0000-ee0000000002'::uuid],'Hello channels','Message body','warning','high') AS r;
+RESET ROLE;
+SELECT pg_temp.chk('email queued for the student who allows it', EXISTS (SELECT 1 FROM public.notification_outbox WHERE user_id='c0000000-0000-0000-0000-ee0000000001' AND channel='email' AND subject='Hello channels'));
+SELECT pg_temp.chk('SMS queued with a cleaned number for high priority', EXISTS (SELECT 1 FROM public.notification_outbox WHERE user_id='c0000000-0000-0000-0000-ee0000000001' AND channel='sms' AND to_address='+919876543210'));
+SELECT pg_temp.chk('opted-out person gets nothing queued', NOT EXISTS (SELECT 1 FROM public.notification_outbox WHERE user_id='c0000000-0000-0000-0000-ee0000000002'));
+SELECT pg_temp.chk('example.test addresses are never mailed', NOT EXISTS (SELECT 1 FROM public.notification_outbox WHERE to_address LIKE '%@example.test'));
+INSERT INTO public.notifications(user_id,title,message,type,priority) VALUES ('c0000000-0000-0000-0000-ee0000000001','Low one','x','info','low');
+SELECT pg_temp.chk('low priority is in-app only', NOT EXISTS (SELECT 1 FROM public.notification_outbox WHERE subject='Low one'));
+CREATE TEMP TABLE _cl AS SELECT id, channel FROM public.outbox_claim(10, ARRAY['email']);
+SELECT pg_temp.chk('worker claims only the channel it can send', (SELECT count(*) FROM _cl)>=1 AND NOT EXISTS (SELECT 1 FROM _cl WHERE channel='sms'));
+SELECT pg_temp.chk('a claimed row is not handed out twice', (SELECT count(*) FROM public.outbox_claim(10, ARRAY['email']) WHERE id IN (SELECT id FROM _cl))=0);
+SELECT public.outbox_complete((SELECT id FROM _cl LIMIT 1), false, 'boom');
+SELECT pg_temp.chk('a failed send goes back to pending for a retry', (SELECT status='pending' AND last_error='boom' FROM public.notification_outbox WHERE id=(SELECT id FROM _cl LIMIT 1)));
+UPDATE public.notification_outbox SET attempts=3, status='sending' WHERE id=(SELECT id FROM _cl LIMIT 1);
+SELECT public.outbox_complete((SELECT id FROM _cl LIMIT 1), false, 'boom again');
+SELECT pg_temp.chk('after 3 attempts it is marked failed', (SELECT status='failed' FROM public.notification_outbox WHERE id=(SELECT id FROM _cl LIMIT 1)));
+SELECT public.outbox_complete((SELECT id FROM _cl OFFSET 1 LIMIT 1), true);
+SET LOCAL ROLE authenticated;
+SELECT set_config('request.jwt.claim.sub','c0000000-0000-0000-0000-ee0000000001',true);
+SELECT pg_temp.chk('students cannot read the outbox', (SELECT count(*) FROM public.notification_outbox)=0);
+SELECT pg_temp.chk('students cannot claim from the outbox', NOT has_function_privilege('authenticated','public.outbox_claim(int,text[])','EXECUTE'));
+SELECT set_config('request.jwt.claim.sub','c0000000-0000-0000-0000-0000000000e1',true);
+SELECT pg_temp.chk('admin can retry failures', (public.outbox_retry_failed()->>'success')='true');
+RESET ROLE;
+SELECT set_config('request.jwt.claim.sub','',true);
+UPDATE public.institutional_settings SET auto_fee_reminders=false;
+SELECT pg_temp.chk('scheduler does nothing while automatic reminders are off', (public.fee_reminders_auto()->>'skipped') IS NOT NULL);
+INSERT INTO public.student_fees(student_id,student_name,class_name,total_due,due_date,status,description) VALUES ('c0000000-0000-0000-0000-ee0000000001','Chan Stu1','CH1',250,CURRENT_DATE+2,'pending','Lab fee');
+UPDATE public.institutional_settings SET auto_fee_reminders=true;
+SELECT pg_temp.chk('scheduler sends when on', (public.fee_reminders_auto()->>'sent')::int>=1);
+SELECT pg_temp.chk('scheduler is idempotent the same day', (public.fee_reminders_auto()->>'sent')::int=0);
+SELECT pg_temp.chk('a scheduled reminder is also queued for e-mail', EXISTS (SELECT 1 FROM public.notification_outbox WHERE user_id='c0000000-0000-0000-0000-ee0000000001' AND subject='Fee due soon'));
+SELECT pg_temp.chk('the run is audited as the system', EXISTS (SELECT 1 FROM public.audit_logs WHERE action='fee_reminders_auto' AND user_role='system'));
+
 SELECT name, CASE WHEN ok THEN 'PASS' ELSE 'FAIL' END AS result FROM _r ORDER BY ok, name;
 DO $$ BEGIN
   IF EXISTS (SELECT 1 FROM _r WHERE NOT ok) THEN RAISE EXCEPTION 'SMOKE TEST FAILED'; END IF;
