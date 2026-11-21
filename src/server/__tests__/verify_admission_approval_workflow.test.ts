@@ -113,8 +113,8 @@ async function runAdmissionApprovalWorkflowTests() {
     const updatedApps = await db.getAdmissionApplications();
     const approvedApp = updatedApps.find((a: any) => a.id === createdAppId || a.email === testStudentEmail || a.applicant_name?.includes(testSuffix));
     assert(approvedApp?.status === 'Approved', 'Application status updated to "Approved"');
-    assert(approvedApp?.student_id === confirmRes.student?.student_id, 'Application has provisioned Student ID attached');
-    assert(approvedApp?.parent_id === confirmRes.parent?.parent_id, 'Application has provisioned Parent ID attached');
+    assert((approvedApp as any)?.student_id === confirmRes.student?.student_id, 'Application has provisioned Student ID attached');
+    assert((approvedApp as any)?.parent_id === confirmRes.parent?.parent_id, 'Application has provisioned Parent ID attached');
 
     // -------------------------------------------------------------
     // STEP 5: Multi-Identifier Login Resolution Verification

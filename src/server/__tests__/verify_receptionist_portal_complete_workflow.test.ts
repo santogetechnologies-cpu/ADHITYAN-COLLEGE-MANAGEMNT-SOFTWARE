@@ -263,7 +263,7 @@ async function runComprehensiveReceptionistWorkflowTests() {
       description: 'First-year Paramedical student orientation and ID badge collection at Main Auditorium.',
       date: new Date().toISOString().split('T')[0],
       time: '10:00 AM',
-      category: 'general',
+      category: 'academic',
       target_audience: 'all',
       priority: 'high',
       status: 'upcoming'

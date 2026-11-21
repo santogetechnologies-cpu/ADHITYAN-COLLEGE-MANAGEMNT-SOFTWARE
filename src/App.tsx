@@ -69,14 +69,6 @@ import SuperAdminControlCenter from '@/components/admin/superAdmin/SuperAdminCon
 import AccountProvisioningWorkspace from '@/components/admin/accountProvisioning/AccountProvisioningWorkspace';
 import { CollegeProvider } from '@/context/CollegeContext';
 import { VisualCustomizerProvider } from '@/context/VisualCustomizerContext';
-import { PlatformAdminLayout } from '@/components/platformAdmin/PlatformAdminLayout';
-import { PlatformOverview } from '@/components/platformAdmin/PlatformOverview';
-import { CollegeManagement } from '@/components/platformAdmin/CollegeManagement';
-import { CollegeProvisioningWizard } from '@/components/platformAdmin/CollegeProvisioningWizard';
-import { CollegeWorkspace } from '@/components/platformAdmin/workspace/CollegeWorkspace';
-import { ConfigurationTemplates } from '@/components/platformAdmin/ConfigurationTemplates';
-import { PlatformAuditLogs } from '@/components/platformAdmin/PlatformAuditLogs';
-import { PlatformSettings } from '@/components/platformAdmin/PlatformSettings';
 
 
 function TransportRouteSwitch() {
@@ -400,7 +392,7 @@ const App = () => (
                 <Route
                   path="/control-center"
                   element={
-                    <ProtectedRoute allowedRoles={['admin', 'platform_super_admin']}>
+                    <ProtectedRoute allowedRoles={['admin']}>
                       <SuperAdminControlCenter />
                     </ProtectedRoute>
                   }
@@ -416,23 +408,7 @@ const App = () => (
                   }
                 />
                 
-                {/* Platform Super Admin Infrastructure (Multi-Tenant Management) */}
-                <Route
-                  path="/platform-admin"
-                  element={
-                    <ProtectedRoute allowedRoles={['platform_super_admin']}>
-                      <PlatformAdminLayout />
-                    </ProtectedRoute>
-                  }
-                >
-                  <Route index element={<PlatformOverview />} />
-                  <Route path="colleges" element={<CollegeManagement />} />
-                  <Route path="provision" element={<CollegeProvisioningWizard />} />
-                  <Route path="workspace/:collegeId" element={<CollegeWorkspace />} />
-                  <Route path="templates" element={<ConfigurationTemplates />} />
-                  <Route path="audit-logs" element={<PlatformAuditLogs />} />
-                  <Route path="settings" element={<PlatformSettings />} />
-                </Route>
+
                 
                 {/* NAAC Accreditation System (Nested) */}
                 <Route

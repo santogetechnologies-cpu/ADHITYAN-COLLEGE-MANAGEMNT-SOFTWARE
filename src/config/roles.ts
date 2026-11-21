@@ -15,20 +15,6 @@ export interface RoleConfig {
 }
 
 export const ROLE_CONFIGS: Record<UserRole, RoleConfig> = {
-  platform_super_admin: {
-    role: 'platform_super_admin',
-    label: 'Platform Super Admin',
-    home: '/platform-admin',
-    allowedRoutes: ['/platform-admin', '/platform-admin/colleges', '/platform-admin/provision', '/platform-admin/templates', '/platform-admin/audit-logs', '/platform-admin/settings'],
-    navItems: [
-      { label: 'Platform Overview', path: '/platform-admin' },
-      { label: 'Colleges Directory', path: '/platform-admin/colleges' },
-      { label: 'Provision College', path: '/platform-admin/provision' },
-      { label: 'Config Templates', path: '/platform-admin/templates' },
-      { label: 'Platform Audit Logs', path: '/platform-admin/audit-logs' },
-      { label: 'Platform Settings', path: '/platform-admin/settings' },
-    ],
-  },
   admin: {
     role: 'admin',
     label: 'Institutional Administrator',

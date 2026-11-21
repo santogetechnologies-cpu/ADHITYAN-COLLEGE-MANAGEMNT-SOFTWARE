@@ -383,7 +383,7 @@ async function runParentPortalCompleteWorkflowTests() {
       studentId: ward1AuthId,
       studentName: `Ramesh Ward ${testSuffix}`,
       amount: 15000,
-      paymentMethod: 'Parent_Online_UPI',
+      paymentMethod: 'UPI',
       notes: 'Parent tuition installment payment',
     });
     assert(payRes.success === true, 'Parent processes fee installment payment of ₹15,000');

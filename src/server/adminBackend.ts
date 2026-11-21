@@ -1,5 +1,4 @@
 import { createClient } from '@supabase/supabase-js';
-import { multiCollegeService } from '../services/multiCollegeService';
 
 const isUuidStr = (u?: unknown): u is string => typeof u === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(u);
 
@@ -16,7 +15,6 @@ const SUPABASE_ANON_KEY = process.env.VITE_SUPABASE_PUBLISHABLE_KEY || 'sb_publi
 const SUPABASE_SECRET_KEY = process.env.SUPABASE_SECRET_KEY || '';
 
 export const ALLOWED_ROLES = [
-  'platform_super_admin',
   'admin',
   'principal',
   'student',
@@ -80,20 +78,6 @@ export async function handleAdminUserOperation(token: string, body: any): Promis
     callerCollegeId = undefined;
   }
 
-  // 2. Strict Tenant Boundary Isolation: Non-platform users cannot access foreign colleges
-  if (callerRole !== 'platform_super_admin' && body.collegeId) {
-    const effectiveCallerCollege = callerCollegeId || '11111111-1111-1111-1111-111111111111';
-    if (body.collegeId !== effectiveCallerCollege) {
-      return {
-        status: 403,
-        body: {
-          error: 'Forbidden: Cross-college tenant access strictly prohibited. Your account is isolated to your assigned college.',
-          code: 'CROSS_TENANT_VIOLATION'
-        }
-      };
-    }
-  }
-
   const { action } = body;
 
   const isStudentPortalOperation = [
@@ -129,15 +113,6 @@ export async function handleAdminUserOperation(token: string, body: any): Promis
     'create_parent_account_and_link'
   ].includes(action);
 
-  const isPlatformSuperAdminAction = [
-    'platform_provision_college',
-    'platform_update_college',
-    'platform_set_college_status',
-    'platform_save_college_config',
-    'platform_publish_college_config',
-    'verify_tenant_isolation'
-  ].includes(action);
-
   const isSuperAdminConfigAction = [
     'save_system_config_draft',
     'publish_system_config',
@@ -146,58 +121,9 @@ export async function handleAdminUserOperation(token: string, body: any): Promis
     'restore_system_backup'
   ].includes(action);
 
-  if (isPlatformSuperAdminAction) {
-    if (action === 'verify_tenant_isolation') {
-      if (!['admin', 'platform_super_admin'].includes(callerRole || '')) {
-        return { status: 403, body: { error: 'Forbidden: Administrator or Super Admin authorization required.', code: 'FORBIDDEN' } };
-      }
-    } else if (callerRole !== 'platform_super_admin') {
-      return { status: 403, body: { error: 'Forbidden: Platform Super Admin authorization required.', code: 'FORBIDDEN_SUPER_ADMIN_REQUIRED' } };
-    }
-  } else if (isSuperAdminConfigAction) {
-    if (callerRole !== 'admin' && callerRole !== 'platform_super_admin') {
+  if (isSuperAdminConfigAction) {
+    if (callerRole !== 'admin') {
       return { status: 403, body: { error: 'Access denied: Super Administrator privileges required.', code: 'FORBIDDEN' } };
-    }
-  }
-
-  // 2. Dynamic Role-Level Capability & Backend Action Enforcement (College Tenant Scoped)
-  if (callerRole && callerRole !== 'platform_super_admin') {
-    const effectiveCollegeId = callerCollegeId || '11111111-1111-1111-1111-111111111111';
-    const isBypassAction = ['resolve_login_id', 'verify_tenant_isolation'].includes(action);
-
-    if (!isBypassAction) {
-      try {
-        const roleConfig = await multiCollegeService.getRoleConfiguration(effectiveCollegeId, callerRole);
-
-        // A. Business Rules Enforcement: e.g. restrictFinanceAccess
-        if (roleConfig?.businessRules?.restrictFinanceAccess) {
-          const isFinanceAction = ['collect_fee_payment', 'generate_fee_receipt', 'approve_fee_concession'].includes(action);
-          if (isFinanceAction) {
-            return {
-              status: 403,
-              body: {
-                error: `Financial transaction "${action}" is blocked for role "${callerRole}" by institutional policy.`,
-                code: 'FINANCE_ACCESS_RESTRICTED'
-              }
-            };
-          }
-        }
-
-        // B. Explicit Backend Action Blocking
-        if (roleConfig && roleConfig.backendActions && roleConfig.backendActions[action] === false) {
-          return {
-            status: 403,
-            body: {
-              error: `Action "${action}" has been disabled for role "${callerRole}" by Institutional Administrator.`,
-              code: 'ROLE_ACTION_DISABLED',
-              role: callerRole,
-              action
-            }
-          };
-        }
-      } catch (roleErr) {
-        // Fallback gracefully
-      }
     }
   }
 
@@ -228,19 +154,19 @@ export async function handleAdminUserOperation(token: string, body: any): Promis
       return { status: 401, body: { error: 'Authentication required.', code: 'UNAUTHORIZED' } };
     }
   } else if (isTeacherOperation) {
-    if (!['teacher', 'hod', 'faculty', 'principal', 'admin', 'platform_super_admin'].includes(callerRole || '')) {
+    if (!['teacher', 'hod', 'faculty', 'principal', 'admin'].includes(callerRole || '')) {
       return { status: 403, body: { error: 'Access denied: Faculty privileges required.', code: 'FORBIDDEN' } };
     }
   } else if (isFinanceOperation) {
-    if (!['finance_manager', 'principal', 'admin', 'platform_super_admin'].includes(callerRole || '')) {
+    if (!['finance_manager', 'principal', 'admin'].includes(callerRole || '')) {
       return { status: 403, body: { error: 'Access denied: Finance Manager or Administrator privileges required.', code: 'FORBIDDEN' } };
     }
   } else if (isAdmissionAndParentOperation) {
-    if (!['admin', 'principal', 'receptionist', 'platform_super_admin'].includes(callerRole || '')) {
+    if (!['admin', 'principal', 'receptionist'].includes(callerRole || '')) {
       return { status: 403, body: { error: 'Access denied: Receptionist, Principal, or Administrator privileges required.', code: 'FORBIDDEN' } };
     }
-  } else if (!isPlatformSuperAdminAction && !isSuperAdminConfigAction) {
-    if (!['admin', 'principal', 'platform_super_admin'].includes(callerRole || '')) {
+  } else if (!isSuperAdminConfigAction) {
+    if (!['admin', 'principal'].includes(callerRole || '')) {
       return { status: 403, body: { error: 'Access denied: Administrator privileges required.', code: 'FORBIDDEN' } };
     }
   }
@@ -3175,122 +3101,6 @@ export async function handleAdminUserOperation(token: string, body: any): Promis
           new_values: { restoredFrom: backupName, timestamp: new Date().toISOString() }
         });
         return { status: 200, body: { success: true, message: 'Backup restored successfully.' } };
-      }
-
-      // =======================================================================
-      // PLATFORM SUPER ADMIN MULTI-COLLEGE GOVERNANCE ACTIONS
-      // =======================================================================
-      case 'platform_provision_college': {
-        if (callerRole !== 'platform_super_admin') {
-          return { status: 403, body: { error: 'Forbidden: Platform Super Admin authorization required.', code: 'FORBIDDEN' } };
-        }
-        const { name, code, contactEmail, institutionType, academicConfig, brandingConfig, adminAccount } = body;
-        if (!name || !code || !contactEmail) {
-          return { status: 400, body: { error: 'College name, unique code, and contact email are required.' } };
-        }
-
-        const collegeId = crypto.randomUUID ? crypto.randomUUID() : `col_${Date.now()}`;
-        
-        // Log in audit trail
-        await supabaseAdmin.from('audit_logs').insert({
-          user_email: callerUser.email || 'superadmin@platform.adithyan.edu',
-          user_role: 'platform_super_admin',
-          action: 'provision_college',
-          entity_type: 'college',
-          entity_id: code,
-          new_values: { collegeId, name, code, contactEmail, institutionType, adminAccount, timestamp: new Date().toISOString() }
-        });
-
-        return { 
-          status: 200, 
-          body: { 
-            success: true, 
-            college: {
-              id: collegeId,
-              name,
-              code,
-              status: 'active',
-              institution_type: institutionType || 'Paramedical',
-              contact_email: contactEmail,
-              admin_email: adminAccount?.email,
-              current_version: 'v1.0.0'
-            } 
-          } 
-        };
-      }
-
-      case 'platform_set_college_status': {
-        if (callerRole !== 'platform_super_admin') {
-          return { status: 403, body: { error: 'Forbidden: Platform Super Admin authorization required.', code: 'FORBIDDEN' } };
-        }
-        const { targetCollegeId, targetStatus } = body;
-        if (!targetCollegeId || !targetStatus) {
-          return { status: 400, body: { error: 'targetCollegeId and targetStatus are required.' } };
-        }
-
-        await supabaseAdmin.from('audit_logs').insert({
-          user_email: callerUser.email || 'superadmin@platform.adithyan.edu',
-          user_role: 'platform_super_admin',
-          action: `set_college_status_${targetStatus}`,
-          entity_type: 'college_status',
-          entity_id: targetCollegeId,
-          new_values: { targetStatus, timestamp: new Date().toISOString() }
-        });
-
-        return { status: 200, body: { success: true, targetCollegeId, status: targetStatus } };
-      }
-
-      case 'platform_save_college_config': {
-        if (callerRole !== 'platform_super_admin') {
-          return { status: 403, body: { error: 'Forbidden: Platform Super Admin authorization required.', code: 'FORBIDDEN' } };
-        }
-        const { targetCollegeId, configType, data } = body;
-        await supabaseAdmin.from('audit_logs').insert({
-          user_email: callerUser.email || 'superadmin@platform.adithyan.edu',
-          user_role: 'platform_super_admin',
-          action: 'save_college_config_draft',
-          entity_type: configType || 'config',
-          entity_id: targetCollegeId,
-          new_values: { data, timestamp: new Date().toISOString() }
-        });
-        return { status: 200, body: { success: true, targetCollegeId, configType } };
-      }
-
-      case 'platform_publish_college_config': {
-        if (callerRole !== 'platform_super_admin') {
-          return { status: 403, body: { error: 'Forbidden: Platform Super Admin authorization required.', code: 'FORBIDDEN' } };
-        }
-        const { targetCollegeId, releaseVersion, summary } = body;
-        const version = releaseVersion || `v1.${Date.now()}.0`;
-        await supabaseAdmin.from('audit_logs').insert({
-          user_email: callerUser.email || 'superadmin@platform.adithyan.edu',
-          user_role: 'platform_super_admin',
-          action: 'publish_college_configuration',
-          entity_type: 'configuration_release',
-          entity_id: targetCollegeId,
-          new_values: { version, summary, publishedAt: new Date().toISOString() }
-        });
-        return { status: 200, body: { success: true, targetCollegeId, version } };
-      }
-
-      case 'verify_tenant_isolation': {
-        // Validation endpoint used in security tests to verify cross-college isolation
-        const { targetCollegeId } = body;
-        if (callerRole === 'platform_super_admin') {
-          return { status: 200, body: { authorized: true, role: callerRole, accessScope: 'global' } };
-        }
-        const effectiveCallerCollege = callerCollegeId || '11111111-1111-1111-1111-111111111111';
-        if (targetCollegeId && targetCollegeId !== effectiveCallerCollege) {
-          return { 
-            status: 403, 
-            body: { 
-              authorized: false, 
-              error: 'Cross-college access rejected. Caller is isolated to their own college.',
-              code: 'CROSS_TENANT_VIOLATION' 
-            } 
-          };
-        }
-        return { status: 200, body: { authorized: true, collegeId: effectiveCallerCollege, accessScope: 'tenant_isolated' } };
       }
 
       default:

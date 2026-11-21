@@ -350,3 +350,9 @@ Still open (new ideas, not regressions): gateway adapters other than Razorpay; a
 | College name comes from Settings (`src/lib/institution.tsx`), not code | ✅ | Headers, receipts, hall tickets, payslips, login, reports; placeholder contact details removed from Settings. |
 | Hard-coded default temporary password removed | ✅ | Random one-time password per account (`src/lib/tempPassword.ts`). |
 | Non-working buttons: expenses filter/export, catalogue "Edit" | ✅ | Edit button removed (no edit flow existed); filter and CSV export now work. |
+
+## Multi-college code removed
+- Deleted the platform-admin area (`/platform-admin/*`, college provisioning/templates/audit), `multiCollegeService`, its types, the college-switching header and "create college" dialog, and 37 orphaned Control Center files (live customizer, old sections, central data hub) that nothing referenced.
+- `CollegeContext` is now single-institution: it reads the institution profile from Settings and the published ERP configuration; no tenant switching, no localStorage college list.
+- The Control Center's "College Configuration" tab (which called methods that no longer existed) now links to the real screens (Settings, Departments, Fees, Admissions, Integrations).
+- `platform_super_admin` removed from roles, route guards, the auth type and the dev admin backend. The type-check is now clean (0 errors).

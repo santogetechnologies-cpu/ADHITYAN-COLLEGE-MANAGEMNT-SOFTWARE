@@ -41,10 +41,6 @@ class PermissionEnforcementService {
   // Route & Page Level Enforcement
   checkRouteAccess(role: UserRole, pathname: string): RouteAuthorizationResult {
     // 1. Platform Super Admin and College Admin have baseline master access to their zones
-    if (role === 'platform_super_admin') {
-      return { allowed: true };
-    }
-
     if (!this.activeConfig) {
       // Fallback: If config hasn't loaded yet, allow standard navigation but require Auth
       return { allowed: true };
@@ -122,7 +118,7 @@ class PermissionEnforcementService {
     entity: string, 
     action: 'view' | 'create' | 'edit' | 'delete' | 'approve' | 'export' | 'import'
   ): CrudAuthorizationResult {
-    if (role === 'platform_super_admin' || role === 'admin') {
+    if (role === 'admin') {
       return { allowed: true };
     }
 

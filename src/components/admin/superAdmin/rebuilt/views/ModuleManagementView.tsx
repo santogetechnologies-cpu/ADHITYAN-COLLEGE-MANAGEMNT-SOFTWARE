@@ -52,7 +52,7 @@ export function ModuleManagementView({
     // Check if other active modules depend on this one
     if (newStatus === 'disabled') {
       const dependentModules = modules.filter(m => 
-        m.status === 'active' && m.dependencies && m.dependencies.includes(moduleId)
+        m.enabled && m.dependencies && m.dependencies.includes(moduleId)
       );
 
       if (dependentModules.length > 0) {
@@ -63,7 +63,7 @@ export function ModuleManagementView({
       }
     }
 
-    const updated = modules.map(m => m.id === moduleId ? { ...m, status: newStatus } : m);
+    const updated = modules.map(m => m.id === moduleId ? { ...m, enabled: newStatus === 'active' } : m);
     onUpdateModules(updated);
     toast.success(`Module "${mod.name}" is now ${newStatus === 'active' ? 'Enabled' : 'Disabled'}`);
   };
@@ -133,7 +133,7 @@ export function ModuleManagementView({
       {/* 2. Modules Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {filteredModules.map((mod) => {
-          const isEnabled = mod.status === 'active';
+          const isEnabled = mod.enabled;
           return (
             <div
               key={mod.id}
@@ -191,7 +191,7 @@ export function ModuleManagementView({
                 </Badge>
 
                 <span className="text-[11px] text-slate-400">
-                  {mod.defaultRoles?.length || 0} Default Roles
+                  {mod.assignedRoles?.length || 0} Roles
                 </span>
               </div>
             </div>
