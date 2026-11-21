@@ -45,6 +45,7 @@ import { exportToCSV, printDocument } from '@/lib/exportUtils';
 const esc = (v: unknown) => String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c] as string));
 import { TransportVehicle, TransportStop, StudentTransportLog, VehicleMaintenance } from '@/types/database.types';
 import { useToast } from '@/hooks/use-toast';
+import { campusOpsService } from '@/services/campusOpsService';
 import { StudentSearchSelect } from '@/components/shared/StudentSearchSelect';
 
 export default function TransportDriverDashboard() {
@@ -383,6 +384,18 @@ export default function TransportDriverDashboard() {
                 ))}
               </SelectContent>
             </Select>
+          )}
+          {selectedVehicle && (
+            <Button variant="outline" size="sm" onClick={async () => {
+              try {
+                const r = await campusOpsService.transportStartDay(selectedVehicle.id);
+                toast({ title: r.created ? `Today's list ready: ${r.created} rider(s) added` : 'Today\'s list is already up to date' });
+                loadTransportData();
+              } catch (e: any) { toast({ title: 'Could not start today\'s list', description: e.message, variant: 'destructive' }); }
+            }}>
+              <Users className="h-4 w-4 mr-2" />
+              Load today's riders
+            </Button>
           )}
           <Button variant="outline" size="sm" onClick={() => setQrScannerDialogOpen(true)}>
             <Scan className="h-4 w-4 mr-2" />

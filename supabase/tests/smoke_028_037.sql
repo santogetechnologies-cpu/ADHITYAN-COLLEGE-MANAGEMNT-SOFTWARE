@@ -1052,6 +1052,33 @@ SELECT pg_temp.chk('audit search finds hostel actions', (public.audit_log_search
 SELECT pg_temp.chk('audit search hides ip addresses', NOT ((public.audit_log_search('hostel')->'items'->0) ? 'ip_address'));
 RESET ROLE;
 
+-- ===== 075: transport assignments =====
+INSERT INTO auth.users(id,email) VALUES ('c0000000-0000-0000-0000-0000000000f1','f1.driver@example.test');
+INSERT INTO public.profiles(id,email,name,role) VALUES ('c0000000-0000-0000-0000-0000000000f1','f1.driver@example.test','F Driver','transport_driver');
+INSERT INTO public.transport_vehicles(id,vehicle_number,route_name,driver_name,driver_id,capacity) VALUES
+ ('c9c00000-0000-0000-0000-000000000001','TS-01','North','F Driver','c0000000-0000-0000-0000-0000000000f1',1),
+ ('c9c00000-0000-0000-0000-000000000002','TS-02','South','Other','c0000000-0000-0000-0000-0000000000f1',5);
+SET LOCAL ROLE authenticated;
+SELECT set_config('request.jwt.claim.sub','c0000000-0000-0000-0000-0000000000e3',true);
+SELECT pg_temp.chk('a student cannot allocate transport', (public.transport_assign('c0000000-0000-0000-0000-0000000000e3','c9c00000-0000-0000-0000-000000000001','Gate')->>'code')='FORBIDDEN');
+SELECT set_config('request.jwt.claim.sub','c0000000-0000-0000-0000-0000000000e1',true);
+SELECT pg_temp.chk('admin allots a rider', (public.transport_assign('c0000000-0000-0000-0000-0000000000e3','c9c00000-0000-0000-0000-000000000001','Gate')->>'success')='true');
+SELECT pg_temp.chk('a full bus refuses another rider', (public.transport_assign('c0000000-0000-0000-0000-0000000000e4','c9c00000-0000-0000-0000-000000000001','Gate')->>'code')='VEHICLE_FULL');
+SELECT pg_temp.chk('a stop is required', (public.transport_assign('c0000000-0000-0000-0000-0000000000e4','c9c00000-0000-0000-0000-000000000002','  ')->>'code')='STOP_REQUIRED');
+SELECT pg_temp.chk('reallocation moves the student', (public.transport_assign('c0000000-0000-0000-0000-0000000000e3','c9c00000-0000-0000-0000-000000000002','Market')->>'reassigned')='true');
+SELECT pg_temp.chk('overview counts riders per bus', (SELECT (v->>'riders')::int=1 AND jsonb_array_length(v->'roster')=1 FROM jsonb_array_elements(public.transport_overview()->'vehicles') v WHERE v->>'vehicle_number'='TS-02'));
+SELECT set_config('request.jwt.claim.sub','c0000000-0000-0000-0000-0000000000f1',true);
+SELECT pg_temp.chk('the driver starts the day roster', (public.transport_generate_day_logs('c9c00000-0000-0000-0000-000000000002')->>'created')='1');
+SELECT pg_temp.chk('starting twice creates nothing new', (public.transport_generate_day_logs('c9c00000-0000-0000-0000-000000000002')->>'created')='0');
+SELECT pg_temp.chk('a driver cannot allocate transport', (public.transport_assign('c0000000-0000-0000-0000-0000000000e4','c9c00000-0000-0000-0000-000000000002','Gate')->>'code')='FORBIDDEN');
+SELECT set_config('request.jwt.claim.sub','c0000000-0000-0000-0000-0000000000e3',true);
+SELECT pg_temp.chk('the rider can see their own bus', EXISTS (SELECT 1 FROM public.transport_vehicles WHERE vehicle_number='TS-02'));
+SELECT pg_temp.chk('...but not other buses', NOT EXISTS (SELECT 1 FROM public.transport_vehicles WHERE vehicle_number='TS-01'));
+SELECT set_config('request.jwt.claim.sub','c0000000-0000-0000-0000-0000000000e1',true);
+SELECT pg_temp.chk('admin ends transport', (public.transport_unassign('c0000000-0000-0000-0000-0000000000e3')->>'success')='true');
+SELECT pg_temp.chk('ending twice is reported', (public.transport_unassign('c0000000-0000-0000-0000-0000000000e3')->>'code')='NOT_FOUND');
+RESET ROLE;
+
 SELECT name, CASE WHEN ok THEN 'PASS' ELSE 'FAIL' END AS result FROM _r ORDER BY ok, name;
 DO $$ BEGIN
   IF EXISTS (SELECT 1 FROM _r WHERE NOT ok) THEN RAISE EXCEPTION 'SMOKE TEST FAILED'; END IF;

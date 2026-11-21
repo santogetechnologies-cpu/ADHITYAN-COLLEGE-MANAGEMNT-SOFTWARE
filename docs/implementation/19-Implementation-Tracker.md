@@ -331,4 +331,5 @@ Still open (new ideas, not regressions): gateway adapters other than Razorpay; a
 | Hostel room allotment, vacate, transfer, room admin | ✅ (074) | Warden desk → "Rooms & Allotment". `allocateHostelRoom` (client-side counter, now blocked by RLS) removed. |
 | Year-end promotion / graduation with undo | ✅ (074) | `/student-promotion` (admin, principal). Dues start unticked. |
 | Audit-log viewer with search, date filter, CSV | ✅ (074) | `/audit-log` (admin, principal). |
-| Still open from the scan | ⬜ | Transport route/stop admin & student allocation, student leave requests, announcements/events management, instalment reminders, global search, data export |
+| Transport fleet/stop admin, rider allocation, driver's daily list | ✅ (075) | `/admin/transport` → "Fleet & riders" tab for admin; driver gets "Load today's riders". |
+| Still open from the scan | ⬜ | Student leave requests, announcements/events management, instalment reminders, global search, data export |

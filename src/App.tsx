@@ -57,6 +57,8 @@ import ReceptionistDashboard from '@/components/dashboards/ReceptionistDashboard
 import StoreManagerDashboard from '@/components/dashboards/StoreManagerDashboard';
 import FinanceManagerDashboard from '@/components/dashboards/FinanceManagerDashboard';
 import TransportDriverDashboard from '@/components/dashboards/TransportDriverDashboard';
+import TransportAdminDesk from '@/components/transport/TransportAdminDesk';
+import { useAuth } from '@/context/AuthContext';
 import SuperAdminControlCenter from '@/components/admin/superAdmin/SuperAdminControlCenter';
 import AccountProvisioningWorkspace from '@/components/admin/accountProvisioning/AccountProvisioningWorkspace';
 import { CollegeProvider } from '@/context/CollegeContext';
@@ -70,6 +72,11 @@ import { ConfigurationTemplates } from '@/components/platformAdmin/Configuration
 import { PlatformAuditLogs } from '@/components/platformAdmin/PlatformAuditLogs';
 import { PlatformSettings } from '@/components/platformAdmin/PlatformSettings';
 
+
+function TransportRouteSwitch() {
+  const { user } = useAuth();
+  return user?.role === 'admin' || user?.role === 'principal' ? <TransportAdminDesk /> : <TransportDriverDashboard />;
+}
 
 const App = () => (
   <ErrorBoundary>
@@ -323,7 +330,7 @@ const App = () => (
                   <Route path="principal" element={<PrincipalDashboard />} />
                   <Route path="finance" element={<FinanceManagerDashboard />} />
                   <Route path="store" element={<StoreManagerDashboard />} />
-                  <Route path="transport" element={<TransportDriverDashboard />} />
+                  <Route path="transport" element={<TransportRouteSwitch />} />
                   <Route path="users" element={<ProtectedRoute allowedRoles={['admin']}><UserManagement /></ProtectedRoute>} />
                   <Route path="departments" element={<DepartmentManagement />} />
                   <Route path="teachers" element={<TeacherAssignments />} />
