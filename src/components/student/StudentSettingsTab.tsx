@@ -42,6 +42,7 @@ export function StudentSettingsTab({ onLogout }: { onLogout: () => void }) {
   const userPrefs = user?.preferences || {};
   const [emailAlerts, setEmailAlerts] = useState<boolean>(userPrefs.email_notifications ?? true);
   const [smsAlerts, setSmsAlerts] = useState<boolean>(userPrefs.sms_notifications ?? true);
+  const [waAlerts, setWaAlerts] = useState<boolean>(userPrefs.whatsapp_notifications ?? false);
   const [pushAlerts, setPushAlerts] = useState<boolean>(userPrefs.push_notifications ?? true);
   const [feeReminders, setFeeReminders] = useState<boolean>(userPrefs.fee_reminders ?? true);
   const [examUpdates, setExamUpdates] = useState<boolean>(userPrefs.exam_updates ?? true);
@@ -137,6 +138,7 @@ export function StudentSettingsTab({ onLogout }: { onLogout: () => void }) {
         ...(user?.preferences || {}),
         email_notifications: emailAlerts,
         sms_notifications: smsAlerts,
+        whatsapp_notifications: waAlerts,
         push_notifications: pushAlerts,
         fee_reminders: feeReminders,
         exam_updates: examUpdates,
@@ -371,6 +373,14 @@ export function StudentSettingsTab({ onLogout }: { onLogout: () => void }) {
                   <div className="text-[11px] text-slate-500">Only urgent alerts, sent to the phone number on your profile</div>
                 </div>
                 <Switch checked={smsAlerts} onCheckedChange={setSmsAlerts} />
+              </div>
+
+              <div className="flex items-center justify-between pt-2 border-t border-slate-100">
+                <div className="space-y-0.5">
+                  <div className="font-semibold text-slate-800">WhatsApp alerts</div>
+                  <div className="text-[11px] text-slate-500">Urgent alerts on WhatsApp, to the phone number on your profile. Off unless you switch it on.</div>
+                </div>
+                <Switch checked={waAlerts} onCheckedChange={setWaAlerts} />
               </div>
 
               {/* 2. Push Notifications */}

@@ -4,7 +4,7 @@
 // and the gateway refuses a second refund of the same payment, in which case finance fixes the ledger from the Online payments tab).
 import { json, preflight, readJson } from "../_shared/http.ts";
 import { authenticate, requireRole, audit } from "../_shared/auth.ts";
-import { gatewayConfig, refundGatewayPayment } from "../_shared/gateway.ts";
+import { loadGatewayConfig, refundGatewayPayment } from "../_shared/gateway.ts";
 
 Deno.serve(async (req) => {
   const pre = preflight(req); if (pre) return pre;
@@ -15,7 +15,7 @@ Deno.serve(async (req) => {
   const b = await readJson(req, 5_000);
   const orderId = String(b?.order_id ?? ""), reason = String(b?.reason ?? "").trim();
   if (!/^[0-9a-f-]{36}$/i.test(orderId) || reason.length < 5) return json(req, 400, { error: "order_id and a reason (5+ characters) are required.", code: "VALIDATION_ERROR" });
-  const cfg = gatewayConfig((k) => Deno.env.get(k));
+  const cfg = await loadGatewayConfig(admin, (k) => Deno.env.get(k));
   if (!cfg) return json(req, 503, { error: "Online payment is not configured.", code: "NOT_CONFIGURED" });
 
   const items = Array.isArray(b?.items) && b.items.length ? b.items : null;

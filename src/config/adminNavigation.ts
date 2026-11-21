@@ -136,6 +136,13 @@ export const ADMIN_HUBS: AdminNavHub[] = [
         roles: ['admin', 'principal'],
       },
       {
+        title: 'Integrations',
+        icon: Settings,
+        url: '/integrations',
+        description: 'Connect payment gateway, e-mail, SMS and WhatsApp',
+        roles: ['admin'],
+      },
+      {
         title: 'Year-End Promotion',
         icon: GraduationCap,
         url: '/student-promotion',

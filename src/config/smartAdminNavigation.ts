@@ -511,6 +511,18 @@ export const ALL_SMART_MODULES: SmartNavModule[] = [
     keywords: ['search','export','csv','download']
   },
   {
+    id: 'integrations',
+    title: 'Integrations',
+    shortTitle: 'Integrations',
+    url: '/integrations',
+    icon: FileText,
+    description: 'Connect payment gateway, e-mail, SMS and WhatsApp',
+    category: 'governance',
+    department: 'modules',
+    roles: ['admin'],
+    keywords: ['razorpay','payment','gateway','email','resend','sms','whatsapp','twilio','api key']
+  },
+  {
     id: 'student-promotion',
     title: 'Year-End Promotion & Graduation',
     shortTitle: 'Promotion',

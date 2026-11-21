@@ -33,7 +33,7 @@ export const ROLE_CONFIGS: Record<UserRole, RoleConfig> = {
     role: 'admin',
     label: 'Institutional Administrator',
     home: '/admin',
-    allowedRoutes: ['/student-lifecycle', '/announcements', '/student-leave', '/data-centre', '/admin', '/dashboard', '/exam-management', '/library-management', '/admission-management', '/alumni-management', '/medical-management', '/student-promotion', '/audit-log', '/certificate-generation', '/sports-management', '/disciplinary-management', '/store', '/report-concern', '/admin/account-provisioning', '/account-provisioning'],
+    allowedRoutes: ['/student-lifecycle', '/integrations', '/announcements', '/student-leave', '/data-centre', '/admin', '/dashboard', '/exam-management', '/library-management', '/admission-management', '/alumni-management', '/medical-management', '/student-promotion', '/audit-log', '/certificate-generation', '/sports-management', '/disciplinary-management', '/store', '/report-concern', '/admin/account-provisioning', '/account-provisioning'],
     navItems: [
       { label: 'Admin Overview', path: '/admin' },
       { label: 'User Directory', path: '/admin/users' },

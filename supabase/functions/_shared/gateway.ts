@@ -30,10 +30,23 @@ export async function verifyWebhookSignature(rawBody: string, signature: string,
   return safeEqual(await hmacHex(webhookSecret, rawBody), signature.toLowerCase());
 }
 
-export interface GatewayConfig { keyId: string; keySecret: string }
+import type { SupabaseClient } from "npm:@supabase/supabase-js@2";
+import { loadIntegration } from "./integrations.ts";
+
+export interface GatewayConfig { keyId: string; keySecret: string; webhookSecret?: string }
 export function gatewayConfig(env: (k: string) => string | undefined): GatewayConfig | null {
   const keyId = env("RAZORPAY_KEY_ID"); const keySecret = env("RAZORPAY_KEY_SECRET");
   return keyId && keySecret ? { keyId, keySecret } : null;
+}
+
+/** Settings saved in the app (encrypted) win; environment secrets are the fallback. */
+export async function loadGatewayConfig(admin: SupabaseClient, env: (k: string) => string | undefined): Promise<GatewayConfig | null> {
+  const l = await loadIntegration(admin, "payments", env);
+  if (l?.provider === "razorpay" && l.publicConfig.key_id && l.secrets.key_secret) {
+    return { keyId: l.publicConfig.key_id, keySecret: l.secrets.key_secret, webhookSecret: l.secrets.webhook_secret };
+  }
+  const e = gatewayConfig(env);
+  return e ? { ...e, webhookSecret: env("RAZORPAY_WEBHOOK_SECRET") } : null;
 }
 
 const basic = (c: GatewayConfig) => "Basic " + btoa(`${c.keyId}:${c.keySecret}`);

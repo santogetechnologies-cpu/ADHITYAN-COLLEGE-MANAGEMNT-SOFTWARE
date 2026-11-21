@@ -106,7 +106,7 @@ export function PaymentSettings() {
   const review = orders.filter((o) => o.status === 'Review');
   return (
     <div className="space-y-4">
-      <Card><CardHeader><CardTitle className="text-base">Payment rules</CardTitle><CardDescription>Online payment needs the gateway keys set as Edge Function secrets (see the deployment runbook) before it can be switched on.</CardDescription></CardHeader>
+      <Card><CardHeader><CardTitle className="text-base">Payment rules</CardTitle><CardDescription>Online payment needs the gateway keys saved under Integrations (admin) before it can be switched on.</CardDescription></CardHeader>
         <CardContent className="space-y-3">
           <label className="flex items-center justify-between gap-4 text-sm"><span><b>Accept online payments</b><br /><span className="text-xs text-muted-foreground">Students and parents can pay fees by card, UPI or net banking; receipts are issued automatically.</span></span><Switch checked={online} onCheckedChange={(v) => save(v, examRule)} /></label>
           <label className="flex items-center justify-between gap-4 text-sm"><span><b>Fee clearance for examinations</b><br /><span className="text-xs text-muted-foreground">Students with overdue fees are withheld from hall tickets and cannot register for examinations until cleared.</span></span><Switch checked={examRule} onCheckedChange={(v) => save(online, v)} /></label>

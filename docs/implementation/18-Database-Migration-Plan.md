@@ -66,6 +66,7 @@ back-fills of NULLs and a de-duplication of `super_admin_releases` rows with the
 | 076_lifecycle_leave_announcements_reminders_search.sql | **New:** student discontinue/reinstate/transfer with history (releases hostel bed and bus seat, keeps dues, profile↔student status mirrored), student leave requests with class-teacher decisions + notifications, announcements that notify by audience, fee-due reminders (student + parents, de-duplicated), staff global search, audited CSV export datasets | 028, 057, 074, 075 |
 | 077_outbox_channels_scheduled_reminders.sql | **New:** e-mail/SMS outbox fed by a trigger on `notifications` (e-mail medium/high, SMS high; per-person opt-out via `profiles.preferences`), worker RPCs (service role only), automatic daily fee reminders (`fee_reminders_auto`, pg_cron job `erp-fee-reminders` created if the extension exists), notification settings RPC | 057, 076 |
 | 078_announcements_by_class.sql | **New:** announcements can target a class and/or department (students, parents, class teachers); recipients counted; broadcast visibility policy honours the target | 076 |
+| 079_integrations_whatsapp.sql | **New:** `integration_settings` (encrypted provider keys; no client role can read the table; `integration_overview` for admin/principal shows provider, non-secret fields and which secrets are filled), WhatsApp outbox channel (opt-in per person) and switch, status/settings RPCs extended | 066, 077 |
 | 036_reconcile_legacy_columns.sql | `timetables.session_type`, `exam_schedules.day_of_week`, `student_attendance.*`, reception columns | 029 |
 
 **Behaviour changes to expect after 032:** buckets `documents`, `attachments`, `student_documents`, `staff_documents`
@@ -157,3 +158,12 @@ See `docs/audit/01-Executive-Audit.md` ("High / medium") and `19-Implementation-
 4. Schedule the function every 5 minutes (Dashboard → Edge Functions → the function → Schedule, or any cron) with header `x-dispatch-secret`.
 5. Automatic reminders: turn on pg_cron (Dashboard → Database → Extensions) and re-run the last block of 077, **or** schedule one daily call to the same function with body `{"task":"reminders"}`. Then enable "Automatic fee reminders" under Announcements → Delivery channels.
 6. Switch e-mail/SMS on in the same panel. Staff and students can opt out in their own settings.
+
+
+## Provider keys from the UI — setup (079)
+One-time server setup, then everything else is done in the app (Admin → Integrations):
+1. Apply migration 079.
+2. Deploy: `supabase functions deploy integrations-admin` and redeploy `payments-create-order`, `payments-verify`, `payments-refund`, `notifications-dispatch`, and `payments-webhook --no-verify-jwt` (they now read the keys saved in the app first, then the old environment secrets).
+3. Set **one** secret: `supabase secrets set INTEGRATION_ENC_KEY=<24+ random characters>`. It encrypts the keys entered in the app (AES-GCM). Keep it safe: if it is lost or changed, the saved keys must be entered again.
+4. In the app: Integrations → connect Razorpay (add the webhook URL shown there to the Razorpay dashboard), an e-mail provider (Resend, SendGrid or Brevo), SMS (Twilio) and/or WhatsApp (Twilio or the WhatsApp Cloud API), press the test button for each, then switch the channels on under Announcements → Delivery channels.
+5. Notes: WhatsApp is opt-in per person (their own settings). WhatsApp business-initiated messages normally need an approved template: with the Cloud API enter its name in the template field; with Twilio use an approved sender/template per Twilio's rules. The old environment secrets (RESEND_API_KEY, TWILIO_*, RAZORPAY_*) keep working as a fallback.

@@ -1208,6 +1208,25 @@ SELECT pg_temp.chk('...but the students-only department notice is not theirs', N
 RESET ROLE;
 SELECT pg_temp.chk('notifications went only to the class', EXISTS (SELECT 1 FROM public.notifications WHERE title='Room change' AND user_id='c0000000-0000-0000-0000-ff0000000001') AND NOT EXISTS (SELECT 1 FROM public.notifications WHERE title='Room change' AND user_id='c0000000-0000-0000-0000-ff0000000002'));
 
+-- ===== 079: integrations, whatsapp =====
+SELECT set_config('request.jwt.claim.sub','',true);
+INSERT INTO public.integration_settings(kind,provider,enabled,public_config,secret_ciphertext,secret_keys) VALUES ('email','resend',true,'{"from":"a@b.co"}'::jsonb,'CIPHERTEXT',ARRAY['api_key']);
+UPDATE public.profiles SET preferences='{"whatsapp_notifications": true}'::jsonb WHERE id='c0000000-0000-0000-0000-ee0000000001';
+UPDATE public.institutional_settings SET whatsapp_alerts_enabled=true, sms_alerts_enabled=true;
+INSERT INTO public.notifications(user_id,title,message,type,priority) VALUES ('c0000000-0000-0000-0000-ee0000000001','WA test','body','warning','high'),('c0000000-0000-0000-0000-ee0000000002','WA test','body','warning','high');
+SELECT pg_temp.chk('WhatsApp is queued for the person who opted in', EXISTS (SELECT 1 FROM public.notification_outbox WHERE channel='whatsapp' AND user_id='c0000000-0000-0000-0000-ee0000000001' AND subject='WA test'));
+SELECT pg_temp.chk('WhatsApp is never queued without opt-in', NOT EXISTS (SELECT 1 FROM public.notification_outbox WHERE channel='whatsapp' AND user_id='c0000000-0000-0000-0000-ee0000000002'));
+SELECT pg_temp.chk('the worker can claim whatsapp rows', (SELECT count(*) FROM public.outbox_claim(10, ARRAY['whatsapp']))>=1);
+SET LOCAL ROLE authenticated;
+SELECT set_config('request.jwt.claim.sub','c0000000-0000-0000-0000-ee0000000001',true);
+SELECT pg_temp.chk('a student cannot read integration settings table', (SELECT count(*) FROM (SELECT 1 FROM information_schema.role_table_grants WHERE table_name='integration_settings' AND grantee='authenticated') g)=0);
+SELECT pg_temp.chk('a student gets nothing from the overview', (public.integration_overview()->>'allowed')='false');
+SELECT set_config('request.jwt.claim.sub','c0000000-0000-0000-0000-0000000000e1',true);
+SELECT pg_temp.chk('admin sees providers and filled secret names, never ciphertext', (SELECT (public.integration_overview()->'items'->0->'secret_keys') ? 'api_key' AND NOT (public.integration_overview()::text LIKE '%CIPHERTEXT%')));
+SELECT pg_temp.chk('admin saves whatsapp setting', (public.notification_settings_set(true,true,false,7,true)->>'success')='true');
+SELECT pg_temp.chk('status reports whatsapp and provider state', (public.notification_channel_status()->'settings'->>'whatsapp')='true' AND (public.notification_channel_status()->'providers'->'email'->>'provider')='resend');
+RESET ROLE;
+
 SELECT name, CASE WHEN ok THEN 'PASS' ELSE 'FAIL' END AS result FROM _r ORDER BY ok, name;
 DO $$ BEGIN
   IF EXISTS (SELECT 1 FROM _r WHERE NOT ok) THEN RAISE EXCEPTION 'SMOKE TEST FAILED'; END IF;

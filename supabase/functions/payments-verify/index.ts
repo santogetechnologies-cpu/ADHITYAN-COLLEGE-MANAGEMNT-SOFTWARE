@@ -2,7 +2,7 @@
 // Verifies the checkout signature AND re-reads the payment from the gateway before settling. Idempotent with the webhook.
 import { json, preflight, readJson } from "../_shared/http.ts";
 import { authenticate } from "../_shared/auth.ts";
-import { fetchGatewayPayment, gatewayConfig, verifyCheckoutSignature } from "../_shared/gateway.ts";
+import { fetchGatewayPayment, loadGatewayConfig, verifyCheckoutSignature } from "../_shared/gateway.ts";
 
 Deno.serve(async (req) => {
   const pre = preflight(req); if (pre) return pre;
@@ -11,7 +11,7 @@ Deno.serve(async (req) => {
   const { caller, admin } = auth;
   const b = await readJson(req, 5_000);
   const orderId = String(b?.razorpay_order_id ?? ""), paymentId = String(b?.razorpay_payment_id ?? ""), signature = String(b?.razorpay_signature ?? "");
-  const cfg = gatewayConfig((k) => Deno.env.get(k));
+  const cfg = await loadGatewayConfig(admin, (k) => Deno.env.get(k));
   if (!cfg) return json(req, 503, { error: "Online payment is not configured.", code: "NOT_CONFIGURED" });
   if (!(await verifyCheckoutSignature(orderId, paymentId, signature, cfg.keySecret))) return json(req, 400, { error: "Payment signature is invalid.", code: "BAD_SIGNATURE" });
 

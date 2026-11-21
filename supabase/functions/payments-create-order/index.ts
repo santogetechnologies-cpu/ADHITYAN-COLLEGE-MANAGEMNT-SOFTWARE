@@ -2,7 +2,7 @@
 // Authenticated student/parent. The server prices and validates everything; the gateway order is created for exactly that amount.
 import { json, preflight, readJson } from "../_shared/http.ts";
 import { authenticate, rateLimit } from "../_shared/auth.ts";
-import { createGatewayOrder, gatewayConfig } from "../_shared/gateway.ts";
+import { createGatewayOrder, loadGatewayConfig } from "../_shared/gateway.ts";
 
 Deno.serve(async (req) => {
   const pre = preflight(req); if (pre) return pre;
@@ -14,7 +14,7 @@ Deno.serve(async (req) => {
   const storeOrder = body?.store_order_id ? String(body.store_order_id) : null;
   if (!body || (!storeOrder && !Array.isArray(body.items))) return json(req, 400, { error: "items (fees) or store_order_id is required.", code: "VALIDATION_ERROR" });
   if (storeOrder && !/^[0-9a-f-]{36}$/i.test(storeOrder)) return json(req, 400, { error: "Invalid store_order_id.", code: "VALIDATION_ERROR" });
-  const cfg = gatewayConfig((k) => Deno.env.get(k));
+  const cfg = await loadGatewayConfig(admin, (k) => Deno.env.get(k));
   if (!cfg) return json(req, 503, { error: "Online payment is not configured.", code: "NOT_CONFIGURED" });
   if (!(await rateLimit(admin, `pay:create:${caller.id}`, 10, 300))) return json(req, 429, { error: "Too many attempts. Wait a few minutes.", code: "RATE_LIMITED" });
 

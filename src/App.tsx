@@ -51,6 +51,7 @@ import StudentPromotion from '@/pages/StudentPromotion';
 import StudentLifecycle from '@/pages/StudentLifecycle';
 import StudentLeaveDesk from '@/pages/StudentLeaveDesk';
 import Announcements from '@/pages/Announcements';
+import Integrations from '@/pages/Integrations';
 import DataCentre from '@/pages/DataCentre';
 import AuditLogViewer from '@/pages/AuditLogViewer';
 import MedicalManagement from '@/pages/MedicalManagement';
@@ -277,6 +278,14 @@ const App = () => (
                   element={
                     <ProtectedRoute allowedRoles={['admin', 'principal', 'hod', 'teacher', 'finance_manager', 'financier', 'accountant', 'hr_manager', 'receptionist']}>
                       <DataCentre />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/integrations"
+                  element={
+                    <ProtectedRoute allowedRoles={['admin']}>
+                      <Integrations />
                     </ProtectedRoute>
                   }
                 />
