@@ -13,7 +13,8 @@
     "preview": "vite preview",
     "e2e": "node e2e/run.cjs",
     "test:edge": "bash scripts/test-edge-gate.sh",
-    "e2e:sweep": "node e2e/sweep.cjs && node e2e/sweep.cjs --keep --broken"
+    "e2e:sweep": "node e2e/sweep.cjs && node e2e/sweep.cjs --keep --broken",
+    "test:db": "bash supabase/tests/run_all.sh"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",

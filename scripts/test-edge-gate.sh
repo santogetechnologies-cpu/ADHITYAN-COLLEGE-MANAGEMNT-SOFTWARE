@@ -24,4 +24,4 @@ npx tsc -p tsconfig.cjs.json
 cp "$ROOT/supabase/tests/admin_api_gate.test.cjs" . && node admin_api_gate.test.cjs ./out/_shared/admin_backend.js
 cp "$ROOT/supabase/tests/gateway_signature.test.cjs" . && node gateway_signature.test.cjs ./out/_shared/gateway.js
 cp "$ROOT/supabase/tests/channels.test.cjs" . && node channels.test.cjs ./out/_shared
-node "$ROOT/scripts/check-provisioning-flag.cjs"
+(cd "$ROOT" && node scripts/check-provisioning-flag.cjs)
