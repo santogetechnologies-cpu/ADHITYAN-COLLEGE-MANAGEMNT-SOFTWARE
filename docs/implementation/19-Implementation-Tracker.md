@@ -332,4 +332,9 @@ Still open (new ideas, not regressions): gateway adapters other than Razorpay; a
 | Year-end promotion / graduation with undo | ✅ (074) | `/student-promotion` (admin, principal). Dues start unticked. |
 | Audit-log viewer with search, date filter, CSV | ✅ (074) | `/audit-log` (admin, principal). |
 | Transport fleet/stop admin, rider allocation, driver's daily list | ✅ (075) | `/admin/transport` → "Fleet & riders" tab for admin; driver gets "Load today's riders". |
-| Still open from the scan | ⬜ | Student leave requests, announcements/events management, instalment reminders, global search, data export |
+| Student discontinuation, reinstatement, department/class transfer | ✅ (076) | `/student-lifecycle`; dues stay on record, bed and seat released. |
+| Student leave requests (apply, cancel, decide, notify) | ✅ (076) | Student: Attendance tab. Staff: `/student-leave`. |
+| Announcements that notify by audience | ✅ (076) | `/announcements`. |
+| Fee-due reminders to students and parents | ✅ (076) | Finance → Payment settings → "Send due-fee reminders now". Not scheduled automatically. |
+| Global search and CSV export (audited) | ✅ (076) | `/data-centre`. |
+| Still open | ⬜ | Scheduled (automatic) reminders, SMS/email channels, parent view of child leave

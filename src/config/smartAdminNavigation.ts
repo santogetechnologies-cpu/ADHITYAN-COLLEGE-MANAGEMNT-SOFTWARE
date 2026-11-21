@@ -463,6 +463,54 @@ export const ALL_SMART_MODULES: SmartNavModule[] = [
     keywords: ['discipline', 'grievance', 'anti ragging', 'inquiry', 'concern']
   },
   {
+    id: 'student-lifecycle',
+    title: 'Discontinuation & Transfers',
+    shortTitle: 'Lifecycle',
+    url: '/student-lifecycle',
+    icon: UserPlus,
+    description: 'Record a student leaving, returning or moving class',
+    category: 'governance',
+    department: 'modules',
+    roles: ['admin','principal'],
+    keywords: ['discontinue','withdraw','transfer','dropout','tc','reinstate']
+  },
+  {
+    id: 'student-leave',
+    title: 'Student Leave Requests',
+    shortTitle: 'Student Leave',
+    url: '/student-leave',
+    icon: Calendar,
+    description: 'Approve or reject student leave',
+    category: 'governance',
+    department: 'modules',
+    roles: ['admin','principal','hod','teacher'],
+    keywords: ['leave','absence','permission']
+  },
+  {
+    id: 'announcements',
+    title: 'Announcements',
+    shortTitle: 'Announcements',
+    url: '/announcements',
+    icon: FileText,
+    description: 'Publish notices that notify students, parents and staff',
+    category: 'governance',
+    department: 'modules',
+    roles: ['admin','principal'],
+    keywords: ['notice','circular','broadcast','announce']
+  },
+  {
+    id: 'data-centre',
+    title: 'Search & Export',
+    shortTitle: 'Search & Export',
+    url: '/data-centre',
+    icon: FileText,
+    description: 'Find anyone, download lists as CSV',
+    category: 'governance',
+    department: 'modules',
+    roles: ['admin','principal'],
+    keywords: ['search','export','csv','download']
+  },
+  {
     id: 'student-promotion',
     title: 'Year-End Promotion & Graduation',
     shortTitle: 'Promotion',

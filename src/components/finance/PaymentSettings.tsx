@@ -10,6 +10,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Loader2 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useToast } from '@/hooks/use-toast';
+import { campusOpsService } from '@/services/campusOpsService';
 
 const sb: any = supabase;
 const isoDay = (d: Date) => d.toISOString().slice(0, 10);
@@ -109,6 +110,8 @@ export function PaymentSettings() {
           <label className="flex items-center justify-between gap-4 text-sm"><span><b>Accept online payments</b><br /><span className="text-xs text-muted-foreground">Students and parents can pay fees by card, UPI or net banking; receipts are issued automatically.</span></span><Switch checked={online} onCheckedChange={(v) => save(v, examRule)} /></label>
           <label className="flex items-center justify-between gap-4 text-sm"><span><b>Fee clearance for examinations</b><br /><span className="text-xs text-muted-foreground">Students with overdue fees are withheld from hall tickets and cannot register for examinations until cleared.</span></span><Switch checked={examRule} onCheckedChange={(v) => save(online, v)} /></label>
         </CardContent></Card>
+      <Card><CardHeader><CardTitle className="text-base">Fee reminders</CardTitle><CardDescription>Sends an in-app reminder to students and their parents for fees due within a week or already overdue. Nobody is reminded twice within a few days.</CardDescription></CardHeader>
+        <CardContent><Button variant="outline" onClick={async () => { try { const r = await campusOpsService.sendFeeReminders(7); toast({ title: r.sent ? `${r.sent} reminder(s) sent` : 'No new reminders needed', description: r.skipped ? `${r.skipped} skipped — reminded recently.` : undefined }); } catch (e: any) { toast({ title: 'Could not send reminders', description: e.message, variant: 'destructive' }); } }}>Send due-fee reminders now</Button></CardContent></Card>
       {review.length > 0 && <Card className="border-amber-300 bg-amber-50"><CardContent className="p-4 text-sm text-amber-900"><b>{review.length} payment(s) need review.</b> Money was received but could not be applied to the fee (for example the fee was already cleared or the amount differed). Refund or re-apply them manually with the gateway reference.</CardContent></Card>}
       <Card><CardHeader><CardTitle className="text-base">Recent online payments</CardTitle></CardHeader>
         <CardContent><Table><TableHeader><TableRow><TableHead>Date</TableHead><TableHead className="text-right">Amount</TableHead><TableHead>Status</TableHead><TableHead>Gateway reference</TableHead><TableHead>Note</TableHead><TableHead /></TableRow></TableHeader><TableBody>

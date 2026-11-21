@@ -1079,6 +1079,65 @@ SELECT pg_temp.chk('admin ends transport', (public.transport_unassign('c0000000-
 SELECT pg_temp.chk('ending twice is reported', (public.transport_unassign('c0000000-0000-0000-0000-0000000000e3')->>'code')='NOT_FOUND');
 RESET ROLE;
 
+-- ===== 076: lifecycle, student leave, announcements, reminders, search, export =====
+INSERT INTO auth.users(id,email) VALUES
+ ('c0000000-0000-0000-0000-dd0000000001','a1.stu@example.test'),('c0000000-0000-0000-0000-dd0000000002','a2.stu@example.test'),
+ ('c0000000-0000-0000-0000-dd0000000004','a4.parent@example.test'),('c0000000-0000-0000-0000-dd0000000005','a5.teacher@example.test'),('c0000000-0000-0000-0000-dd0000000006','a6.fin@example.test');
+INSERT INTO public.profiles(id,email,name,role,class_name,department) VALUES
+ ('c0000000-0000-0000-0000-dd0000000001','a1.stu@example.test','Life Stu1','student','LC1','Dept1'),('c0000000-0000-0000-0000-dd0000000002','a2.stu@example.test','Life Stu2','student','LC1','Dept1'),
+ ('c0000000-0000-0000-0000-dd0000000004','a4.parent@example.test','Life Parent','parent',NULL,NULL),('c0000000-0000-0000-0000-dd0000000005','a5.teacher@example.test','Life Teacher','teacher',NULL,NULL),
+ ('c0000000-0000-0000-0000-dd0000000006','a6.fin@example.test','Life Fin','finance_manager',NULL,NULL);
+INSERT INTO public.parent_student_links(parent_id,student_id) VALUES ('c0000000-0000-0000-0000-dd0000000004','c0000000-0000-0000-0000-dd0000000001');
+INSERT INTO public.student_fees(student_id,student_name,class_name,total_due,due_date,status,description) VALUES ('c0000000-0000-0000-0000-dd0000000001','Life Stu1','LC1',500,CURRENT_DATE-2,'overdue','Term fee');
+INSERT INTO public.timetables(teacher_id,class_name,day_of_week,start_time,end_time,subject,teacher_name,room) VALUES ('c0000000-0000-0000-0000-dd0000000005','LC1','Monday','09:00','10:00','Math','Life Teacher','R1');
+CREATE TEMP TABLE _lc AS SELECT id, user_id FROM public.students WHERE user_id IN ('c0000000-0000-0000-0000-dd0000000001','c0000000-0000-0000-0000-dd0000000002');
+GRANT SELECT ON _lc TO authenticated;
+SET LOCAL ROLE authenticated;
+SELECT set_config('request.jwt.claim.sub','c0000000-0000-0000-0000-dd0000000001',true);
+SELECT pg_temp.chk('a student cannot discontinue anyone', (public.student_discontinue((SELECT id FROM _lc WHERE user_id='c0000000-0000-0000-0000-dd0000000002'),'Dropout','nope nope')->>'code')='FORBIDDEN');
+SELECT pg_temp.chk('student applies for leave', (public.student_leave_apply('Medical',CURRENT_DATE+1,CURRENT_DATE+3,'Fever and rest advised')->>'success')='true');
+SELECT pg_temp.chk('overlapping leave is refused', (public.student_leave_apply('Personal',CURRENT_DATE+2,CURRENT_DATE+4,'Family function here')->>'code')='OVERLAP');
+SELECT pg_temp.chk('backwards dates are refused', (public.student_leave_apply('Personal',CURRENT_DATE+9,CURRENT_DATE+8,'Family function here')->>'code')='INVALID_DATES');
+SELECT pg_temp.chk('the parent sees the leave', true);
+SELECT set_config('request.jwt.claim.sub','c0000000-0000-0000-0000-dd0000000004',true);
+SELECT pg_temp.chk('the parent can read the child leave', (SELECT count(*) FROM public.student_leave_requests)=1);
+SELECT pg_temp.chk('a parent cannot decide leave', (public.student_leave_decide((SELECT id FROM public.student_leave_requests LIMIT 1),'Approve')->>'code')='FORBIDDEN');
+SELECT set_config('request.jwt.claim.sub','c0000000-0000-0000-0000-dd0000000002',true);
+SELECT pg_temp.chk('another student cannot read it', (SELECT count(*) FROM public.student_leave_requests)=0);
+SELECT set_config('request.jwt.claim.sub','c0000000-0000-0000-0000-dd0000000005',true);
+CREATE TEMP TABLE _lv AS SELECT id FROM public.student_leave_requests LIMIT 1;
+GRANT SELECT ON _lv TO authenticated;
+SELECT pg_temp.chk('the class teacher rejects without a reason: refused', (public.student_leave_decide((SELECT id FROM _lv),'Reject')->>'code')='REASON_REQUIRED');
+SELECT pg_temp.chk('the class teacher approves', (public.student_leave_decide((SELECT id FROM _lv),'Approve','ok')->>'success')='true');
+SELECT pg_temp.chk('deciding twice is refused', (public.student_leave_decide((SELECT id FROM _lv),'Reject','late')->>'code')='ALREADY_DECIDED');
+SELECT set_config('request.jwt.claim.sub','c0000000-0000-0000-0000-dd0000000006',true);
+SELECT pg_temp.chk('finance sends fee reminders', (public.fee_send_reminders(7)->>'sent')::int>=1);
+SELECT pg_temp.chk('sending again the same day sends nothing new', (public.fee_send_reminders(7)->>'sent')='0');
+SELECT pg_temp.chk('finance cannot discontinue students', (public.student_discontinue((SELECT id FROM _lc LIMIT 1),'Dropout','nope nope')->>'code')='FORBIDDEN');
+SELECT pg_temp.chk('finance can export fees but not students', (public.export_dataset('fees')->>'success')='true' AND (public.export_dataset('students')->>'code')='FORBIDDEN');
+SELECT set_config('request.jwt.claim.sub','c0000000-0000-0000-0000-0000000000e1',true);
+SELECT pg_temp.chk('admin allots hostel and bus first', (public.hostel_allot('c0000000-0000-0000-0000-dd0000000001','c9b00000-0000-0000-0000-000000000002')->>'success')='true' AND (public.transport_assign('c0000000-0000-0000-0000-dd0000000001','c9c00000-0000-0000-0000-000000000002','Gate')->>'success')='true');
+SELECT pg_temp.chk('dues block discontinuation unless confirmed', (public.student_discontinue((SELECT id FROM _lc WHERE user_id='c0000000-0000-0000-0000-dd0000000001'),'Withdrawn','Moving abroad')->>'code')='DUES_PENDING');
+SELECT pg_temp.chk('a reason is required', (public.student_discontinue((SELECT id FROM _lc WHERE user_id='c0000000-0000-0000-0000-dd0000000001'),'Withdrawn','x',CURRENT_DATE,true)->>'code')='REASON_REQUIRED');
+SELECT pg_temp.chk('confirmed discontinuation succeeds and reports dues left', (SELECT (r->>'success')='true' AND (r->>'dues_left')::numeric=500 AND (r->>'released_hostel')='true' FROM (SELECT public.student_discontinue((SELECT id FROM _lc WHERE user_id='c0000000-0000-0000-0000-dd0000000001'),'Withdrawn','Moving abroad',CURRENT_DATE,true) r) q));
+SELECT pg_temp.chk('status is withdrawn and login profile inactive', (SELECT status='withdrawn' FROM public.students WHERE user_id='c0000000-0000-0000-0000-dd0000000001') AND (SELECT status='inactive' FROM public.profiles WHERE id='c0000000-0000-0000-0000-dd0000000001'));
+SELECT pg_temp.chk('hostel bed and bus seat released', NOT EXISTS (SELECT 1 FROM public.hostel_allotments WHERE student_id='c0000000-0000-0000-0000-dd0000000001' AND status='Active') AND NOT EXISTS (SELECT 1 FROM public.transport_assignments WHERE student_id='c0000000-0000-0000-0000-dd0000000001' AND status='Active'));
+SELECT pg_temp.chk('discontinuing twice is refused', (public.student_discontinue((SELECT id FROM _lc WHERE user_id='c0000000-0000-0000-0000-dd0000000001'),'Withdrawn','Moving abroad',CURRENT_DATE,true)->>'code')='BAD_STATE');
+SELECT pg_temp.chk('a discontinued student cannot be transferred', (public.student_transfer((SELECT id FROM _lc WHERE user_id='c0000000-0000-0000-0000-dd0000000001'),'D2','C2','new section')->>'code')='BAD_STATE');
+SELECT pg_temp.chk('reinstating restores the student', (public.student_reinstate((SELECT id FROM _lc WHERE user_id='c0000000-0000-0000-0000-dd0000000001'),'Returned after review')->>'success')='true');
+SELECT pg_temp.chk('transfer to the same place is refused', (public.student_transfer((SELECT id FROM _lc WHERE user_id='c0000000-0000-0000-0000-dd0000000002'),'Dept1','LC1','same')->>'code')='NO_CHANGE');
+SELECT pg_temp.chk('transfer moves class and department', (public.student_transfer((SELECT id FROM _lc WHERE user_id='c0000000-0000-0000-0000-dd0000000002'),'Dept2','LC2','Section change',3)->>'success')='true');
+SELECT pg_temp.chk('both records follow', (SELECT class_name='LC2' AND department='Dept2' AND current_semester=3 FROM public.students WHERE user_id='c0000000-0000-0000-0000-dd0000000002') AND (SELECT class_name='LC2' FROM public.profiles WHERE id='c0000000-0000-0000-0000-dd0000000002'));
+SELECT pg_temp.chk('history lists the events', (SELECT jsonb_array_length(public.student_lifecycle_history()->'items'))=3);
+SELECT pg_temp.chk('search finds the student', (SELECT jsonb_array_length(public.global_search('Life Stu')->'students'))=2);
+SELECT pg_temp.chk('short searches return nothing', (SELECT jsonb_array_length(public.global_search('L')->'students'))=0);
+SELECT pg_temp.chk('announcement publishes and notifies students', (public.announcement_publish('Holiday','College closed on Friday','Holiday','High','Students')->>'success')='true');
+SELECT pg_temp.chk('students-only audience excludes parents', (SELECT count(*) FROM public.notifications WHERE title='Holiday' AND user_id='c0000000-0000-0000-0000-dd0000000004')=0) ;
+RESET ROLE;
+SELECT pg_temp.chk('the student really got the notice', EXISTS (SELECT 1 FROM public.notifications WHERE title='Holiday' AND user_id='c0000000-0000-0000-0000-dd0000000002'));
+SELECT pg_temp.chk('the parent was reminded about the fee too', EXISTS (SELECT 1 FROM public.notifications WHERE title='Fee overdue' AND user_id='c0000000-0000-0000-0000-dd0000000004'));
+SELECT pg_temp.chk('the student was told about leave approval', EXISTS (SELECT 1 FROM public.notifications WHERE title='Leave approved' AND user_id='c0000000-0000-0000-0000-dd0000000001'));
+
 SELECT name, CASE WHEN ok THEN 'PASS' ELSE 'FAIL' END AS result FROM _r ORDER BY ok, name;
 DO $$ BEGIN
   IF EXISTS (SELECT 1 FROM _r WHERE NOT ok) THEN RAISE EXCEPTION 'SMOKE TEST FAILED'; END IF;

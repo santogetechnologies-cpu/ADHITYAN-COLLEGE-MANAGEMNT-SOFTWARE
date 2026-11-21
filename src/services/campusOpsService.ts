@@ -21,6 +21,10 @@ export interface PromotionBatch { batch_id: string; action: 'promote' | 'graduat
 export interface TransportStopView { id: string; name: string; time: string; order: number; riders: number }
 export interface TransportRider { student_id: string; name: string; class_name: string | null; stop: string }
 export interface TransportVehicleView { id: string; vehicle_number: string; route_name: string; driver_name: string; driver_phone: string | null; driver_id: string | null; capacity: number; status: string; riders: number; stops: TransportStopView[]; roster: TransportRider[] }
+export interface LifecycleEvent { id: string; student_id: string; name: string; code: string; event: 'discontinued' | 'reinstated' | 'transferred'; type: string | null; reason: string; effective: string; from_class: string | null; to_class: string | null; from_department: string | null; to_department: string | null; dues: number; at: string }
+export interface StudentHit { id: string; name: string; student_id: string; class_name: string | null; department: string | null; status: string }
+export interface StaffHit { id: string; name: string; role: string; department: string | null; email: string }
+export interface LeaveRow { id: string; student_id: string; leave_type: string; from_date: string; to_date: string; reason: string; status: string; decision_note: string | null; created_at: string; student?: { name: string; class_name: string | null } | null }
 export interface AuditRow { id: string; user_email: string; user_role: string | null; action: string; entity_type: string | null; entity_id: string | null; old_values: any; new_values: any; created_at: string }
 
 export const campusOpsService = {
@@ -52,6 +56,46 @@ export const campusOpsService = {
     const { error } = await sb.from('transport_stops').delete().eq('id', id);
     if (error) throw new Error(error.message);
   },
+
+  lifecycleHistory: async (student?: string): Promise<LifecycleEvent[]> => (await rpc('student_lifecycle_history', { p_student: student ?? null })).items ?? [],
+  discontinue: async (student: string, type: string, reason: string, effective: string, force: boolean) => {
+    const res = await rpc('student_discontinue', { p_student: student, p_type: type, p_reason: reason, p_effective: effective || null, p_force: force });
+    if (res?.code === 'DUES_PENDING') { const e: any = new Error(res.error); e.code = 'DUES_PENDING'; e.dues = res.dues; throw e; }
+    return ok(res);
+  },
+  reinstate: async (student: string, reason: string) => ok(await rpc('student_reinstate', { p_student: student, p_reason: reason })),
+  transfer: async (student: string, department: string, className: string, reason: string, semester?: number | null) =>
+    ok(await rpc('student_transfer', { p_student: student, p_department: department || null, p_class: className || null, p_reason: reason, p_semester: semester ?? null })),
+
+  leaveApply: async (type: string, from: string, to: string, reason: string) => ok(await rpc('student_leave_apply', { p_type: type, p_from: from, p_to: to, p_reason: reason })),
+  leaveCancel: async (id: string) => ok(await rpc('student_leave_cancel', { p_id: id })),
+  leaveDecide: async (id: string, decision: 'Approve' | 'Reject', note?: string) => ok(await rpc('student_leave_decide', { p_id: id, p_decision: decision, p_note: note ?? null })),
+  async leaveList(): Promise<LeaveRow[]> {
+    const { data, error } = await sb.from('student_leave_requests').select('*').order('created_at', { ascending: false }).limit(200);
+    if (error) throw new Error(error.message);
+    const rows: LeaveRow[] = data || [];
+    const ids = [...new Set(rows.map(r => r.student_id))];
+    if (ids.length) {
+      const { data: ps } = await sb.from('profiles').select('id,name,class_name').in('id', ids);
+      const m = new Map((ps || []).map((p: any) => [p.id, p]));
+      rows.forEach(r => { r.student = (m.get(r.student_id) as any) ?? null; });
+    }
+    return rows;
+  },
+
+  announce: async (a: { title: string; message: string; category: string; priority: string; audience: string }) =>
+    ok(await rpc('announcement_publish', { p_title: a.title, p_message: a.message, p_category: a.category, p_priority: a.priority, p_audience: a.audience })),
+  async announcements(): Promise<any[]> {
+    const { data, error } = await sb.from('institutional_broadcasts').select('*').order('published_at', { ascending: false }).limit(50);
+    if (error) throw new Error(error.message);
+    return data || [];
+  },
+  sendFeeReminders: async (daysAhead = 7): Promise<{ sent: number; skipped: number }> => ok(await rpc('fee_send_reminders', { p_days_ahead: daysAhead })),
+  globalSearch: async (q: string): Promise<{ students: StudentHit[]; staff: StaffHit[] }> => {
+    const r = await rpc('global_search', { p_query: q });
+    return { students: r?.students ?? [], staff: r?.staff ?? [] };
+  },
+  exportDataset: async (name: string): Promise<Record<string, any>[]> => ok(await rpc('export_dataset', { p_name: name })).rows ?? [],
 
   promotionPreview: async (f: { department?: string; className?: string; semester?: number | null }): Promise<PromotionCandidate[]> =>
     (await rpc('promotion_preview', { p_department: f.department || null, p_class: f.className || null, p_semester: f.semester ?? null })).items ?? [],

@@ -47,6 +47,10 @@ import LibraryManagement from '@/pages/LibraryManagement';
 import AdmissionManagement from '@/pages/AdmissionManagement';
 import AlumniManagement from '@/pages/AlumniManagement';
 import StudentPromotion from '@/pages/StudentPromotion';
+import StudentLifecycle from '@/pages/StudentLifecycle';
+import StudentLeaveDesk from '@/pages/StudentLeaveDesk';
+import Announcements from '@/pages/Announcements';
+import DataCentre from '@/pages/DataCentre';
 import AuditLogViewer from '@/pages/AuditLogViewer';
 import MedicalManagement from '@/pages/MedicalManagement';
 import CertificateGeneration from '@/pages/CertificateGeneration';
@@ -239,6 +243,38 @@ const App = () => (
                   element={
                     <ProtectedRoute allowedRoles={['admin', 'principal', 'receptionist']}>
                       <AdmissionManagement />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/student-lifecycle"
+                  element={
+                    <ProtectedRoute allowedRoles={['admin', 'principal']}>
+                      <StudentLifecycle />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/student-leave"
+                  element={
+                    <ProtectedRoute allowedRoles={['admin', 'principal', 'hod', 'teacher']}>
+                      <StudentLeaveDesk />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/announcements"
+                  element={
+                    <ProtectedRoute allowedRoles={['admin', 'principal']}>
+                      <Announcements />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/data-centre"
+                  element={
+                    <ProtectedRoute allowedRoles={['admin', 'principal', 'hod', 'teacher', 'finance_manager', 'financier', 'accountant', 'hr_manager', 'receptionist']}>
+                      <DataCentre />
                     </ProtectedRoute>
                   }
                 />
