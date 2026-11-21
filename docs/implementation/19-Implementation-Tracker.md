@@ -356,3 +356,9 @@ Still open (new ideas, not regressions): gateway adapters other than Razorpay; a
 - `CollegeContext` is now single-institution: it reads the institution profile from Settings and the published ERP configuration; no tenant switching, no localStorage college list.
 - The Control Center's "College Configuration" tab (which called methods that no longer existed) now links to the real screens (Settings, Departments, Fees, Admissions, Integrations).
 - `platform_super_admin` removed from roles, route guards, the auth type and the dev admin backend. The type-check is now clean (0 errors).
+
+## Automated browser tests (`npm run e2e`)
+Builds the real app against a fake backend (dead Supabase URL; every request is answered by the test) and drives it in Chromium. 16 checks: signed-out redirect, not-found page, role guard, integrations screen (secrets leave the browser only in the save request and are never shown again), in-app dialogs instead of browser pop-ups, institution name from Settings, no leftover hard-coded name, phone-width layout. Add scenarios to `e2e/run.cjs`. Needs Playwright with Chromium installed (`npm i -D playwright && npx playwright install chromium` elsewhere). Database behaviour is covered by `supabase/tests/smoke_028_037.sql` (520 checks) and the edge-function gate (`npm run test:edge`).
+
+## Provider integrations from the UI (079)
+Payments (Razorpay), e-mail (Resend / SendGrid / Brevo), SMS (Twilio) and WhatsApp (Twilio / Meta Cloud API) are configured under Admin → Integrations, keys encrypted server-side, with a test button per provider. **Not yet exercised against the real providers** — use the test buttons after saving real keys.

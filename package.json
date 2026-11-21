@@ -10,7 +10,9 @@
     "lint": "eslint .",
     "types:supabase": "supabase gen types typescript --project-id ogbbyqxulhegwvrtinib > src/types/database.ts",
     "seed": "tsx scripts/seed.ts",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "e2e": "node e2e/run.cjs",
+    "test:edge": "bash scripts/test-edge-gate.sh"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",

@@ -46,18 +46,18 @@ function Panel({ kind, catalog, item, onChanged }: { kind: string; catalog: Cata
       </CardHeader>
       <CardContent className="space-y-4">
         {catalog.providers.length > 1 && (
-          <div><Label>Provider</Label>
-            <select className="w-full border rounded-md h-10 px-3 text-sm bg-white" value={provider} onChange={e => setProvider(e.target.value)}>
+          <div><Label htmlFor={`${kind}-provider`}>Provider</Label>
+            <select id={`${kind}-provider`} className="w-full border rounded-md h-10 px-3 text-sm bg-white" value={provider} onChange={e => setProvider(e.target.value)}>
               {catalog.providers.map(p => <option key={p.id} value={p.id}>{p.label}</option>)}</select></div>)}
         {def.docs && <a className="text-xs text-blue-700 inline-flex items-center gap-1" href={def.docs} target="_blank" rel="noreferrer noopener">Where do I find these? <ExternalLink className="w-3 h-3" /></a>}
         <div className="grid gap-3 sm:grid-cols-2">
           {def.publicFields.map(f => (
-            <div key={f.key}><Label>{f.label}{f.required ? ' *' : ''}</Label>
-              <Input type={f.type === 'email' ? 'email' : 'text'} value={pub[f.key] ?? ''} onChange={e => setPub({ ...pub, [f.key]: e.target.value })} autoComplete="off" />
+            <div key={f.key}><Label htmlFor={`${kind}-${f.key}`}>{f.label}{f.required ? ' *' : ''}</Label>
+              <Input id={`${kind}-${f.key}`} type={f.type === 'email' ? 'email' : 'text'} value={pub[f.key] ?? ''} onChange={e => setPub({ ...pub, [f.key]: e.target.value })} autoComplete="off" />
               {f.help && <p className="text-xs text-muted-foreground mt-1">{f.help}</p>}</div>))}
           {def.secretFields.map(f => (
-            <div key={f.key}><Label>{f.label}{f.required ? ' *' : ''}</Label>
-              <Input type="password" value={sec[f.key] ?? ''} onChange={e => setSec({ ...sec, [f.key]: e.target.value })} autoComplete="new-password" placeholder={saved(f.key) ? '•••••••• saved — leave blank to keep' : ''} />
+            <div key={f.key}><Label htmlFor={`${kind}-${f.key}`}>{f.label}{f.required ? ' *' : ''}</Label>
+              <Input id={`${kind}-${f.key}`} type="password" value={sec[f.key] ?? ''} onChange={e => setSec({ ...sec, [f.key]: e.target.value })} autoComplete="new-password" placeholder={saved(f.key) ? '•••••••• saved — leave blank to keep' : ''} />
               {f.help && <p className="text-xs text-muted-foreground mt-1">{f.help}</p>}</div>))}
         </div>
         {kind === 'payments' && (

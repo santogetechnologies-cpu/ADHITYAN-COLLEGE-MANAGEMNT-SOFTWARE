@@ -276,7 +276,7 @@ export function RoleSelection({ onSelectRole }: RoleSelectionProps) {
         <div className="container mx-auto text-center relative z-10 max-w-4xl">
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 text-xs font-medium mb-4 backdrop-blur border border-white/20">
             <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-            <span>Role-Based Access Control • All 13 Institutional Portals Live</span>
+            <span>Role-Based Access Control • Every role has its own secure portal</span>
           </div>
 
           <h1 className="text-3xl md:text-5xl font-extrabold mb-4 tracking-tight leading-tight">
