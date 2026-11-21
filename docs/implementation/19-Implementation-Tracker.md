@@ -362,3 +362,14 @@ Builds the real app against a fake backend (dead Supabase URL; every request is 
 
 ## Provider integrations from the UI (079)
 Payments (Razorpay), e-mail (Resend / SendGrid / Brevo), SMS (Twilio) and WhatsApp (Twilio / Meta Cloud API) are configured under Admin → Integrations, keys encrypted server-side, with a test button per provider. **Not yet exercised against the real providers** — use the test buttons after saving real keys.
+
+## Fresh database set + super-admin bootstrap (replaces migrations 001-079)
+| Item | Status | Notes |
+|---|---|---|
+| All old migrations/archives removed; 35 generated migrations from the verified schema | ✅ | Equivalence checked: schema diff against the old chain is empty apart from intended changes; 526 smoke checks pass on the new set. |
+| Paste-ready runbook for an IDE AI: wipe, apply one by one, verify, functions | ✅ | `SUPABASE_FRESH_SETUP_FOR_IDE.md`. Wipe and apply scripts were exercised on a scratch database (wipe -> rebuild -> 526 checks). **Not yet run against your real project.** |
+| Direct Supabase account => Super Admin; app creates everyone else | ✅ | Trigger + `erp_provisioned` marker on all 23 server createUser calls (checked by script). Needs public sign-up OFF. |
+| Realtime publication now includes the 18 tables screens listen to but were never published | ✅ | |
+| Storage rule bug (teacher could not open student files) fixed; anonymous visitors lose all table privileges except 3 public tables | ✅ | |
+| No demo data in the new schema; optional sample structure kept separate | ✅ | `supabase/optional_seed/`. |
+| `admin-users` (retired stub) removed; 11 edge functions remain; `supabase/config.toml` added | ✅ | |

@@ -1,25 +1,27 @@
-import { useEffect } from 'react';
+import { useEffect, lazy, Suspense } from 'react';
+import { PageLoader } from '@/components/PageLoader';
 import { useNavigate, useParams, useSearchParams, useLocation } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
 import { Navigation } from '@/components/Navigation';
-import { StudentDashboard } from '@/components/dashboards/StudentDashboard';
-import { ParentDashboard } from '@/components/dashboards/ParentDashboard';
-import { TeacherDashboard } from '@/components/dashboards/TeacherDashboard';
-import { AdminDashboard } from '@/components/dashboards/AdminDashboard';
-import PrincipalDashboard from '@/components/dashboards/PrincipalDashboard';
-import ReceptionistDashboard from '@/components/dashboards/ReceptionistDashboard';
-import StoreManagerDashboard from '@/components/dashboards/StoreManagerDashboard';
-import FinanceManagerDashboard from '@/components/dashboards/FinanceManagerDashboard';
-import TransportDriverDashboard from '@/components/dashboards/TransportDriverDashboard';
-import HRManagerDashboard from '@/components/dashboards/HRManagerDashboard';
-import LibrarianDashboard from '@/components/dashboards/LibrarianDashboard';
-import HostelWardenDashboard from '@/components/dashboards/HostelWardenDashboard';
-import PlacementOfficerDashboard from '@/components/dashboards/PlacementOfficerDashboard';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { AlertTriangle, LogOut, ArrowLeft } from 'lucide-react';
 import { ROLE_CONFIGS } from '@/config/roles';
-import { DynamicRoleDashboard } from '@/components/dashboards/DynamicRoleDashboard';
+
+const StudentDashboard = lazy(() => import('@/components/dashboards/StudentDashboard').then(m => ({ default: m.StudentDashboard })));
+const ParentDashboard = lazy(() => import('@/components/dashboards/ParentDashboard').then(m => ({ default: m.ParentDashboard })));
+const TeacherDashboard = lazy(() => import('@/components/dashboards/TeacherDashboard').then(m => ({ default: m.TeacherDashboard })));
+const AdminDashboard = lazy(() => import('@/components/dashboards/AdminDashboard').then(m => ({ default: m.AdminDashboard })));
+const PrincipalDashboard = lazy(() => import('@/components/dashboards/PrincipalDashboard'));
+const ReceptionistDashboard = lazy(() => import('@/components/dashboards/ReceptionistDashboard'));
+const StoreManagerDashboard = lazy(() => import('@/components/dashboards/StoreManagerDashboard'));
+const FinanceManagerDashboard = lazy(() => import('@/components/dashboards/FinanceManagerDashboard'));
+const TransportDriverDashboard = lazy(() => import('@/components/dashboards/TransportDriverDashboard'));
+const HRManagerDashboard = lazy(() => import('@/components/dashboards/HRManagerDashboard'));
+const LibrarianDashboard = lazy(() => import('@/components/dashboards/LibrarianDashboard'));
+const HostelWardenDashboard = lazy(() => import('@/components/dashboards/HostelWardenDashboard'));
+const PlacementOfficerDashboard = lazy(() => import('@/components/dashboards/PlacementOfficerDashboard'));
+const DynamicRoleDashboard = lazy(() => import('@/components/dashboards/DynamicRoleDashboard').then(m => ({ default: m.DynamicRoleDashboard })));
 
 function RoleErrorDashboard({ role, onLogout }: { role: string; onLogout: () => void }) {
   const navigate = useNavigate();
@@ -53,7 +55,7 @@ function RoleErrorDashboard({ role, onLogout }: { role: string; onLogout: () => 
   );
 }
 
-const Dashboard = () => {
+const DashboardInner = () => {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
@@ -211,5 +213,11 @@ const Dashboard = () => {
     </div>
   );
 };
+
+const Dashboard = () => (
+  <Suspense fallback={<PageLoader label="Opening your dashboard…" />}>
+    <DashboardInner />
+  </Suspense>
+);
 
 export default Dashboard;

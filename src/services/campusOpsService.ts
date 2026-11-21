@@ -29,14 +29,14 @@ export interface ChannelStatus { allowed: boolean; settings: { email: boolean; s
 export interface AuditRow { id: string; user_email: string; user_role: string | null; action: string; entity_type: string | null; entity_id: string | null; old_values: any; new_values: any; created_at: string }
 
 export const campusOpsService = {
-  hostelOccupancy: async (): Promise<HostelRoomView[]> => (await rpc('hostel_occupancy')).rooms ?? [],
+  hostelOccupancy: async (): Promise<HostelRoomView[]> => (await rpc('hostel_occupancy'))?.rooms ?? [],
   hostelSaveRoom: async (r: { id?: string | null; block: string; floor: number; room: string; capacity: number; type: string; fee: number; status?: string }) =>
     ok(await rpc('hostel_room_save', { p_id: r.id ?? null, p_block: r.block, p_floor: r.floor, p_room: r.room, p_capacity: r.capacity, p_type: r.type, p_fee: r.fee, p_status: r.status ?? 'Available' })),
   hostelAllot: async (student: string, room: string, remarks?: string) => ok(await rpc('hostel_allot', { p_student: student, p_room: room, p_remarks: remarks ?? null })),
   hostelVacate: async (allotment: string) => ok(await rpc('hostel_vacate', { p_allotment: allotment })),
   hostelTransfer: async (student: string, room: string) => ok(await rpc('hostel_transfer', { p_student: student, p_room: room })),
 
-  transportOverview: async (): Promise<TransportVehicleView[]> => (await rpc('transport_overview')).vehicles ?? [],
+  transportOverview: async (): Promise<TransportVehicleView[]> => (await rpc('transport_overview'))?.vehicles ?? [],
   transportAssign: async (student: string, vehicle: string, stop: string) => ok(await rpc('transport_assign', { p_student: student, p_vehicle: vehicle, p_stop: stop })),
   transportUnassign: async (student: string) => ok(await rpc('transport_unassign', { p_student: student })),
   transportStartDay: async (vehicle: string) => ok(await rpc('transport_generate_day_logs', { p_vehicle: vehicle })),
@@ -58,7 +58,7 @@ export const campusOpsService = {
     if (error) throw new Error(error.message);
   },
 
-  lifecycleHistory: async (student?: string): Promise<LifecycleEvent[]> => (await rpc('student_lifecycle_history', { p_student: student ?? null })).items ?? [],
+  lifecycleHistory: async (student?: string): Promise<LifecycleEvent[]> => (await rpc('student_lifecycle_history', { p_student: student ?? null }))?.items ?? [],
   discontinue: async (student: string, type: string, reason: string, effective: string, force: boolean) => {
     const res = await rpc('student_discontinue', { p_student: student, p_type: type, p_reason: reason, p_effective: effective || null, p_force: force });
     if (res?.code === 'DUES_PENDING') { const e: any = new Error(res.error); e.code = 'DUES_PENDING'; e.dues = res.dues; throw e; }
@@ -110,12 +110,14 @@ export const campusOpsService = {
   },
 
   promotionPreview: async (f: { department?: string; className?: string; semester?: number | null }): Promise<PromotionCandidate[]> =>
-    (await rpc('promotion_preview', { p_department: f.department || null, p_class: f.className || null, p_semester: f.semester ?? null })).items ?? [],
+    (await rpc('promotion_preview', { p_department: f.department || null, p_class: f.className || null, p_semester: f.semester ?? null }))?.items ?? [],
   promote: async (ids: string[], action: 'promote' | 'graduate', maxSemester: number, academicYear?: string) =>
     ok(await rpc('students_promote', { p_student_ids: ids, p_action: action, p_max_semester: maxSemester, p_academic_year: academicYear || null })),
   promotionUndo: async (batch: string) => ok(await rpc('students_promotion_undo', { p_batch: batch })),
-  promotionHistory: async (): Promise<PromotionBatch[]> => (await rpc('promotion_history')).items ?? [],
+  promotionHistory: async (): Promise<PromotionBatch[]> => (await rpc('promotion_history'))?.items ?? [],
 
-  auditSearch: async (f: { query?: string; entity?: string; from?: string; to?: string; limit?: number; offset?: number }): Promise<{ total: number; items: AuditRow[] }> =>
-    rpc('audit_log_search', { p_query: f.query || null, p_entity: f.entity || null, p_from: f.from || null, p_to: f.to || null, p_limit: f.limit ?? 100, p_offset: f.offset ?? 0 }),
+  auditSearch: async (f: { query?: string; entity?: string; from?: string; to?: string; limit?: number; offset?: number }): Promise<{ total: number; items: AuditRow[] }> => {
+    const r: any = await rpc('audit_log_search', { p_query: f.query || null, p_entity: f.entity || null, p_from: f.from || null, p_to: f.to || null, p_limit: f.limit ?? 100, p_offset: f.offset ?? 0 });
+    return { total: Number(r?.total ?? 0), items: Array.isArray(r?.items) ? r.items : [] };
+  },
 };

@@ -1,169 +1,24 @@
-# Deployment runbook — migrations 028–037 + edge functions
+# Database & edge-function deployment
 
-Everything below is done **by you** on a staging project first (this repo never touches your Supabase). Nothing here is
-destructive: every migration is additive/idempotent and wrapped in a transaction; the only data statements are
-back-fills of NULLs and a de-duplication of `super_admin_releases` rows with the same version (keeps the earliest).
+**Superseded.** The old chain of 79 incremental migrations (and the archived ones) was removed. The database is now rebuilt from a
+fresh, generated set of 35 migrations in `supabase/migrations/`, applied one by one onto an EMPTY Supabase project.
 
-## 0. Before anything
-1. Take a backup / note the PITR point (Dashboard → Database → Backups).
-2. Run on **staging** (a restored copy of production if possible). Stage scripts contain pre-flight checks that
-   `RAISE EXCEPTION` on bad data (NULL roles; duplicate attendance keys; unknown role values) — read the message,
-   fix the data, re-run. They are safe to re-run.
-3. `supabase migration list` must show 001–015 applied and **no** 016–027. If the remote history lists any of 016–027,
-   do not push; run `supabase migration repair --status reverted <version>` for each, or tell me and I will adapt.
-   (016–027 + `all_migrations.sql` were moved to `supabase/migrations_archive/` so `db push` cannot run them.)
+**Everything an operator (or an AI IDE) needs is in one paste-ready file at the repository root:**
+[`SUPABASE_FRESH_SETUP_FOR_IDE.md`](../../SUPABASE_FRESH_SETUP_FOR_IDE.md)
 
-## 1. Migrations (apply in order; `supabase db push`)
-| File | What it does | Depends on |
-|------|--------------|-----------|
-| 028_reconcile_missing_core_objects.sql | `institutional_settings`, `students` (+ID generator, sync triggers, immutable id), `student_mood_checkins`, `fee_payments`; corrected RPCs `issue_library_book`, `return_library_book`, `checkout_store_order`, `decrement_book_copies`, `resolve_login_id`, `get_first_login_status` | 001–015 |
-| 029_phase1_columns.sql | profile `status/login_id/student_id`, timetable/exam/reception columns, safe defaults (hostel passes start Pending) | 028 |
-| 030_phase1_constraints.sql | 20-role whitelist, login-id uniqueness, attendance unique key, leave-balance checks | 029 |
-| 031_phase1_triggers_and_functions.sql | profile-column protection (no self role change), attendance window, leave state machine, search_path lockdown | 030 |
-| 032_phase1_rls_and_storage.sql | unbundled per-operation RLS on ERP tables, private storage buckets | 031 |
-| 033_phase1_configs_and_audit.sql | `super_admin_configs/releases`, append-only `audit_logs` (no UPDATE/DELETE/TRUNCATE) | 032 |
-| 034_auth_rate_limits.sql | `auth_rate_limits`, `check_rate_limit()` (service_role only) | — |
-| 035_record_fee_payment.sql | transactional, idempotent `record_fee_payment()` + receipts (service_role only) | 028 |
-| 037_admissions_lifecycle.sql | **closes RLS on `admission_document_verifications` / `admission_merit_lists`** (were open to the public key), typed application columns + backfill from the JSON workaround (originals kept), wider status set, `admission_set_status()` (validated transitions + audit), `admission_enroll()` (transactional, idempotent student record), student↔profile adoption | 028, 036 |
-| 038_admission_deposit.sql | `record_admission_deposit()`: admission deposit + receipt + ledger row in one transaction, idempotent | 037 |
-| 039_admission_tests_and_merit.sql | entrance tests per applicant (`admission_schedule_tests`, `admission_record_test_result`), server-side merit ranking (`admission_publish_merit`: qualifying × w% + entrance × (100−w)%, seats, tie-break by submission date then id) and `admission_apply_merit` (Approved/Waitlisted through `admission_set_status`) | 038 |
-| 040_fee_engine.sql | configurable fee engine: `fee_heads`, `fee_plans` + frozen-when-published `fee_plan_items` (one_time / per_semester / per_year), `fee_runs`, `fee_adjustments`; `fee_generate` (preview/execute, idempotent per student+item+term), `fee_adjust`, `fee_cancel_run`, `fee_plan_clone`; fees attach to the student record (login optional); quota/admission type on applications+students; `record_fee_payment` reworked for it | 039 |
-| 041_student_fee_code.sql | `student_fees.student_code` filled by trigger (the finance table showed a fake `AIP-VERIFIED` id) | 040 |
-| 042_admission_configuration.sql | configurable admissions: routes (entrance / merit / direct / lateral…), quotas, seat matrix, form fields, required documents; `admission_validate_fields`; `admission_set_status` enforces route + required documents; merit ranking and apply take a quota and default seats from the matrix | 041 |
-| 043_library_renew.sql | `renew_library_book` (the Renew button only showed a toast); **RLS fix: librarian could not see issued books or manage the catalog** (policies named admin/principal/teacher only) | 042 |
-| 044_shared_app_settings.sql | shared, versioned settings: `app_settings` (live, readable by all signed-in users), append-only `app_setting_versions` (release log), `app_setting_drafts`; admin-only `app_settings_draft_merge/save`, `app_settings_publish`, `app_settings_rollback`. **Fixes:** Control Center config lived in each browser's localStorage and was read back from admin-only `audit_logs` (other roles got defaults, so disabled modules stayed open to them) | 043 |
-| 045_exam_core.sql | **SECURITY: legacy permissive policies let students/parents read UNPUBLISHED marks and let any teacher edit any result — dropped**; teachers enter marks only for their classes while unpublished; one result per exam+student+subject; `exam_save_marks` (all-or-nothing, server grading), `exam_publish_results` (publish / withdraw with reason), `exam_analytics`; students see an exam once its timetable/hall tickets/results are published | 044 |
-| 046_hall_tickets.sql | Hall tickets from real attendance and (optional) fee clearance: `exam_generate_hall_tickets`, audited `exam_release_hall_ticket`, `exam_set_hall_tickets_visible`, public `exam_verify_hall_ticket`; removed fabricated defaults (hall B-302, seat 14-B, attendance 88, signature); students see tickets only after publishing; `record_fee_payment`/`record_admission_deposit` search_path includes `extensions` | 045 |
-| 047_alumni.sql | **SECURITY: alumni directory (e-mail/phone of former students) was readable by every signed-in user — now admin/principal/placement/HOD only**; donations get validated amount/status; new `alumni_mentorships` table with staff-only RLS | 046 |
-| 048_certificates.sql | **SECURITY/INTEGRITY: certificates were created from the browser (typed name, made-up number) and showed as created even when saving failed.** Now `certificate_issue`, `certificate_request` (student), `certificate_decide` (reject needs a reason), public `certificate_verify`; server-generated number + hash; no direct writes; audited | 047 |
-| 049_medical.sql | **PRIVACY: teachers could read every student's health record — now owner/admin/principal only**; infirmary log limited to admin/principal/hostel warden; new `medical_emergency_contacts` and `wellness_alerts` tables; unique student ID per health record | 048 |
-| 050_naac.sql | **PRIVACY: NAAC evidence readable by every signed-in user (students, parents) and deletable by teachers — now staff-only, delete by coordinator/principal/admin**; new `naac_metrics`; progress % computed by trigger (no hand-typed %); evidence files go to a new PRIVATE bucket `naac-evidence` (signed links) instead of only saving the file name | 049 |
-| 051_discipline.sql | **PRIVACY/INTEGRITY: every teacher could read all disciplinary incidents and resolve any of them** — now reporters see only their own; principal/admin decide through audited `discipline_update` (a resolution needs the action taken); no direct update/delete | 050 |
-| 052_hostel_outpass_integrity.sql | **INTEGRITY: students/parents could set `parent_otp_verified` on their own out-pass**; trigger enforces who may set consent/gate fields, valid status flow Pending→Approved→Exited→Returned (Rejected), gate times stamped by the server; return time must be after departure | 032 |
-| 053_payroll.sql | **CRITICAL PRIVACY: `staff_service_records` allowed every signed-in user to read AND edit all staff PAN/bank/salary** — now own record or HR/finance/principal/admin; HR/admin only can write. Payroll computed on the server (`payroll_run_create`) from service records + approved leave-without-pay, rules in `payroll_settings` (EPF %, ceiling, ESI, PT — **must be set by the institution before the first run**), Draft → Approved (not by the preparer) → Disbursed (bank reference required), cancel with reason; direct writes revoked; invented pay/bank defaults removed | 028 |
-| 054_transport_access.sql | **PRIVACY/INTEGRITY: any driver could edit every vehicle, stop, rider log and maintenance record; every signed-in user could read all vehicles (driver phone, live location)** — drivers act only on their own bus (and may only report location/status/seats), riders/parents see only their own bus, seats cannot exceed capacity | 001 |
-| 055_placement.sql | Students apply only through `placement_apply` (deadline, drive open, department and minimum-CGPA checks, one application per drive); applicants cannot edit CGPA/round/outcome (only withdraw); drive statuses validated; drives hidden from non-college roles. CGPA is self-declared until grade points are computed from results | 032 |
-| 056_store_orders.sql | **INTEGRITY: store orders trusted the browser's prices/total/status** (student could insert a 'Delivered' order for ₹0; stock changed from the browser); managers' status changes never saved (no UPDATE policy). Now only `checkout_store_order` (server prices + row locks) creates orders, `store_order_set_status` moves them (Pending→Processing→Delivered/Cancelled; cancel restocks; student may cancel own pending); old `place_store_order` revoked | 028 |
-| 057_notifications.sql | **Every cross-user alert was silently rejected by RLS** (users could only write notifications for themselves) — warden→student, store→admin, transport→riders, receptionist→admins etc. never arrived. Now `notify_users` / `notify_roles` (staff only, size-limited, validated type/priority); students/parents can only notify themselves | 001 |
-| 058_assignments.sql | **INTEGRITY: a student could submit work already 'graded' with any score; any teacher could edit/grade any other teacher's assignments** — submissions forced to submitted/late with no score; teachers manage and grade only their own (`assignment_grade`, 0–100); one submission per student; graded work locked | 001 |
-| 059_password_change_ack.sql | Lets a user clear their own "must change password" flag after choosing a new password (admin password resets now set the flag; the app blocks until the user changes it) | 028 |
-| 060_open_policies.sql | **PRIVACY/INTEGRITY: `attendance_shortage_warnings` and `scholarships_master` were `ALL USING (true)`** — any signed-in user could read/rewrite warnings and edit scholarship schemes; now student/parent/staff scoped (parent may only acknowledge) and admin/principal/finance for schemes. Also revokes TRUNCATE/REFERENCES/TRIGGER (not governed by RLS) from `anon`/`authenticated` on all public tables | 001 |
-| 061_hr_staff_directory.sql | HR can list non-student/non-parent profiles (the HR dashboard and leave manager saw nothing before) | 053 |
-| 062_leave_decisions.sql | Staff leave decisions only through `staff_leave_decide`: HOD/principal/HR/admin, never your own leave, rejection needs a reason, over-quota approvals refused (the existing balance-ledger trigger does the deduction); leave days must fit the dates; balances can no longer be edited directly | 053 |
-| 063_scholarship_decisions.sql | **INTEGRITY: the principal's screen edited `student_fees.total_due` of the student's FIRST fee row directly from the browser** (no adjustment record, wrong fee when several) and students could edit their own sanctioned amount — decisions now go through `scholarship_decide`, which applies the concession with `fee_adjust` (audited, waived amount tracked, never above the balance) | 040 |
-| 064_grading_gpa.sql | **New:** configurable grade scale (bands → grade/grade points; edited by COE/principal/admin, audited), credits per paper, `student_gpa` (SGPA per examination + CGPA over published results, latest attempt per subject, arrears), `exam_gpa_report`; `exam_grade` now reads the scale. Placement applications use the computed CGPA (ignoring a typed one) when the student has published results; self-declared otherwise and flagged | 045, 055 |
-| 065_exam_registration_seating.sql | **New:** optional exam registration (open/close, deadline, class registration, fee clearance), exam rooms with capacity, seating generated per session (classes interleaved, capacity checked, previous plan kept on refusal), invigilator assignment without double-booking, seating visible to students only after hall tickets are published; hall tickets honour registration and carry hall/seat; fee-dues check also finds fees attached to the student record | 046 |
-| 066_online_payments.sql | **New:** online fee payments — `payment_orders`/items/events, service-role-only `payment_order_create/attach/settle/fail` (server prices the order, amount re-checked on settlement, idempotent by gateway event, applies money through `record_fee_payment`, parks unapplicable money in `Review`), `institutional_settings.online_payments_enabled`, audited `payment_flags_set` (online switch + exam fee-clearance rule) | 035, 040 |
-| 067_refunds_reconciliation.sql | **New:** payment reversal (ledger restored, receipt voided, finance entry, audited; counter payments by finance, online payments only via the gateway refund so money actually returns), `payments-refund` edge function, `payment_refunds`, daily reconciliation report with exceptions (orders in review / stuck / online payments without an order) | 066 |
-| 068_revaluation_supplementary.sql | **New:** revaluation (window set by COE after publication; student request with reason; COE decides Revise/Keep/Reject with a note; revision recomputes grade/pass-fail, kept in `exam_result_history`, flows into GPA) and supplementary examinations (linked to a parent exam; only students who failed/were absent can register; papers generated from failed subjects) | 045, 064, 065 |
-| 069_inventory_atomic.sql | **INTEGRITY:** store stock moves are atomic server calls (`inventory_issue/return/order/receive/cancel_order`): exact item match (was fuzzy `ilike`), row locks, no negative stock, returns limited to what the recipient holds, purchase orders can be received in parts or cancelled, urgency follows the minimum; movements can no longer be written directly | 001 |
-| 070_private_admission_documents.sql | **PRIVACY:** admission documents (ID proofs, mark sheets, photos) go to a private `admission-documents` bucket (staff-only, signed links) instead of the publicly readable `documents` bucket; no more base64 copies of documents inside application records. **Action:** files uploaded earlier remain in `documents` — re-upload sensitive ones, then delete the old copies | 003 |
-| 071_wellness_afternoon.sql | The afternoon wellness check-in could never be saved (CHECK allowed only morning/evening) — now allowed | 028 |
-| 072_partial_refunds_settlement_store_payments.sql | **New:** partial / per-fee refunds (counter payments and online payments; the gateway amount is validated against the ledger *before* the gateway is called; receipt voided only when fully refunded), gateway settlement-report import with matching/mismatch/unsettled checks, online payment of store orders (settlement marks the order paid; refund cancels and restocks) | 066, 067, 056 |
-| 073_revaluation_fee_valuer_photos.sql | **New:** revaluation fee raised on the student's fee ledger (COE cannot decide until paid/waived; upward revision flags the fee refundable), blind second valuation by an assigned teacher (no student, no earlier marks), student photos on seating rows | 068, 065 |
-| 074_hostel_allotment_promotion_audit_viewer.sql | **New:** hostel allotment ledger (allot/vacate/transfer keep occupancy exact; rooms read-only to clients; `hostel_room_save`), year-end promotion/graduation with dues/arrears preview and undo (`students_promote`, `students_promotion_undo`), audit-log search RPC (admin/principal, no IPs) | 028, 033, 011 |
-| 075_transport_assignments.sql | **New:** permanent student↔bus/stop allocation (`transport_assign/unassign`, capacity-checked), admin fleet overview, daily roster generator for drivers; riders see their own bus before any trip log exists | 054, 001 |
-| 076_lifecycle_leave_announcements_reminders_search.sql | **New:** student discontinue/reinstate/transfer with history (releases hostel bed and bus seat, keeps dues, profile↔student status mirrored), student leave requests with class-teacher decisions + notifications, announcements that notify by audience, fee-due reminders (student + parents, de-duplicated), staff global search, audited CSV export datasets | 028, 057, 074, 075 |
-| 077_outbox_channels_scheduled_reminders.sql | **New:** e-mail/SMS outbox fed by a trigger on `notifications` (e-mail medium/high, SMS high; per-person opt-out via `profiles.preferences`), worker RPCs (service role only), automatic daily fee reminders (`fee_reminders_auto`, pg_cron job `erp-fee-reminders` created if the extension exists), notification settings RPC | 057, 076 |
-| 078_announcements_by_class.sql | **New:** announcements can target a class and/or department (students, parents, class teachers); recipients counted; broadcast visibility policy honours the target | 076 |
-| 079_integrations_whatsapp.sql | **New:** `integration_settings` (encrypted provider keys; no client role can read the table; `integration_overview` for admin/principal shows provider, non-secret fields and which secrets are filled), WhatsApp outbox channel (opt-in per person) and switch, status/settings RPCs extended | 066, 077 |
-| 036_reconcile_legacy_columns.sql | `timetables.session_type`, `exam_schedules.day_of_week`, `student_attendance.*`, reception columns | 029 |
+It covers: wiping the project (files, edge functions, SQL), applying each migration with an expected-result check, creating the first
+Super Admin, deploying the 11 edge functions, secrets, the web-app `.env`, and troubleshooting.
 
-**Behaviour changes to expect after 032:** buckets `documents`, `attachments`, `student_documents`, `staff_documents`
-become private → any UI showing uploaded files must use `createSignedUrl()`. `profiles` role/status can no longer be
-changed by the user themselves. Per-operation RLS replaces the older permissive policies (an old permissive policy
-that was missed would still apply — check `select * from pg_policies` on `profiles`, `exams`, `fee_*`).
+## Key rules
+* **First Super Admin**: any account created *directly* in Supabase Auth becomes role `admin` (trigger `on_auth_user_created`,
+  migration 33). Every other account is created by that Super Admin inside the app; server code marks them
+  `app_metadata.erp_provisioned = true`, so the trigger never promotes them. `scripts/check-provisioning-flag.cjs` enforces this in CI.
+* **Public sign-up must be OFF** (`supabase/config.toml` and the dashboard), otherwise a visitor could register as Super Admin.
+* **Never edit the generated migration files.** To change the schema later, add a new migration file with a later timestamp.
 
-Not carried over on purpose: multi-college tables (`colleges`, `college_*`, `platform_super_admin`), plaintext OTP columns.
+## Verifying locally (no Supabase needed)
+`bash supabase/tests/run_all.sh` builds a scratch Postgres database, applies all 35 migrations with ON_ERROR_STOP, and runs
+`supabase/tests/smoke_all.sql` (526 checks). `bash scripts/test-edge-gate.sh` type-checks and tests the edge functions.
 
-### Verify
-```bash
-psql "$STAGING_DB_URL" -v ON_ERROR_STOP=1 -f supabase/tests/smoke_028_037.sql   # synthetic data, rolls back
-```
-All lines must read PASS (409 checks). Edge-function checks: `scripts/test-edge-gate.sh` (type-check + authorization/validation cases; needs no database). Then in the SQL editor: `select count(*) from public.profiles where role is null;` (must be 0).
-
-### Rollback
-Each file is one transaction, so a failure leaves nothing half-applied. To undo a *successful* run use the backup/PITR from
-step 0 (no down-migrations are provided — dropping RLS/privilege changes by script is riskier than restoring).
-Note: `docs/DATABASE_DEPLOYMENT_AND_ROLLBACK_PLAN.md` references a `028_rollback.sql` that was never written.
-
-## 2. Edge functions
-Secrets (Dashboard → Edge Functions → Secrets, or `supabase secrets set`):
-`ALLOWED_ORIGINS=https://your-erp-domain,http://localhost:8080`  ·  `GEMINI_API_KEY` (for ai-chat; already required).
-`SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY` are injected automatically.
-
-```bash
-supabase functions deploy admin-api admin-create-user ai-chat          # JWT verification ON
-supabase functions deploy auth-resolve-login-id auth-first-login --no-verify-jwt   # pre-login, public by design
-supabase functions delete admin-users                                  # superseded; was exploitable
-```
-First-login activation e-mails an OTP through **Supabase Auth**: configure SMTP (Auth → SMTP) and make the
-"Magic Link" template include `{{ .Token }}`. Without SMTP students/parents cannot self-activate (an admin can still reset
-passwords from User Management).
-
-Also: Auth → Providers → Email → **disable "Allow new users to sign up"** (accounts are provisioned by staff).
-
-Frontend: no change needed beyond this branch. In production builds `src/lib/apiBase.ts` sends `/api/*` calls to
-`<VITE_SUPABASE_URL>/functions/v1/<function>`; `vite dev` keeps using the local dev plugin (`VITE_USE_EDGE_API=true` to test the
-functions locally).
-
-### Smoke-check the functions (staging)
-```bash
-curl -s -X POST "$SUPABASE_URL/functions/v1/admin-api" -H "Authorization: Bearer $STUDENT_JWT" -H 'Content-Type: application/json' -d '{"action":"list_users"}'   # expect 403 FORBIDDEN
-curl -s -X POST "$SUPABASE_URL/functions/v1/admin-api" -H "Authorization: Bearer $ADMIN_JWT"   -H 'Content-Type: application/json' -d '{"action":"list_users"}'   # expect 200
-curl -s -X POST "$SUPABASE_URL/functions/v1/admin-api" -H 'Content-Type: application/json' -d '{}'                                                               # expect 401
-```
-Also confirm a user who runs `supabase.auth.updateUser({ data: { role: 'admin' } })` is still refused.
-
-### Behaviour changes from the admissions work (037/038 + app)
-- New student/parent accounts created by `confirm_admission` and parent provisioning no longer use the shared
-  password `Adithyan@<year>`; they get a random password and must activate through the e-mailed code
-  (the old default was guessable by anyone knowing a student's id/e-mail).
-- `confirm_admission` now takes the student id from the application (the manually entered one) and ends the application
-  as **Enrolled** (linked to the student record) instead of leaving it "Approved".
-- Applications: Submitted → Under Review → Approved → (Offered) → Enrolled; Approve can no longer skip review.
-
-## 3. Known gaps after this deployment
-See `docs/audit/01-Executive-Audit.md` ("High / medium") and `19-Implementation-Tracker.md`.
-
-
-## Online payments — setup (Razorpay adapter)
-1. Create a Razorpay account (test mode first). In the dashboard create **API keys** and a **webhook** pointing to
-   `https://<project-ref>.functions.supabase.co/payments-webhook` with events **payment.captured, order.paid, payment.failed**, and a webhook secret.
-2. Set the Edge Function secrets (never in the repo / `.env` of the frontend):
-   ```bash
-   supabase secrets set RAZORPAY_KEY_ID=rzp_test_xxx RAZORPAY_KEY_SECRET=xxx RAZORPAY_WEBHOOK_SECRET=xxx
-   ```
-3. Deploy the three functions — the webhook must NOT require a user JWT (its trust is the HMAC signature):
-   ```bash
-   supabase functions deploy payments-create-order
-   supabase functions deploy payments-verify
-   supabase functions deploy payments-webhook --no-verify-jwt
-   supabase functions deploy payments-refund
-   ```
-4. Apply migration 066, then in the app: Finance → Fee Setup → **Online payments** → switch on. Test with a ₹1 fee in test mode:
-   pay, confirm the receipt appears, replay the webhook from the Razorpay dashboard and confirm nothing is applied twice.
-5. Switch to live keys only after finance has reconciled a few test payments. Another gateway needs only a new adapter in
-   `supabase/functions/_shared/gateway.ts`; the database side is gateway-agnostic.
-
-
-## E-mail / SMS delivery and automatic reminders — setup (077)
-1. Apply migration 077. In-app notices keep working with no further setup; the queue simply waits.
-2. Deploy: `supabase functions deploy notifications-dispatch --no-verify-jwt`
-3. Set secrets (`supabase secrets set ...`):
-   - `DISPATCH_SECRET` — any random string of 16+ characters (the scheduler sends it in the `x-dispatch-secret` header).
-   - E-mail (Resend): `RESEND_API_KEY`, `MAIL_FROM` (a verified sender, e.g. `College <noreply@yourcollege.edu>`).
-   - SMS (Twilio): `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM`. Indian transactional SMS usually needs DLT registration; a 10-digit number is sent as +91.
-   A channel without its secrets is skipped and its messages stay queued (they expire after 3 days).
-4. Schedule the function every 5 minutes (Dashboard → Edge Functions → the function → Schedule, or any cron) with header `x-dispatch-secret`.
-5. Automatic reminders: turn on pg_cron (Dashboard → Database → Extensions) and re-run the last block of 077, **or** schedule one daily call to the same function with body `{"task":"reminders"}`. Then enable "Automatic fee reminders" under Announcements → Delivery channels.
-6. Switch e-mail/SMS on in the same panel. Staff and students can opt out in their own settings.
-
-
-## Provider keys from the UI — setup (079)
-One-time server setup, then everything else is done in the app (Admin → Integrations):
-1. Apply migration 079.
-2. Deploy: `supabase functions deploy integrations-admin` and redeploy `payments-create-order`, `payments-verify`, `payments-refund`, `notifications-dispatch`, and `payments-webhook --no-verify-jwt` (they now read the keys saved in the app first, then the old environment secrets).
-3. Set **one** secret: `supabase secrets set INTEGRATION_ENC_KEY=<24+ random characters>`. It encrypts the keys entered in the app (AES-GCM). Keep it safe: if it is lost or changed, the saved keys must be entered again.
-4. In the app: Integrations → connect Razorpay (add the webhook URL shown there to the Razorpay dashboard), an e-mail provider (Resend, SendGrid or Brevo), SMS (Twilio) and/or WhatsApp (Twilio or the WhatsApp Cloud API), press the test button for each, then switch the channels on under Announcements → Delivery channels.
-5. Notes: WhatsApp is opt-in per person (their own settings). WhatsApp business-initiated messages normally need an approved template: with the Cloud API enter its name in the template field; with Twilio use an approved sender/template per Twilio's rules. The old environment secrets (RESEND_API_KEY, TWILIO_*, RAZORPAY_*) keep working as a fallback.
+## Maintenance tools (`supabase/maintenance/`)
+`wipe_everything.sql` (guarded by a confirmation setting), `empty_storage.mjs` (files), `apply_one_by_one.sh` (migrations).

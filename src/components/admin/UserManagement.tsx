@@ -167,12 +167,17 @@ export default function UserManagement() {
   // Load all user directories, unprovisioned approved admissions, and parent-student links
   const loadAllData = useCallback(async () => {
     try {
+      const failed: string[] = [];
+      const soft = <T,>(p: Promise<T[]>, what: string) => p.catch(() => { failed.push(what); return [] as T[]; });
       const [allUsers, unprovisioned, studentsParentStatus, linksData] = await Promise.all([
-        adminUserService.listUsers().catch(() => []),
-        adminUserService.listUnprovisionedApprovedStudents().catch(() => []),
-        adminUserService.listStudentsForParentLinking().catch(() => []),
-        supabase.from('parent_student_links').select('*').order('created_at', { ascending: false }).then(r => r.data || [])
+        soft(adminUserService.listUsers(), 'user list'),
+        soft(adminUserService.listUnprovisionedApprovedStudents(), 'approved admissions'),
+        soft(adminUserService.listStudentsForParentLinking(), 'parent linking'),
+        supabase.from('parent_student_links').select('*').order('created_at', { ascending: false }).then(r => { if (r.error) failed.push('parent links'); return r.data || []; })
       ]);
+      if (failed.length) {
+        toast({ title: 'Some lists could not be loaded', description: `Not loaded: ${failed.join(', ')}. What you see may be incomplete — refresh to try again.`, variant: 'destructive' });
+      }
 
       setUsers(allUsers);
       setUnprovisionedStudents(unprovisioned);

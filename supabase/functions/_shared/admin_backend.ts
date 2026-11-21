@@ -739,6 +739,7 @@ export async function handleAdminUserOperation(caller: Caller, body: any, userTo
 
         // 3. Create Auth user
         const { data: authCreated, error: authErr } = await supabaseAdmin.auth.admin.createUser({
+          app_metadata: { erp_provisioned: true },
           email: cleanEmail,
           password: password,
           email_confirm: true,
@@ -920,6 +921,7 @@ export async function handleAdminUserOperation(caller: Caller, body: any, userTo
             const parentPass = strongRandomPassword();
 
             const { data: pAuth, error: pAuthErr } = await supabaseAdmin.auth.admin.createUser({
+          app_metadata: { erp_provisioned: true },
               email: parentAuthEmail,
               password: parentPass,
               email_confirm: true,
@@ -1090,6 +1092,7 @@ export async function handleAdminUserOperation(caller: Caller, body: any, userTo
         } else {
           // Create parent Auth user
           const { data: parentAuth, error: pAuthErr } = await supabaseAdmin.auth.admin.createUser({
+          app_metadata: { erp_provisioned: true },
             email: cleanEmail,
             password: password,
             email_confirm: true,
@@ -1227,6 +1230,7 @@ export async function handleAdminUserOperation(caller: Caller, body: any, userTo
           try {
             // Create Supabase Auth user
             const { data: authCreated, error: authErr } = await supabaseAdmin.auth.admin.createUser({
+          app_metadata: { erp_provisioned: true },
               email: cleanEmail,
               password: cleanPassword,
               email_confirm: true,
@@ -1421,6 +1425,7 @@ export async function handleAdminUserOperation(caller: Caller, body: any, userTo
 
             try {
               const { data: parentAuth, error: pAuthErr } = await supabaseAdmin.auth.admin.createUser({
+          app_metadata: { erp_provisioned: true },
                 email: cleanParentEmail,
                 password: cleanPassword,
                 email_confirm: true,
@@ -1567,6 +1572,7 @@ export async function handleAdminUserOperation(caller: Caller, body: any, userTo
           } else {
             try {
               const { data: stuAuth, error: stuAuthErr } = await supabaseAdmin.auth.admin.createUser({
+          app_metadata: { erp_provisioned: true },
                 email: cleanStudentEmail,
                 password: cleanStudentPassword,
                 email_confirm: true,
@@ -1625,6 +1631,7 @@ export async function handleAdminUserOperation(caller: Caller, body: any, userTo
                 parentUserId = existingParent.id;
               } else {
                 const { data: parentAuth } = await supabaseAdmin.auth.admin.createUser({
+          app_metadata: { erp_provisioned: true },
                   email: cleanParentEmail,
                   password: cleanParentPassword,
                   email_confirm: true,
@@ -1842,6 +1849,7 @@ export async function handleAdminUserOperation(caller: Caller, body: any, userTo
         const teacherDept = newUser.role === 'teacher' ? (newUser.department || 'Paramedical Faculty') : (newUser.department || '');
 
         const { data: createdData, error: createError } = await supabaseAdmin.auth.admin.createUser({
+          app_metadata: { erp_provisioned: true },
           email: cleanEmail,
           password: newUser.password,
           email_confirm: true,
@@ -2321,6 +2329,7 @@ export async function handleAdminUserOperation(caller: Caller, body: any, userTo
 
         // 3. Create parent account in Supabase Auth (No email invites, no OTP, no activation email needed)
         const { data: authCreated, error: authError } = await supabaseAdmin.auth.admin.createUser({
+          app_metadata: { erp_provisioned: true },
           email: cleanEmail,
           password: cleanPassword,
           email_confirm: true,
@@ -2542,6 +2551,7 @@ export async function handleAdminUserOperation(caller: Caller, body: any, userTo
 
           // Create Student account in Supabase Auth
           const { data: studentAuth, error: studentAuthErr } = await supabaseAdmin.auth.admin.createUser({
+          app_metadata: { erp_provisioned: true },
             email: cleanStudentEmail,
             password: initialStudentPassword,
             email_confirm: true,
@@ -2686,6 +2696,7 @@ export async function handleAdminUserOperation(caller: Caller, body: any, userTo
           }
 
           const { data: parentAuth, error: parentAuthErr } = await supabaseAdmin.auth.admin.createUser({
+          app_metadata: { erp_provisioned: true },
             email: parentAuthEmail,
             password: initialParentPassword,
             email_confirm: true,

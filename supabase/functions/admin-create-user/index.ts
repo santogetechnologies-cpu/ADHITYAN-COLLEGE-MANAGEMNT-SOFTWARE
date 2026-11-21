@@ -34,7 +34,7 @@ Deno.serve(async (req) => {
   const { data: created, error: createErr } = await admin.auth.admin.createUser({
     email, password, email_confirm: true,
     user_metadata: { name },                 // display only; never used for authorisation
-    app_metadata: { role },                  // not user-editable
+    app_metadata: { role, erp_provisioned: true },   // not user-editable; the flag tells the sign-up trigger this account is already provisioned
   });
   if (createErr || !created?.user) {
     return json(req, 400, { error: createErr?.message ?? "Could not create user.", code: "CREATE_USER_FAILED" });

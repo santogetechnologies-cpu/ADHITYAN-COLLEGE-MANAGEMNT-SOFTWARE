@@ -169,7 +169,7 @@ export const DocumentVerification = () => {
                       </>
                     )}
                     {doc.document_url && (
-                      <Button variant="ghost" size="sm" onClick={async () => { try { window.open(await resolveDocumentUrl(doc.document_url), '_blank', 'noopener'); } catch { /* not available */ } }}>
+                      <Button variant="ghost" size="sm" aria-label="Open document" onClick={async () => { try { window.open(await resolveDocumentUrl(doc.document_url), '_blank', 'noopener'); } catch (e: any) { toast({ title: 'Could not open the document', description: e?.message || 'The file may have been removed.', variant: 'destructive' }); } }}>
                         <ExternalLink className="w-3.5 h-3.5" />
                       </Button>
                     )}

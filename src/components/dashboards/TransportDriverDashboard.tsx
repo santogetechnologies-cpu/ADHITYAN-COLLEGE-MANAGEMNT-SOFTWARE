@@ -731,7 +731,7 @@ export default function TransportDriverDashboard() {
               onClick={async () => {
                 const waiting = studentLogs.filter(l => l.status === 'waiting' && l.student_id);
                 await Promise.all(waiting.map(l => db.createNotification({ user_id: l.student_id as string, title: 'Bus arriving', message: `Bus ${selectedVehicle?.vehicle_number ?? ''} is on its way to ${l.stop_name}.`, type: 'info', priority: 'medium', is_read: false }).catch(() => null)));
-                toast({ title: 'Riders notified', description: `In-app notification sent to ${waiting.length} waiting rider(s). No SMS is sent from this screen.` });
+                toast({ title: 'Riders notified', description: `Notification sent to ${waiting.length} waiting rider(s). It is also e-mailed where e-mail alerts are switched on.` });
               }}
             >
               <Phone className="h-4 w-4 mr-2" />

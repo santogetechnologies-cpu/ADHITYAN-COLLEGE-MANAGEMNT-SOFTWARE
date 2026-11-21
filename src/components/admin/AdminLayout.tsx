@@ -1,4 +1,6 @@
+import { Suspense } from 'react';
 import { Outlet } from 'react-router-dom';
+import { PageLoader } from '@/components/PageLoader';
 import { ManagementRoute } from '@/components/guards/ManagementRoute';
 import { AdminExecutiveNavbar } from './AdminExecutiveNavbar';
 import { AdminContextBreadcrumbs } from './navigation/AdminContextBreadcrumbs';
@@ -10,7 +12,7 @@ export function AdminLayout() {
         <AdminExecutiveNavbar />
         <AdminContextBreadcrumbs />
         <main className="flex-1 w-full max-w-screen-2xl mx-auto px-3 sm:px-6 lg:px-8 py-5 min-w-0">
-          <Outlet />
+          <Suspense fallback={<PageLoader />}><Outlet /></Suspense>
         </main>
       </div>
     </ManagementRoute>

@@ -5,7 +5,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 W="$(mktemp -d)"; trap 'rm -rf "$W"' EXIT
 cd "$W" && npm init -y >/dev/null && npm i @supabase/supabase-js@2 typescript >/dev/null 2>&1
-mkdir fn && cp -r "$ROOT"/supabase/functions/{_shared,admin-api,admin-create-user,admin-users,auth-resolve-login-id,auth-first-login,payments-create-order,payments-verify,payments-webhook,notifications-dispatch,integrations-admin,payments-refund} fn/
+mkdir fn && cp -r "$ROOT"/supabase/functions/{_shared,admin-api,admin-create-user,auth-resolve-login-id,auth-first-login,payments-create-order,payments-verify,payments-webhook,notifications-dispatch,integrations-admin,payments-refund} fn/
 cat > fn/deno.d.ts <<'D'
 declare const Deno: { env: { get(k: string): string | undefined }; serve(h: (r: Request) => Response | Promise<Response>): void };
 D
@@ -24,3 +24,4 @@ npx tsc -p tsconfig.cjs.json
 cp "$ROOT/supabase/tests/admin_api_gate.test.cjs" . && node admin_api_gate.test.cjs ./out/_shared/admin_backend.js
 cp "$ROOT/supabase/tests/gateway_signature.test.cjs" . && node gateway_signature.test.cjs ./out/_shared/gateway.js
 cp "$ROOT/supabase/tests/channels.test.cjs" . && node channels.test.cjs ./out/_shared
+node "$ROOT/scripts/check-provisioning-flag.cjs"

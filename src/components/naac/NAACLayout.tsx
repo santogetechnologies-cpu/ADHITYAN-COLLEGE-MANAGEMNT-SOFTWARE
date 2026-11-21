@@ -1,4 +1,6 @@
+import { Suspense } from 'react';
 import { Outlet } from 'react-router-dom';
+import { PageLoader } from '@/components/PageLoader';
 import { SidebarProvider } from '@/components/ui/sidebar';
 import { NAACProvider } from '@/context/NAACContext';
 import { AdminRoute } from '@/components/guards/AdminRoute';
@@ -16,7 +18,7 @@ export function NAACLayout() {
               <main className="flex-1 flex flex-col">
                 <NAACHeader />
                 <div className="flex-1 p-6">
-                  <Outlet />
+                  <Suspense fallback={<PageLoader />}><Outlet /></Suspense>
                 </div>
               </main>
             </div>

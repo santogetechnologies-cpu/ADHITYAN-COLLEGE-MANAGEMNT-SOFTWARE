@@ -1,0 +1,50 @@
+# Supabase project settings used by the CLI.
+# Keep sign-ups OFF: the first Super Admin is created in the Supabase dashboard, everyone else is created by that Super Admin inside the app.
+# (For a hosted project, also switch it off in the dashboard: Authentication -> Providers -> Email -> "Allow new users to sign up".)
+project_id = "college-erp"
+
+[auth]
+enable_signup = false
+enable_anonymous_sign_ins = false
+minimum_password_length = 8
+
+[auth.email]
+enable_signup = false
+enable_confirmations = false
+
+# Every function checks the caller itself (session token -> role read from public.profiles), so the platform's own JWT gate is
+# switched off. That is required for the new "sb_publishable_..." API keys (they are not JWTs) and for the payment webhook and
+# the scheduler, which have no user session. Functions that need a signed-in user reject anonymous calls on their own.
+
+[functions.admin-api]
+verify_jwt = false
+
+[functions.admin-create-user]
+verify_jwt = false
+
+[functions.ai-chat]
+verify_jwt = false
+
+[functions.auth-first-login]
+verify_jwt = false
+
+[functions.auth-resolve-login-id]
+verify_jwt = false
+
+[functions.integrations-admin]
+verify_jwt = false
+
+[functions.notifications-dispatch]
+verify_jwt = false
+
+[functions.payments-create-order]
+verify_jwt = false
+
+[functions.payments-refund]
+verify_jwt = false
+
+[functions.payments-verify]
+verify_jwt = false
+
+[functions.payments-webhook]
+verify_jwt = false

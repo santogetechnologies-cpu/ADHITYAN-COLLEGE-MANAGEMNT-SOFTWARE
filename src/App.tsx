@@ -1,6 +1,3 @@
-import AdminReports from '@/pages/admin/AdminReports';
-import AdminAnalytics from '@/pages/admin/AdminAnalytics';
-import AdminSettings from '@/pages/admin/AdminSettings';
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -13,62 +10,70 @@ import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { ProtectedRoute } from "@/components/guards/ProtectedRoute";
 import { NAACLayout } from "@/components/naac/NAACLayout";
 import { AdminLayout } from "@/components/admin/AdminLayout";
-import AdminOverview from "@/components/admin/AdminOverview";
-import PrincipalDashboard from "@/components/dashboards/PrincipalDashboard";
-import UserManagement from "@/components/admin/UserManagement";
-import DepartmentManagement from "@/components/admin/DepartmentManagement";
 import Index from "./pages/Index";
-import Dashboard from "./pages/Dashboard";
 import NotFound from "./pages/NotFound";
-import MessageTeacher from "./pages/MessageTeacher";
-import TrackSchoolBus from "./pages/TrackSchoolBus";
-import ViewAchievements from "./pages/ViewAchievements";
-import ReportConcern from "./pages/ReportConcern";
-import CreateAssignment from '@/pages/teachers/CreateAssignment';
-import MessageParents from '@/pages/teachers/MessageParents';  
-import GenerateReport from '@/pages/teachers/GenerateReport';
-import { DailyTeachingUpdate } from '@/components/teachers/DailyTeachingUpdate';
-import TeacherAssignments from "./components/admin/TeacherAssignments";
-import TimetableManagement from "./components/admin/TimetableManagement";
-import NAACDashboard from "./pages/naac/NAACDashboard";
-import Criterion1 from "./pages/naac/Criterion1";
-import Criterion2 from "./pages/naac/Criterion2";
-import Criterion3 from "./pages/naac/Criterion3";
-import Criterion4 from "./pages/naac/Criterion4";
-import Criterion5 from "./pages/naac/Criterion5";
-import Criterion6 from "./pages/naac/Criterion6";
-import Criterion7 from "./pages/naac/Criterion7";
-import Repository from "./pages/naac/Repository";
-import Reports from "./pages/naac/Reports";
-import Settings from "./pages/naac/Settings";
-import { EventsManagement } from '@/components/admin/EventsManagement';
-import ExamManagement from '@/pages/ExamManagement';
-import LibraryManagement from '@/pages/LibraryManagement';
-import AdmissionManagement from '@/pages/AdmissionManagement';
-import AlumniManagement from '@/pages/AlumniManagement';
 import { DialogHost } from '@/lib/dialogs';
-import StudentPromotion from '@/pages/StudentPromotion';
-import StudentLifecycle from '@/pages/StudentLifecycle';
-import StudentLeaveDesk from '@/pages/StudentLeaveDesk';
-import Announcements from '@/pages/Announcements';
-import Integrations from '@/pages/Integrations';
-import DataCentre from '@/pages/DataCentre';
-import AuditLogViewer from '@/pages/AuditLogViewer';
-import MedicalManagement from '@/pages/MedicalManagement';
-import CertificateGeneration from '@/pages/CertificateGeneration';
-import SportsManagement from '@/pages/SportsManagement';
-import DisciplinaryManagement from '@/pages/DisciplinaryManagement';
-import Store from '@/pages/Store';
-import ReceptionistDashboard from '@/components/dashboards/ReceptionistDashboard';
-import StoreManagerDashboard from '@/components/dashboards/StoreManagerDashboard';
-import FinanceManagerDashboard from '@/components/dashboards/FinanceManagerDashboard';
-import TransportDriverDashboard from '@/components/dashboards/TransportDriverDashboard';
-import TransportAdminDesk from '@/components/transport/TransportAdminDesk';
 import { useAuth } from '@/context/AuthContext';
-import SuperAdminControlCenter from '@/components/admin/superAdmin/SuperAdminControlCenter';
-import AccountProvisioningWorkspace from '@/components/admin/accountProvisioning/AccountProvisioningWorkspace';
 import { CollegeProvider } from '@/context/CollegeContext';
 import { VisualCustomizerProvider } from '@/context/VisualCustomizerContext';
+import { lazy, Suspense } from 'react';
+import { PageLoader } from '@/components/PageLoader';
+import { AppSafetyNet } from '@/components/AppSafetyNet';
+
+// Each screen is downloaded the first time it is opened, so the app starts fast.
+const AdminReports = lazy(() => import('@/pages/admin/AdminReports'));
+const AdminAnalytics = lazy(() => import('@/pages/admin/AdminAnalytics'));
+const AdminSettings = lazy(() => import('@/pages/admin/AdminSettings'));
+const AdminOverview = lazy(() => import('@/components/admin/AdminOverview'));
+const PrincipalDashboard = lazy(() => import('@/components/dashboards/PrincipalDashboard'));
+const UserManagement = lazy(() => import('@/components/admin/UserManagement'));
+const DepartmentManagement = lazy(() => import('@/components/admin/DepartmentManagement'));
+const Dashboard = lazy(() => import('./pages/Dashboard'));
+const MessageTeacher = lazy(() => import('./pages/MessageTeacher'));
+const TrackSchoolBus = lazy(() => import('./pages/TrackSchoolBus'));
+const ViewAchievements = lazy(() => import('./pages/ViewAchievements'));
+const ReportConcern = lazy(() => import('./pages/ReportConcern'));
+const CreateAssignment = lazy(() => import('@/pages/teachers/CreateAssignment'));
+const MessageParents = lazy(() => import('@/pages/teachers/MessageParents'));
+const GenerateReport = lazy(() => import('@/pages/teachers/GenerateReport'));
+const DailyTeachingUpdate = lazy(() => import('@/components/teachers/DailyTeachingUpdate').then(m => ({ default: m.DailyTeachingUpdate })));
+const TeacherAssignments = lazy(() => import('./components/admin/TeacherAssignments'));
+const TimetableManagement = lazy(() => import('./components/admin/TimetableManagement'));
+const NAACDashboard = lazy(() => import('./pages/naac/NAACDashboard'));
+const Criterion1 = lazy(() => import('./pages/naac/Criterion1'));
+const Criterion2 = lazy(() => import('./pages/naac/Criterion2'));
+const Criterion3 = lazy(() => import('./pages/naac/Criterion3'));
+const Criterion4 = lazy(() => import('./pages/naac/Criterion4'));
+const Criterion5 = lazy(() => import('./pages/naac/Criterion5'));
+const Criterion6 = lazy(() => import('./pages/naac/Criterion6'));
+const Criterion7 = lazy(() => import('./pages/naac/Criterion7'));
+const Repository = lazy(() => import('./pages/naac/Repository'));
+const Reports = lazy(() => import('./pages/naac/Reports'));
+const Settings = lazy(() => import('./pages/naac/Settings'));
+const EventsManagement = lazy(() => import('@/components/admin/EventsManagement').then(m => ({ default: m.EventsManagement })));
+const ExamManagement = lazy(() => import('@/pages/ExamManagement'));
+const LibraryManagement = lazy(() => import('@/pages/LibraryManagement'));
+const AdmissionManagement = lazy(() => import('@/pages/AdmissionManagement'));
+const AlumniManagement = lazy(() => import('@/pages/AlumniManagement'));
+const StudentPromotion = lazy(() => import('@/pages/StudentPromotion'));
+const StudentLifecycle = lazy(() => import('@/pages/StudentLifecycle'));
+const StudentLeaveDesk = lazy(() => import('@/pages/StudentLeaveDesk'));
+const Announcements = lazy(() => import('@/pages/Announcements'));
+const Integrations = lazy(() => import('@/pages/Integrations'));
+const DataCentre = lazy(() => import('@/pages/DataCentre'));
+const AuditLogViewer = lazy(() => import('@/pages/AuditLogViewer'));
+const MedicalManagement = lazy(() => import('@/pages/MedicalManagement'));
+const CertificateGeneration = lazy(() => import('@/pages/CertificateGeneration'));
+const SportsManagement = lazy(() => import('@/pages/SportsManagement'));
+const DisciplinaryManagement = lazy(() => import('@/pages/DisciplinaryManagement'));
+const Store = lazy(() => import('@/pages/Store'));
+const ReceptionistDashboard = lazy(() => import('@/components/dashboards/ReceptionistDashboard'));
+const StoreManagerDashboard = lazy(() => import('@/components/dashboards/StoreManagerDashboard'));
+const FinanceManagerDashboard = lazy(() => import('@/components/dashboards/FinanceManagerDashboard'));
+const TransportDriverDashboard = lazy(() => import('@/components/dashboards/TransportDriverDashboard'));
+const TransportAdminDesk = lazy(() => import('@/components/transport/TransportAdminDesk'));
+const SuperAdminControlCenter = lazy(() => import('@/components/admin/superAdmin/SuperAdminControlCenter'));
+const AccountProvisioningWorkspace = lazy(() => import('@/components/admin/accountProvisioning/AccountProvisioningWorkspace'));
 
 
 function TransportRouteSwitch() {
@@ -88,6 +93,8 @@ const App = () => (
             <DialogHost />
             <Sonner />
             <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+              <AppSafetyNet />
+              <Suspense fallback={<PageLoader />}>
               <Routes>
                 {/* Public Route */}
                 <Route path="/" element={<Index />} />
@@ -435,6 +442,7 @@ const App = () => (
                 {/* 404 Catch-All */}
                 <Route path="*" element={<NotFound />} />
               </Routes>
+              </Suspense>
             </BrowserRouter>
           </TooltipProvider>
             </PresenceProvider>

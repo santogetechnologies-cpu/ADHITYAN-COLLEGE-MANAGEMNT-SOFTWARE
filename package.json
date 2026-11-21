@@ -12,7 +12,8 @@
     "seed": "tsx scripts/seed.ts",
     "preview": "vite preview",
     "e2e": "node e2e/run.cjs",
-    "test:edge": "bash scripts/test-edge-gate.sh"
+    "test:edge": "bash scripts/test-edge-gate.sh",
+    "e2e:sweep": "node e2e/sweep.cjs && node e2e/sweep.cjs --keep --broken"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",
