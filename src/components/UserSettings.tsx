@@ -29,6 +29,8 @@ export function UserSettings() {
     },
     notifications: {
       emailNotifications: true,
+      smsNotifications: true,
+      whatsappNotifications: false,
       pushNotifications: true,
       assignmentReminders: true,
       examAlerts: true,
@@ -92,6 +94,9 @@ export function UserSettings() {
           preferences: {
             ...settings.preferences,
             ...settings.notifications,
+            email_notifications: settings.notifications.emailNotifications,
+            sms_notifications: settings.notifications.smsNotifications,
+            whatsapp_notifications: settings.notifications.whatsappNotifications,
           }
         });
       }
@@ -242,6 +247,34 @@ export function UserSettings() {
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-6">
+                  <div className="flex items-center justify-between">
+                    <div className="space-y-0.5">
+                      <Label>WhatsApp alerts</Label>
+                      <p className="text-xs text-muted-foreground">Urgent alerts on WhatsApp. Off unless you switch it on.</p>
+                    </div>
+                    <Switch
+                      checked={settings.notifications.whatsappNotifications}
+                      onCheckedChange={(checked) => setSettings(prev => ({
+                        ...prev,
+                        notifications: { ...prev.notifications, whatsappNotifications: checked }
+                      }))}
+                    />
+                  </div>
+
+                  <div className="flex items-center justify-between">
+                    <div className="space-y-0.5">
+                      <Label>Text messages (SMS)</Label>
+                      <p className="text-xs text-muted-foreground">Urgent alerts only, to the phone number on your profile</p>
+                    </div>
+                    <Switch
+                      checked={settings.notifications.smsNotifications}
+                      onCheckedChange={(checked) => setSettings(prev => ({
+                        ...prev,
+                        notifications: { ...prev.notifications, smsNotifications: checked }
+                      }))}
+                    />
+                  </div>
+
                   <div className="flex items-center justify-between">
                     <div className="space-y-0.5">
                       <Label>Email Notifications</Label>

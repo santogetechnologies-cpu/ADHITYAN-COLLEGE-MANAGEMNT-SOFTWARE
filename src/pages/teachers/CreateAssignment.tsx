@@ -28,6 +28,7 @@ import {
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { FileUpload } from '@/components/ui/file-upload';
+import { askConfirm, askText } from '@/lib/dialogs';
 
 export default function CreateAssignment() {
   const navigate = useNavigate();
@@ -90,8 +91,8 @@ export default function CreateAssignment() {
     );
   };
 
-  const addAttachment = () => {
-    const name = prompt('Enter attachment document title or URL:');
+  const addAttachment = async () => {
+    const name = await askText('Enter the attachment title or link', { title: 'Add attachment', required: true, confirmLabel: 'Add' });
     if (name) {
       setAttachments(prev => [...prev, name]);
     }

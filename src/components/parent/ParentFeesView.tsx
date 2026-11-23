@@ -1,3 +1,4 @@
+import { OnlinePayDialog } from '@/components/shared/OnlinePayDialog';
 import React, { useState, useEffect, useCallback } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -42,9 +43,6 @@ export function ParentFeesView({ student }: ParentFeesViewProps) {
 
   // Payment modal state
   const [isPayOpen, setIsPayOpen] = useState(false);
-  const [paymentAmount, setPaymentAmount] = useState<number>(15000);
-  const [paymentMethod, setPaymentMethod] = useState<string>('Online Card');
-  const [isProcessingPayment, setIsProcessingPayment] = useState(false);
 
   // Receipt viewer modal
   const [selectedReceipt, setSelectedReceipt] = useState<FeeReceipt | null>(null);
@@ -75,67 +73,10 @@ export function ParentFeesView({ student }: ParentFeesViewProps) {
   useRealtimeSubscription({ table: 'student_fees', onChange: loadFeesAndReceipts, onReconnect: loadFeesAndReceipts });
   useRealtimeSubscription({ table: 'fee_receipts', onChange: loadFeesAndReceipts, onReconnect: loadFeesAndReceipts });
 
-  const totalFee = fees.reduce((sum, f: any) => sum + (Number(f.total_due ?? f.amount ?? 0)), 0);
-  const paidFee = receipts.reduce((sum, r) => sum + (Number(r.amount_paid ?? 0)), 0);
-  const pendingBalance = Math.max(0, totalFee - paidFee);
-
-  const handleProcessPayment = async () => {
-    if (paymentAmount <= 0) {
-      toast({ title: 'Invalid Amount', description: 'Please enter a valid amount to pay.', variant: 'destructive' });
-      return;
-    }
-
-    setIsProcessingPayment(true);
-    try {
-      await db.recordFeePayment({
-        studentId: student.id,
-        studentName: student.name,
-        amount: paymentAmount,
-        paymentMethod,
-        notes: `Parent payment via ${paymentMethod}`,
-      });
-
-      const receiptNo = `AIP-REC-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`;
-      const newRec = await db.generateFeeReceipt({
-        receipt_number: receiptNo,
-        student_id: student.id,
-        student_name: student.name,
-        roll_number: student.student_id || student.roll_number || 'AIP-PENDING',
-        department: student.department || 'Paramedical Sciences',
-        academic_year: '2026-2027',
-        semester: student.class_name || 'Semester 1',
-        fee_type: 'Parent Portal Academic Installment Payment',
-        gross_amount: paymentAmount,
-        discount_applied: 0,
-        amount_paid: paymentAmount,
-        balance_remaining: Math.max(0, pendingBalance - paymentAmount),
-        payment_mode: paymentMethod,
-        transaction_reference: `PARENT-UPI-${Date.now().toString().slice(-8)}`,
-        qr_verification_token: `VERIFY-${receiptNo}-${Date.now()}`,
-      });
-
-      toast({
-        title: 'Payment Successful',
-        description: `₹${paymentAmount} paid successfully for ${student.name}.`,
-      });
-
-      setIsPayOpen(false);
-      await loadFeesAndReceipts();
-
-      if (newRec) {
-        setSelectedReceipt(newRec);
-        setReceiptsModalOpen(true);
-      }
-    } catch (err: any) {
-      toast({
-        title: 'Payment Failed',
-        description: err.message || 'Could not complete transaction.',
-        variant: 'destructive',
-      });
-    } finally {
-      setIsProcessingPayment(false);
-    }
-  };
+  // student_fees.total_due is the OUTSTANDING balance; paid_amount is cumulative paid.
+  const pendingBalance = fees.reduce((sum, f: any) => sum + Number(f.total_due ?? 0), 0);
+  const paidFee = fees.reduce((sum, f: any) => sum + Number(f.paid_amount ?? 0), 0);
+  const totalFee = pendingBalance + paidFee;
 
   return (
     <div className="space-y-6">
@@ -150,7 +91,7 @@ export function ParentFeesView({ student }: ParentFeesViewProps) {
           onClick={() => setIsPayOpen(true)}
           className="bg-[#1D61E7] hover:bg-blue-700 text-white font-semibold flex items-center gap-2"
         >
-          <CreditCard className="w-4 h-4" /> Pay Academic Fees
+          <CreditCard className="w-4 h-4" /> How to Pay Fees
         </Button>
       </div>
 
@@ -250,54 +191,7 @@ export function ParentFeesView({ student }: ParentFeesViewProps) {
         </CardContent>
       </Card>
 
-      {/* Pay Online Dialog */}
-      <Dialog open={isPayOpen} onOpenChange={setIsPayOpen}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <CreditCard className="w-5 h-5 text-[#1D61E7]" />
-              Pay Academic Fees Online
-            </DialogTitle>
-            <DialogDescription className="text-xs">
-              Secured payment gateway for {student.name} ({student.student_id || student.roll_number})
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 py-2 text-xs">
-            <div className="space-y-1.5">
-              <Label>Payment Amount (₹)</Label>
-              <Input
-                type="number"
-                value={paymentAmount}
-                onChange={(e) => setPaymentAmount(Number(e.target.value) || 0)}
-                className="font-mono text-base font-bold"
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Payment Method</Label>
-              <Select value={paymentMethod} onValueChange={setPaymentMethod}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="UPI / QR Code">UPI (GPay / PhonePe / Paytm)</SelectItem>
-                  <SelectItem value="Net Banking">Net Banking</SelectItem>
-                  <SelectItem value="Debit / Credit Card">Debit / Credit Card</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="p-3 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-900 text-[11px] flex items-center gap-2">
-              <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0" />
-              <span>Direct bank integration with instant verifiable receipt generation.</span>
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsPayOpen(false)}>Cancel</Button>
-            <Button onClick={handleProcessPayment} disabled={isProcessingPayment} className="bg-[#1D61E7] text-white">
-              {isProcessingPayment ? 'Processing...' : `Pay ₹${paymentAmount.toLocaleString('en-IN')}`}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <OnlinePayDialog open={isPayOpen} onOpenChange={setIsPayOpen} fees={fees} studentName={student.name} onPaid={loadFeesAndReceipts} />
 
       {/* Receipt Viewer Modal */}
       <FeeReceiptModal

@@ -24,6 +24,8 @@ import { db } from '@/services/supabase/database';
 import { useRealtimeSubscription } from '@/hooks/useRealtimeSubscription';
 import { StudentAttendance } from '@/types/database.types';
 
+import { StudentLeaveCard } from './StudentLeaveCard';
+
 export function StudentAttendanceTab() {
   const { user } = useAuth();
   const [loading, setLoading] = useState(true);
@@ -173,6 +175,7 @@ export function StudentAttendanceTab() {
 
   return (
     <div className="space-y-6 max-w-6xl mx-auto pb-12">
+      <StudentLeaveCard />
       {/* 1. Header Bar */}
       <div className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="space-y-1">

@@ -107,7 +107,7 @@ export function TeacherDashboard() {
 
   // Grading Modal State
   const [gradingSubmission, setGradingSubmission] = useState<AssignmentSubmission | null>(null);
-  const [gradeScore, setGradeScore] = useState<number>(85);
+  const [gradeScore, setGradeScore] = useState<number>(0);
   const [gradeFeedback, setGradeFeedback] = useState<string>('');
   const [isGrading, setIsGrading] = useState(false);
 
@@ -187,6 +187,9 @@ export function TeacherDashboard() {
   }, [assignedClassRosters, selectedClass]);
 
   // ── Enriched Student List for Selected Class ──
+  const [minAttendance, setMinAttendance] = useState(75);
+  useEffect(() => { db.getInstitutionalSettings().then((i: any) => { if (i?.min_attendance_percentage) setMinAttendance(Number(i.min_attendance_percentage)); }).catch(() => {}); }, []);
+
   const enrichedStudents = useMemo(() => {
     if (!currentRoster) return [];
     const todayStr = new Date().toISOString().split('T')[0];
@@ -194,10 +197,10 @@ export function TeacherDashboard() {
     return currentRoster.students.map((stu: Profile) => {
       const stuAttRecords = attendanceRecordsList.filter(a => a.student_id === stu.id);
       const totalAtt = stuAttRecords.length;
-      const presCount = stuAttRecords.filter(a => a.status === 'present' || a.status === 'on_duty').length;
-      const lateCount = stuAttRecords.filter(a => a.status === 'late').length;
-      const rate = totalAtt > 0 ? Math.round(((presCount + lateCount * 0.5) / totalAtt) * 100) : 100;
-      const hasShortage = totalAtt >= 2 && rate < 75;
+      // Same rule as hall-ticket eligibility: present, late, excused and on-duty all count as attended.
+      const attended = stuAttRecords.filter(a => ['present', 'late', 'excused', 'excuse', 'on_duty'].includes(String(a.status).toLowerCase())).length;
+      const rate = totalAtt > 0 ? Math.round((attended / totalAtt) * 100) : 0;
+      const hasShortage = totalAtt >= 2 && rate < minAttendance;
       const todayRecord = stuAttRecords.find(a => a.date === todayStr);
 
       const stuExams = examResultsList.filter(e => e.student_id === stu.id);
@@ -217,7 +220,7 @@ export function TeacherDashboard() {
         academicNote,
       };
     });
-  }, [currentRoster, attendanceRecordsList, examResultsList]);
+  }, [currentRoster, attendanceRecordsList, examResultsList, minAttendance]);
 
   // Filtered Students (Search & Attendance Status)
   const filteredStudents = useMemo(() => {
@@ -263,6 +266,10 @@ export function TeacherDashboard() {
   // ── Grade Submission Handler ──
   const handleSaveGrade = async () => {
     if (!gradingSubmission) return;
+    if (!Number.isFinite(gradeScore) || gradeScore < 0 || gradeScore > 100) {
+      toast({ title: 'Invalid score', description: 'Enter a score between 0 and 100.', variant: 'destructive' });
+      return;
+    }
     setIsGrading(true);
     try {
       await db.gradeAssignmentSubmission(gradingSubmission.id, gradeScore, gradeFeedback);
@@ -293,7 +300,8 @@ export function TeacherDashboard() {
 
     setIsSubmittingAssignment(true);
     try {
-      const subject = newAssignmentSubject.trim() || currentRoster?.courseName || 'Paramedical Sciences';
+      const subject = newAssignmentSubject.trim() || currentRoster?.courseName || '';
+      if (!subject) { toast({ title: 'Subject required', description: 'Enter the subject for this assignment.', variant: 'destructive' }); setIsSubmittingAssignment(false); return; }
       const due = new Date(newAssignmentDueDate);
       due.setHours(23, 59, 59, 0);
 
@@ -306,26 +314,13 @@ export function TeacherDashboard() {
         due_date: due.toISOString(),
         classes: [selectedClass],
         teacher_id: user?.id,
-        teacher_name: user?.name || 'Faculty Member',
+        teacher_name: user?.name || '',
         attachments: [],
       });
 
       // Dispatch notifications to students of this class
       if (currentRoster && currentRoster.students.length > 0) {
-        for (const stu of currentRoster.students) {
-          try {
-            await db.createNotification({
-              user_id: stu.id,
-              title: `New Assignment: ${newAssignmentTitle.trim()}`,
-              message: `${subject} coursework due on ${due.toLocaleDateString()}.`,
-              type: 'info',
-              priority: 'high',
-              is_read: false,
-            });
-          } catch (e) {
-            // non-fatal
-          }
-        }
+        await db.notifyMany(currentRoster.students.map((st: any) => st.id), `New Assignment: ${newAssignmentTitle.trim()}`, `${subject} coursework due on ${due.toLocaleDateString()}.`, 'info', 'high');
       }
 
       toast({
@@ -886,7 +881,7 @@ export function TeacherDashboard() {
                               className={`h-7 text-xs font-semibold ${sub.status !== 'graded' ? 'bg-blue-600 hover:bg-blue-700 text-white' : ''}`}
                               onClick={() => {
                                 setGradingSubmission(sub);
-                                setGradeScore(sub.score || 85);
+                                setGradeScore(sub.score ?? 0);
                                 setGradeFeedback(sub.feedback || '');
                               }}
                             >

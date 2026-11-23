@@ -12,7 +12,13 @@ export type UserRole =
   | 'store_manager'
   | 'finance_manager'
   | 'transport_driver'
-  | 'naac_coordinator';
+  | 'naac_coordinator'
+  | 'hr_manager'
+  | 'coe'
+  | 'hod'
+  | 'librarian'
+  | 'hostel_warden'
+  | 'placement_officer';
 
 export interface Profile {
   id: string;
@@ -32,7 +38,18 @@ export interface Profile {
     language?: string;
     notifications?: boolean;
     timezone?: string;
+    assigned_classes?: string[];
+    designation?: string;
+    [key: string]: any;
   };
+  /** read from preferences by the services that load profiles */
+  assigned_classes?: string[];
+  designation?: string;
+  phone_number?: string;
+  enrollment_status?: string;
+  staff_id?: string;
+  address?: string;
+  parent_phone?: string;
   created_at?: string;
   updated_at?: string;
 }
@@ -137,6 +154,8 @@ export interface DailyTeachingUpdate {
   next_class_prep?: string;
   notes?: string;
   created_at?: string;
+  course_name?: string;
+  next_plan?: string;
 }
 
 export interface FeedbackSubmission {
@@ -149,6 +168,7 @@ export interface FeedbackSubmission {
   user_id?: string;
   user_name?: string;
   created_at?: string;
+  rating?: number;
 }
 
 export interface Concern {
@@ -165,6 +185,11 @@ export interface Concern {
   resolution_notes?: string;
   attachments?: string[];
   created_at?: string;
+  /** derived from concern_type / user_name for the screens */
+  category?: string;
+  student_name?: string;
+  class_name?: string;
+  admin_response?: string;
 }
 
 export interface TeacherMessage {
@@ -184,8 +209,8 @@ export interface TeacherMessage {
 export interface WellnessCheckin {
   id: string;
   user_id?: string;
-  checkin_type: 'morning' | 'evening';
-  type?: 'morning' | 'evening';
+  checkin_type: 'morning' | 'afternoon' | 'evening';
+  type?: 'morning' | 'afternoon' | 'evening';
   date: string;
   mood?: string;
   energy_level?: number;
@@ -301,6 +326,7 @@ export interface TransportStop {
   stop_order: number;
   status: 'Completed' | 'Current' | 'Upcoming' | 'Skipped';
   students_count: number;
+  arrival_time?: string;
 }
 
 export interface VehicleMaintenance {
@@ -382,6 +408,8 @@ export interface AdmissionApplication {
   remarks?: string;
   documents?: any[];
   created_at?: string;
+  roll_number?: string;
+  program?: string;
 }
 
 export interface AlumniProfile {
@@ -529,6 +557,7 @@ export interface ExamSchedule {
   max_marks: number;
   passing_marks?: number;
   created_at?: string;
+  exam_type?: string;
 }
 
 export interface ExamResult {
@@ -549,6 +578,9 @@ export interface ExamResult {
   published_at?: string;
   remarks?: string;
   created_at?: string;
+  exam_name?: string;
+  status?: string;
+  percentage?: number | null;
 }
 
 export interface SportsEvent {
@@ -590,6 +622,8 @@ export interface CalendarEvent {
   status: 'upcoming' | 'ongoing' | 'completed' | 'cancelled';
   created_at?: string;
 }
+
+export type Notification = NotificationItem;
 
 export interface NotificationItem {
   id: string;
@@ -687,9 +721,29 @@ export interface StudentFee {
   total_due: number;
   paid_amount: number;
   due_date: string;
-  status: 'paid' | 'pending' | 'overdue' | 'partially_paid';
+  status: 'paid' | 'pending' | 'overdue' | 'partially_paid' | 'waived' | 'cancelled';
   created_at?: string;
+  // fee engine (migrations 040/041)
+  student_record_id?: string | null;
+  student_code?: string | null;
+  fee_head_id?: string | null;
+  plan_item_id?: string | null;
+  run_id?: string | null;
+  charge_key?: string | null;
+  academic_year?: string | null;
+  term_label?: string | null;
+  description?: string | null;
+  original_amount?: number | null;
+  waived_amount?: number;
+  term?: string;
 }
+
+export interface FeeHead { id: string; code: string; name: string; category: string; refundable: boolean; active: boolean; description?: string | null; created_at?: string; updated_at?: string }
+export interface FeePlan { id: string; name: string; academic_year: string; department: string | null; class_name: string | null; quota: string | null; description: string | null; status: 'Draft' | 'Published' | 'Archived'; created_by?: string | null; published_at?: string | null; created_at?: string; updated_at?: string }
+export interface FeePlanItem { id: string; plan_id: string; fee_head_id: string; amount: number; billing_cycle: 'one_time' | 'per_semester' | 'per_year'; semesters: number[] | null; due_days: number; description?: string | null; sort_order?: number; created_at?: string }
+export interface FeeRun { id: string; run_type: 'plan' | 'adhoc'; plan_id: string | null; fee_head_id: string | null; amount: number | null; description: string | null; scope_type: 'student' | 'class' | 'department' | 'all'; scope_value: string | null; quota_filter: string | null; semester_filter: number | null; academic_year: string; due_date: string | null; status: 'Completed' | 'Cancelled'; students_count: number; demands_count: number; total_amount: number; created_at: string }
+export interface FeeAdjustment { id: string; student_fee_id: string; kind: 'waiver' | 'concession' | 'cancellation'; amount: number; reason: string; created_by?: string | null; created_at: string }
+export interface StudentRecord { id: string; user_id: string | null; student_id: string; name: string; department: string | null; class_name: string | null; current_semester: number; status: string; admission_quota?: string | null; admission_type?: string | null; entry_academic_year?: string | null }
 
 export interface StudentAchievement {
   id: string;
@@ -745,6 +799,8 @@ export interface StudentAttendance {
   recorded_by?: string;
   created_at?: string;
   updated_at?: string;
+  class_name?: string;
+  session?: string;
 }
 
 export interface StudentMoodCheckin {
@@ -768,6 +824,7 @@ export interface StudentTransportLog {
   status: 'checked_in' | 'waiting' | 'absent' | 'dropped';
   checkin_time?: string;
   date: string;
+  scan_time?: string;
 }
 
 // ============================================================================
@@ -837,8 +894,10 @@ export interface StaffPayrollRun {
   total_net_disbursed: number;
   total_employees: number;
   run_date: string;
-  status: 'Draft' | 'Approved_Principal' | 'Disbursed';
+  status: 'Draft' | 'Approved' | 'Disbursed' | 'Cancelled';
   processed_by?: string;
+  approved_by?: string;
+  payment_reference?: string;
   created_at?: string;
 }
 
@@ -1028,6 +1087,10 @@ export interface HallTicket {
   issued_date: string;
   coe_signature_hash: string;
   created_at?: string;
+  exam_id?: string | null;
+  exam_title?: string | null;
+  status?: string;
+  override_reason?: string | null;
 }
 
 export interface LibraryCirculation {

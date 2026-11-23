@@ -47,6 +47,7 @@ import { db } from '@/services/supabase/database';
 import { InventoryItem, InventoryTransaction, StoreProduct, StoreOrder } from '@/types/database.types';
 import { useToast } from '@/hooks/use-toast';
 import { StudentSearchSelect } from '@/components/shared/StudentSearchSelect';
+import { askConfirm, askText } from '@/lib/dialogs';
 
 export default function StoreManagerDashboard() {
   const { toast } = useToast();
@@ -235,7 +236,7 @@ export default function StoreManagerDashboard() {
           title: 'Store Purchase Order Placed',
           message: `PO logged for ${newPO.quantity}x ${newPO.item_name} from ${newPO.supplier} (${newPO.category} dept). Pending finance verification.`,
           type: 'info',
-          priority: 'normal',
+          priority: 'medium',
           is_read: false
         }).catch(console.warn);
         setPurchaseOrderDialogOpen(false);
@@ -296,7 +297,8 @@ export default function StoreManagerDashboard() {
       const res = await db.returnItemDistribution({
         itemName: returnForm.item_name,
         quantity: Number(returnForm.quantity),
-        studentName: returnForm.student_name
+        studentName: returnForm.student_name,
+        reason: returnForm.reason
       });
       if (res.success) {
         toast({ 
@@ -352,14 +354,13 @@ export default function StoreManagerDashboard() {
     }
     setSubmitting(true);
     try {
-      const res = await db.createStoreProduct({
+      const res = await db.createStoreProduct(({
         name: newStoreProduct.name.trim(),
         category: newStoreProduct.category,
         price: Number(newStoreProduct.price),
         stock: Number(newStoreProduct.stock),
-        description: newStoreProduct.description.trim(),
-        rating: 4.8
-      });
+        description: newStoreProduct.description.trim()
+      } as any));
       if (res) {
         toast({ title: 'Store Product Created', description: `${res.name} added to campus store catalog.` });
         setAddStoreProductDialogOpen(false);
@@ -661,8 +662,24 @@ export default function StoreManagerDashboard() {
                       </div>
                       <div className="flex items-center gap-2">
                         <Badge variant={po.status === 'completed' ? 'default' : 'secondary'} className="capitalize text-xs">
-                          {po.status}
+                          {po.status}{po.status === 'processing' ? ` (${(po as any).received_qty}/${po.quantity})` : ''}
                         </Badge>
+                        {['pending', 'processing'].includes(po.status) && (<>
+                          <Button size="sm" variant="outline" onClick={async () => {
+                            const left = po.quantity - ((po as any).received_qty || 0);
+                            const v = await askText(`How many units arrived? (up to ${left})`, { title: 'Receive delivery', inputType: 'number', defaultValue: String(left), required: true, confirmLabel: 'Record delivery' });
+                            if (!v) return;
+                            const r = await db.receivePurchaseOrder(po.id, Number(v));
+                            toast(r.success ? { title: r.complete ? 'Order complete' : 'Partial delivery recorded', description: 'Stock updated.' } : { title: 'Not received', description: r.error, variant: 'destructive' });
+                            if (r.success) loadStoreData();
+                          }}>Receive</Button>
+                          <Button size="sm" variant="ghost" onClick={async () => {
+                            const why = await askText('Reason for cancelling this order', { title: 'Cancel order', required: true, minLength: 3, confirmLabel: 'Cancel order', destructive: true });
+                            if (!why) return;
+                            const r = await db.cancelPurchaseOrder(po.id, why);
+                            toast(r.success ? { title: 'Order cancelled' } : { title: 'Not cancelled', description: r.error, variant: 'destructive' });
+                            if (r.success) loadStoreData();
+                          }}>Cancel</Button></>)}
                       </div>
                     </div>
                   ))

@@ -1,10 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { useCollege } from '@/context/CollegeContext';
-import { multiCollegeService, DEFAULT_PRIMARY_COLLEGE } from '@/services/multiCollegeService';
 import { superAdminService } from '@/services/superAdminService';
-import { MasterSystemConfigState, RoleCustomConfig, WidgetPlacement, RoleNavItem, RolePageConfig, ModuleDefinition } from '@/types/superAdmin.types';
-import { College } from '@/types/multiCollege.types';
+import { MasterSystemConfigState, RoleCustomConfig, WidgetPlacement, NavItemConfig as RoleNavItem, RolePageConfig, ModuleDefinition } from '@/types/superAdmin.types';
 import { SuperAdminCommandHeader } from './header/SuperAdminCommandHeader';
 import { RoleControlCenterView } from './views/RoleControlCenterView';
 import { ModuleManagementView } from './views/ModuleManagementView';
@@ -41,8 +39,7 @@ export function RebuiltSuperAdminControlCenter() {
   const { currentCollege } = useCollege();
 
   const [activeTab, setActiveTab] = useState<SuperAdminDomainTab>('roles');
-  const [colleges, setColleges] = useState<College[]>([DEFAULT_PRIMARY_COLLEGE]);
-  const [activeCollege, setActiveCollege] = useState<College>(DEFAULT_PRIMARY_COLLEGE);
+  const activeCollege = currentCollege;
   const [masterConfig, setMasterConfig] = useState<MasterSystemConfigState | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
@@ -56,13 +53,6 @@ export function RebuiltSuperAdminControlCenter() {
   const initializeControlCenter = async () => {
     setIsLoading(true);
     try {
-      // 1. Load available colleges
-      const collegesList = await multiCollegeService.getColleges();
-      setColleges(collegesList);
-
-      const targetCollege = currentCollege || collegesList[0] || DEFAULT_PRIMARY_COLLEGE;
-      setActiveCollege(targetCollege);
-
       // 2. Load master system configuration
       const config = await superAdminService.getMasterConfiguration({ includeDrafts: true });
       setMasterConfig(config);
@@ -71,14 +61,6 @@ export function RebuiltSuperAdminControlCenter() {
     } finally {
       setIsLoading(false);
     }
-  };
-
-  const handleSelectCollege = async (collegeId: string) => {
-    const target = colleges.find(c => c.id === collegeId);
-    if (!target) return;
-    setActiveCollege(target);
-    await multiCollegeService.setActiveCollege(collegeId);
-    toast.success(`Switched active tenant context to ${target.name}`);
   };
 
   // State mutators with unsaved changes tracking
@@ -238,9 +220,7 @@ export function RebuiltSuperAdminControlCenter() {
       
       {/* 1. Master Command Header */}
       <SuperAdminCommandHeader
-        colleges={colleges}
         activeCollege={activeCollege}
-        onSelectCollege={handleSelectCollege}
         activeVersion={masterConfig.activeReleaseVersion || 'v1.0.0'}
         hasUnsavedChanges={hasUnsavedChanges}
         isSaving={isSaving}

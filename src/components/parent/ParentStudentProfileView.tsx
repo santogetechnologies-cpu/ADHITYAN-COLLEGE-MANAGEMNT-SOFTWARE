@@ -41,7 +41,7 @@ export function ParentStudentProfileView({
         <Card className="rounded-2xl shadow-sm border-border">
           <CardContent className="p-6 text-center space-y-4">
             <Avatar className="h-28 w-28 mx-auto border-4 border-[#1D61E7]/20 shadow-lg">
-              <AvatarImage src={student.avatar_url || student.avatar} alt={student.name} className="object-cover" />
+              <AvatarImage src={student.avatar_url} alt={student.name} className="object-cover" />
               <AvatarFallback className="text-2xl font-bold bg-primary text-primary-foreground">
                 {student.name?.charAt(0) || 'S'}
               </AvatarFallback>
@@ -110,7 +110,7 @@ export function ParentStudentProfileView({
                 <div className="space-y-1">
                   <span className="text-muted-foreground block">Verification Authority:</span>
                   <span className="text-emerald-600 font-semibold flex items-center gap-1">
-                    <ShieldCheck className="w-3.5 h-3.5" /> Adithyan Institutional Registrar
+                    <ShieldCheck className="w-3.5 h-3.5" /> Institutional Registrar
                   </span>
                 </div>
               </div>

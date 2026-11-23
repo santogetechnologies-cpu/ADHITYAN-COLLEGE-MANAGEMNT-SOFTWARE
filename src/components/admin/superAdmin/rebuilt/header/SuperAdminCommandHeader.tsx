@@ -14,13 +14,10 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { College } from '@/types/multiCollege.types';
+import { College } from '@/types/institution.types';
 
 interface SuperAdminCommandHeaderProps {
-  colleges: College[];
   activeCollege: College;
-  onSelectCollege: (collegeId: string) => void;
   activeVersion: string;
   hasUnsavedChanges: boolean;
   isSaving: boolean;
@@ -30,9 +27,7 @@ interface SuperAdminCommandHeaderProps {
 }
 
 export function SuperAdminCommandHeader({
-  colleges,
   activeCollege,
-  onSelectCollege,
   activeVersion,
   hasUnsavedChanges,
   isSaving,
@@ -61,19 +56,8 @@ export function SuperAdminCommandHeader({
             
             <div className="flex items-center space-x-2 text-xs text-slate-500">
               <Building2 className="w-3.5 h-3.5 text-slate-400" />
-              <span>Campus Tenant:</span>
-              <Select value={activeCollege.id} onValueChange={onSelectCollege}>
-                <SelectTrigger className="h-6 text-xs px-2 py-0 border-none bg-slate-100 font-medium text-slate-700 rounded hover:bg-slate-200 transition-colors">
-                  <SelectValue placeholder="Select Campus" />
-                </SelectTrigger>
-                <SelectContent>
-                  {colleges.map((c) => (
-                    <SelectItem key={c.id} value={c.id} className="text-xs">
-                      {c.name} ({c.code})
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <span>Institution:</span>
+              <span className="font-medium text-slate-700">{activeCollege.name}</span>
             </div>
           </div>
         </div>

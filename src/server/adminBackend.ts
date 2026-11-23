@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
-import { multiCollegeService } from '../services/multiCollegeService';
+
+const isUuidStr = (u?: unknown): u is string => typeof u === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(u);
 
 try {
   if (typeof process !== 'undefined' && typeof (process as any).loadEnvFile === 'function') {
@@ -14,7 +15,6 @@ const SUPABASE_ANON_KEY = process.env.VITE_SUPABASE_PUBLISHABLE_KEY || 'sb_publi
 const SUPABASE_SECRET_KEY = process.env.SUPABASE_SECRET_KEY || '';
 
 export const ALLOWED_ROLES = [
-  'platform_super_admin',
   'admin',
   'principal',
   'student',
@@ -30,6 +30,13 @@ export const ALLOWED_ROLES = [
   'placement_officer'
 ];
 
+/** Random initial password. Nobody ever types it: first sign-in goes through the e-mailed activation code. */
+function strongRandomPassword(): string {
+  const bytes = new Uint8Array(18);
+  crypto.getRandomValues(bytes);
+  return btoa(String.fromCharCode(...bytes)).replace(/[+/=]/g, 'x') + 'aA1!';
+}
+
 export async function handleAdminUserOperation(token: string, body: any): Promise<{ status: number; body: any }> {
   if (!token) {
     return { status: 401, body: { error: 'Missing authorization token.', code: 'UNAUTHORIZED' } };
@@ -40,7 +47,8 @@ export async function handleAdminUserOperation(token: string, body: any): Promis
   let callerRole: string | undefined;
   let callerCollegeId: string | undefined;
 
-  if (token.startsWith('mock-test-role:')) {
+  // Test-only identity tokens are honoured ONLY when the test runner opts in explicitly; never in a dev server or production.
+  if (token.startsWith('mock-test-role:') && process.env.ALLOW_MOCK_TEST_TOKENS === '1') {
     const parts = token.split(':');
     callerRole = parts[1];
     callerCollegeId = parts[3];
@@ -61,29 +69,13 @@ export async function handleAdminUserOperation(token: string, body: any): Promis
     }
 
     callerUser = user;
-    callerRole = user.user_metadata?.role;
-    callerCollegeId = user.user_metadata?.college_id;
-    if (!callerRole) {
-      const { data: callerProfile } = await userClient.from('profiles').select('role, college_id').eq('id', callerUser.id).maybeSingle();
-      callerRole = callerProfile?.role;
-      if (!callerCollegeId && callerProfile?.college_id) {
-        callerCollegeId = callerProfile.college_id;
-      }
+    // The role is read from public.profiles (protected by RLS and a trigger) — NEVER from user_metadata, which the user can edit.
+    const { data: callerProfile } = await userClient.from('profiles').select('role, status').eq('id', callerUser.id).maybeSingle();
+    if (!callerProfile || (callerProfile.status && callerProfile.status !== 'active')) {
+      return { status: 403, body: { error: 'Your account is not active.', code: 'FORBIDDEN' } };
     }
-  }
-
-  // 2. Strict Tenant Boundary Isolation: Non-platform users cannot access foreign colleges
-  if (callerRole !== 'platform_super_admin' && body.collegeId) {
-    const effectiveCallerCollege = callerCollegeId || '11111111-1111-1111-1111-111111111111';
-    if (body.collegeId !== effectiveCallerCollege) {
-      return {
-        status: 403,
-        body: {
-          error: 'Forbidden: Cross-college tenant access strictly prohibited. Your account is isolated to your assigned college.',
-          code: 'CROSS_TENANT_VIOLATION'
-        }
-      };
-    }
+    callerRole = callerProfile.role;
+    callerCollegeId = undefined;
   }
 
   const { action } = body;
@@ -107,21 +99,18 @@ export async function handleAdminUserOperation(token: string, body: any): Promis
     'confirm_admission',
     'create_admission_application',
     'update_admission_status',
+    'enroll_admission',
+    'record_admission_deposit',
+    'schedule_admission_tests',
+    'record_entrance_result',
+    'publish_merit_list',
+    'apply_merit_decisions',
     'resolve_login_id',
     'check_student_id_availability',
     'list_unprovisioned_approved_students',
     'provision_student_account',
     'list_students_for_parent_linking',
     'create_parent_account_and_link'
-  ].includes(action);
-
-  const isPlatformSuperAdminAction = [
-    'platform_provision_college',
-    'platform_update_college',
-    'platform_set_college_status',
-    'platform_save_college_config',
-    'platform_publish_college_config',
-    'verify_tenant_isolation'
   ].includes(action);
 
   const isSuperAdminConfigAction = [
@@ -132,58 +121,9 @@ export async function handleAdminUserOperation(token: string, body: any): Promis
     'restore_system_backup'
   ].includes(action);
 
-  if (isPlatformSuperAdminAction) {
-    if (action === 'verify_tenant_isolation') {
-      if (!['admin', 'platform_super_admin'].includes(callerRole || '')) {
-        return { status: 403, body: { error: 'Forbidden: Administrator or Super Admin authorization required.', code: 'FORBIDDEN' } };
-      }
-    } else if (callerRole !== 'platform_super_admin') {
-      return { status: 403, body: { error: 'Forbidden: Platform Super Admin authorization required.', code: 'FORBIDDEN_SUPER_ADMIN_REQUIRED' } };
-    }
-  } else if (isSuperAdminConfigAction) {
-    if (callerRole !== 'admin' && callerRole !== 'platform_super_admin') {
+  if (isSuperAdminConfigAction) {
+    if (callerRole !== 'admin') {
       return { status: 403, body: { error: 'Access denied: Super Administrator privileges required.', code: 'FORBIDDEN' } };
-    }
-  }
-
-  // 2. Dynamic Role-Level Capability & Backend Action Enforcement (College Tenant Scoped)
-  if (callerRole && callerRole !== 'platform_super_admin') {
-    const effectiveCollegeId = callerCollegeId || '11111111-1111-1111-1111-111111111111';
-    const isBypassAction = ['resolve_login_id', 'verify_tenant_isolation'].includes(action);
-
-    if (!isBypassAction) {
-      try {
-        const roleConfig = await multiCollegeService.getRoleConfiguration(effectiveCollegeId, callerRole);
-
-        // A. Business Rules Enforcement: e.g. restrictFinanceAccess
-        if (roleConfig?.businessRules?.restrictFinanceAccess) {
-          const isFinanceAction = ['collect_fee_payment', 'generate_fee_receipt', 'approve_fee_concession'].includes(action);
-          if (isFinanceAction) {
-            return {
-              status: 403,
-              body: {
-                error: `Financial transaction "${action}" is blocked for role "${callerRole}" by institutional policy.`,
-                code: 'FINANCE_ACCESS_RESTRICTED'
-              }
-            };
-          }
-        }
-
-        // B. Explicit Backend Action Blocking
-        if (roleConfig && roleConfig.backendActions && roleConfig.backendActions[action] === false) {
-          return {
-            status: 403,
-            body: {
-              error: `Action "${action}" has been disabled for role "${callerRole}" by Institutional Administrator.`,
-              code: 'ROLE_ACTION_DISABLED',
-              role: callerRole,
-              action
-            }
-          };
-        }
-      } catch (roleErr) {
-        // Fallback gracefully
-      }
     }
   }
 
@@ -202,7 +142,11 @@ export async function handleAdminUserOperation(token: string, body: any): Promis
     'collect_fee_payment',
     'generate_fee_receipt',
     'approve_fee_concession',
-    'get_finance_summary'
+    'get_finance_summary',
+    'fee_generate',
+    'fee_adjust',
+    'fee_cancel_run',
+    'fee_plan_clone'
   ].includes(action);
 
   if (isStudentPortalOperation) {
@@ -210,19 +154,19 @@ export async function handleAdminUserOperation(token: string, body: any): Promis
       return { status: 401, body: { error: 'Authentication required.', code: 'UNAUTHORIZED' } };
     }
   } else if (isTeacherOperation) {
-    if (!['teacher', 'hod', 'faculty', 'principal', 'admin', 'platform_super_admin'].includes(callerRole || '')) {
+    if (!['teacher', 'hod', 'faculty', 'principal', 'admin'].includes(callerRole || '')) {
       return { status: 403, body: { error: 'Access denied: Faculty privileges required.', code: 'FORBIDDEN' } };
     }
   } else if (isFinanceOperation) {
-    if (!['finance_manager', 'principal', 'admin', 'platform_super_admin'].includes(callerRole || '')) {
+    if (!['finance_manager', 'principal', 'admin'].includes(callerRole || '')) {
       return { status: 403, body: { error: 'Access denied: Finance Manager or Administrator privileges required.', code: 'FORBIDDEN' } };
     }
   } else if (isAdmissionAndParentOperation) {
-    if (!['admin', 'principal', 'receptionist', 'platform_super_admin'].includes(callerRole || '')) {
+    if (!['admin', 'principal', 'receptionist'].includes(callerRole || '')) {
       return { status: 403, body: { error: 'Access denied: Receptionist, Principal, or Administrator privileges required.', code: 'FORBIDDEN' } };
     }
-  } else if (!isPlatformSuperAdminAction && !isSuperAdminConfigAction) {
-    if (!['admin', 'principal', 'platform_super_admin'].includes(callerRole || '')) {
+  } else if (!isSuperAdminConfigAction) {
+    if (!['admin', 'principal'].includes(callerRole || '')) {
       return { status: 403, body: { error: 'Access denied: Administrator privileges required.', code: 'FORBIDDEN' } };
     }
   }
@@ -283,18 +227,20 @@ export async function handleAdminUserOperation(token: string, body: any): Promis
       }
 
       case 'collect_fee_payment': {
-        const { payment } = body;
-        try {
-          const { data, error } = await supabaseAdmin.from('fee_payments').insert({
-            ...payment,
-            collected_by: callerUser?.id,
-            created_at: new Date().toISOString()
-          }).select().maybeSingle();
-          if (!error && data) {
-            return { status: 200, body: { success: true, payment: data } };
-          }
-        } catch {}
-        return { status: 200, body: { success: true, payment: payment || {} } };
+        // Same transactional, idempotent path as the edge function (see supabase/migrations/035).
+        const p = body.payment ?? {};
+        const amount = Number(p.amount);
+        if (!p.student_fee_id || !Number.isFinite(amount) || amount <= 0) {
+          return { status: 400, body: { error: 'payment.student_fee_id and a positive payment.amount are required.', code: 'VALIDATION_ERROR' } };
+        }
+        const { data, error } = await supabaseAdmin.rpc('record_fee_payment', {
+          p_student_fee_id: p.student_fee_id, p_amount: amount, p_payment_mode: String(p.payment_mode ?? ''),
+          p_reference: p.transaction_reference ?? null, p_idempotency_key: String(p.idempotency_key ?? ''),
+          p_collected_by: callerUser?.id, p_remarks: p.remarks ?? null,
+        });
+        if (error) return { status: 500, body: { error: 'Payment could not be recorded.', code: 'PAYMENT_FAILED' } };
+        if (!data?.success) return { status: 400, body: { error: data?.error ?? 'Payment rejected.', code: data?.code ?? 'PAYMENT_REJECTED' } };
+        return { status: 200, body: data };
       }
 
       case 'place_store_order': {
@@ -397,8 +343,8 @@ export async function handleAdminUserOperation(token: string, body: any): Promis
 
         const profileMap = new Map((studentProfiles || []).map(p => [p.id, {
           ...p,
-          student_id: p.student_id || p.roll_number || `STU-${p.id.slice(0, 8).toUpperCase()}`,
-          roll_number: p.roll_number || p.student_id || `STU-${p.id.slice(0, 8).toUpperCase()}`,
+          student_id: (p as any).student_id || p.roll_number || `STU-${p.id.slice(0, 8).toUpperCase()}`,
+          roll_number: p.roll_number || (p as any).student_id || `STU-${p.id.slice(0, 8).toUpperCase()}`,
         }]));
 
         const enrichedLinks = links.map(link => ({
@@ -531,176 +477,226 @@ export async function handleAdminUserOperation(token: string, body: any): Promis
       }
 
       case 'create_admission_application': {
-        const { application } = body;
-        if (!application) {
-          return { status: 400, body: { error: 'Application payload required.', code: 'VALIDATION_ERROR' } };
-        }
-
-        const studentId = (application.student_id || application.studentId || '').trim();
+        const a = body.application;
+        if (!a) return { status: 400, body: { error: 'Application payload required.', code: 'VALIDATION_ERROR' } };
+        const studentId = String(a.student_id || a.studentId || a.application_number || '').trim();
+        const name = String(a.applicant_name || a.name || '').trim();
         if (!studentId) {
           return { status: 400, body: { error: 'Student ID must be entered manually by authorized staff. Auto-generation is not permitted.', code: 'STUDENT_ID_REQUIRED' } };
         }
-
-        // Uniqueness check for manual student ID
-        const { data: duplicateProfile } = await supabaseAdmin
-          .from('profiles')
-          .select('id, name, roll_number')
-          .eq('roll_number', studentId)
-          .maybeSingle();
-
-        if (duplicateProfile) {
-          return {
-            status: 409,
-            body: {
-              error: `Student ID "${studentId}" is already assigned to active student ${duplicateProfile.name}. Please enter a unique Student ID.`,
-              code: 'DUPLICATE_STUDENT_ID'
-            }
-          };
+        if (studentId.length > 64 || !name || name.length > 200) {
+          return { status: 400, body: { error: 'A valid applicant name and a student ID of at most 64 characters are required.', code: 'VALIDATION_ERROR' } };
+        }
+        const email = String(a.email || '').trim();
+        if (email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
+          return { status: 400, body: { error: 'The e-mail address is not valid.', code: 'VALIDATION_ERROR' } };
         }
 
-        // Check active applications in document metadata for duplicate student ID
-        try {
-          const { data: docMatches } = await supabaseAdmin
-            .from('admission_document_verifications')
-            .select('document_url')
-            .eq('document_type', 'APPLICATION_METADATA');
+        // Student id must be unique across profiles, students and open applications
+        const [{ data: dupProfile }, { data: dupStudent }, { data: dupApp }] = await Promise.all([
+          supabaseAdmin.from('profiles').select('name').or(`roll_number.eq.${studentId.replace(/[,()]/g, '')},student_id.eq.${studentId.replace(/[,()]/g, '')}`).limit(1).maybeSingle(),
+          supabaseAdmin.from('students').select('name').eq('student_id', studentId).maybeSingle(),
+          supabaseAdmin.from('admission_applications').select('applicant_name, status').eq('application_number', studentId).maybeSingle(),
+        ]);
+        const owner = dupProfile?.name || dupStudent?.name || dupApp?.applicant_name;
+        if (owner) {
+          return { status: 409, body: { error: `Student ID "${studentId}" is already in use (${owner}). Enter a unique Student ID.`, code: 'DUPLICATE_STUDENT_ID' } };
+        }
 
-          for (const doc of (docMatches || [])) {
-            if (doc.document_url && doc.document_url.includes(studentId)) {
-              try {
-                const metaDoc = JSON.parse(doc.document_url);
-                const sId = (metaDoc.student_id || metaDoc.studentId || metaDoc.application_no || metaDoc.application_number || '').trim();
-                if (sId.toLowerCase() === studentId.toLowerCase() && metaDoc.status !== 'Rejected') {
-                  return {
-                    status: 409,
-                    body: {
-                      error: `Student ID "${studentId}" is already registered in an active admission application for ${metaDoc.applicant_name || metaDoc.name}.`,
-                      code: 'DUPLICATE_STUDENT_ID'
-                    }
-                  };
-                }
-              } catch (pe) { }
-            }
-          }
-        } catch (e) { }
+        const num = (v: unknown) => { const n = Number(v); return v !== '' && v != null && Number.isFinite(n) ? n : null; };
+        const txt = (v: unknown, max = 500) => (v == null || String(v).trim() === '' ? null : String(v).trim().slice(0, max));
+        const course = txt(a.class_applied || a.class_name || a.program_applied, 200);
+        if (!course) return { status: 400, body: { error: 'The course applied for is required.', code: 'VALIDATION_ERROR' } };
+        const docs = (Array.isArray(a.documents) ? a.documents : []).filter((d: any) => d && (d.file_url || d.file_name));
 
-        const studentName = application.name || application.applicant_name || 'Applicant';
-        const courseName = application.class_applied || application.class_name || application.program_applied || 'Paramedical Sciences';
-        const appNo = studentId;
+        // route / quota must be configured and active; custom fields are validated against the configured form
+        const routeCode = txt(a.admission_type, 30);
+        const quotaCode = txt(a.quota, 30);
+        if (routeCode) {
+          const { data: r } = await supabaseAdmin.from('admission_routes').select('code').eq('code', routeCode).eq('active', true).maybeSingle();
+          if (!r) return { status: 400, body: { error: 'The admission route is not configured or is inactive.', code: 'VALIDATION_ERROR' } };
+        }
+        if (quotaCode) {
+          const { data: q } = await supabaseAdmin.from('admission_quotas').select('code').eq('code', quotaCode).eq('active', true).maybeSingle();
+          if (!q) return { status: 400, body: { error: 'The admission quota is not configured or is inactive.', code: 'VALIDATION_ERROR' } };
+        }
+        const { data: fieldCheck, error: fieldErr } = await supabaseAdmin.rpc('admission_validate_fields', { p_course: course, p_values: a.custom_fields ?? {} });
+        if (fieldErr) return { status: 500, body: { error: 'The form could not be validated.', code: 'VALIDATION_FAILED' } };
+        if (!fieldCheck?.valid) {
+          return { status: 400, body: { error: fieldCheck.errors.map((e: any) => e.message).join(' '), code: 'FIELD_VALIDATION', fields: fieldCheck.errors } };
+        }
 
-        // 1. Create merit record
-        const { data: merit } = await supabaseAdmin.from('admission_merit_lists').insert({
-          student_name: studentName,
-          course_name: courseName,
-          merit_score: Number(application.qualifying_marks || application.qualifyingScore || 85),
-          rank: 1,
-          category: application.merit_category || 'Institutional Merit',
-          status: 'Submitted',
-          academic_year: application.academic_year || '2026-2027'
+        const { data: created, error: insErr } = await supabaseAdmin.from('admission_applications').insert({
+          application_number: studentId, applicant_name: name, email, phone: String(a.phone || '').trim(),
+          class_name: course, parent_name: txt(a.parent_name || a.guardian_name, 200) || 'Guardian',
+          parent_phone: String(a.parent_phone || a.guardian_phone || '').trim(), status: 'Submitted',
+          submission_date: new Date().toISOString().split('T')[0], remarks: txt(a.remarks, 1000),
+          date_of_birth: /^\d{4}-\d{2}-\d{2}$/.test(String(a.date_of_birth || '')) ? a.date_of_birth : null,
+          gender: txt(a.gender, 30), blood_group: txt(a.blood_group, 10), address: txt(a.address, 500),
+          previous_school: txt(a.previous_school, 300), parent_email: txt(a.parent_email, 200),
+          relationship: txt(a.relationship, 50), occupation: txt(a.occupation, 100), annual_income: txt(a.annual_income, 50),
+          academic_year: txt(a.academic_year, 20), admission_batch: txt(a.admission_batch, 50),
+          qualifying_board: txt(a.qualifying_board, 100), passing_year: txt(a.passing_year, 10),
+          qualifying_marks: num(a.qualifying_marks), science_score: num(a.science_score),
+          merit_category: txt(a.merit_category, 100), eligibility_verified: !!a.eligibility_verified,
+          admission_type: routeCode, quota: quotaCode,
+          documents: docs, extra: { custom_fields: fieldCheck.cleaned ?? {}, fee_payment: a.fee_payment ?? null },
         }).select().single();
-
-        const newId = merit?.id || crypto.randomUUID();
-
-        // 2. Create metadata record in admission_document_verifications
-        const meta = {
-          ...application,
-          id: newId,
-          application_id: newId,
-          student_id: studentId,
-          studentId: studentId,
-          application_no: appNo,
-          application_number: appNo,
-          name: studentName,
-          applicant_name: studentName,
-          class_name: courseName,
-          class_applied: courseName,
-          status: 'Submitted',
-          is_provisioned: false,
-          created_at: new Date().toISOString()
-        };
-
-        await supabaseAdmin.from('admission_document_verifications').insert({
-          student_name: studentName,
-          document_type: 'APPLICATION_METADATA',
-          document_url: JSON.stringify(meta),
-          status: 'Pending',
-          submission_date: new Date().toISOString().split('T')[0]
-        });
-
-        // 3. Best-effort insert into admission_applications
-        try {
-          await supabaseAdmin.from('admission_applications').insert({
-            id: newId,
-            application_number: appNo,
-            applicant_name: studentName,
-            email: application.email || '',
-            phone: application.phone || '',
-            class_name: courseName,
-            parent_name: application.parent_name || application.guardian_name || 'Guardian',
-            parent_phone: application.parent_phone || application.guardian_phone || '',
-            status: 'Submitted',
-            submission_date: new Date().toISOString().split('T')[0],
-            remarks: application.remarks || `Student ID: ${studentId}`
-          });
-        } catch (e) { }
-
-        // Note: Admission application submission NEVER creates auth login accounts
-        return { status: 200, body: { success: true, application: meta } };
+        if (insErr || !created) {
+          return { status: insErr?.code === '23505' ? 409 : 400, body: { error: insErr?.code === '23505' ? 'This student ID is already used by another application.' : 'The application could not be saved.', code: insErr?.code === '23505' ? 'DUPLICATE_STUDENT_ID' : 'APPLICATION_FAILED' } };
+        }
+        if (docs.length > 0) {
+          await supabaseAdmin.from('admission_document_verifications').insert(docs.map((d: any) => ({
+            application_id: created.id, student_name: name, document_type: String(d.type || 'Document').slice(0, 100),
+            document_url: d.file_url || null, status: 'Pending', submission_date: new Date().toISOString().split('T')[0],
+          })));
+        }
+        // Registering an application never creates login accounts or a student record.
+        return { status: 200, body: { success: true, application: created } };
       }
 
       case 'update_admission_status': {
-        const { id, status: newStatus, remarks } = body;
-        if (!id || !newStatus) {
-          return { status: 400, body: { error: 'id and status required.', code: 'VALIDATION_ERROR' } };
+        const { id, status: requested, remarks } = body;
+        if (!id || !requested) return { status: 400, body: { error: 'id and status are required.', code: 'VALIDATION_ERROR' } };
+        const wanted = requested === 'Pending' ? 'Submitted' : String(requested);
+        const { data, error } = await supabaseAdmin.rpc('admission_set_status', {
+          p_application_id: id, p_new_status: wanted, p_remarks: remarks ?? null, p_actor: callerUser.id,
+        });
+        if (error) return { status: 500, body: { error: 'The status could not be changed.', code: 'STATUS_FAILED' } };
+        if (!data?.success) return { status: data?.code === 'NOT_FOUND' ? 404 : 400, body: { error: data?.error ?? 'Status change rejected.', code: data?.code, allowed: data?.allowed } };
+        return { status: 200, body: data };
+      }
+
+      case 'record_admission_deposit': {
+        const d = body.deposit ?? {};
+        const amount = Number(d.amount);
+        if (!isUuidStr(d.application_id) || !Number.isFinite(amount) || amount <= 0) {
+          return { status: 400, body: { error: 'deposit.application_id (uuid) and a positive deposit.amount are required.', code: 'VALIDATION_ERROR' } };
         }
+        const { data, error } = await supabaseAdmin.rpc('record_admission_deposit', {
+          p_application_id: d.application_id, p_amount: amount, p_payment_mode: String(d.payment_mode ?? ''),
+          p_reference: d.transaction_reference ?? null, p_idempotency_key: String(d.idempotency_key ?? ''), p_actor: callerUser.id,
+        });
+        if (error) return { status: 500, body: { error: 'The deposit could not be recorded.', code: 'DEPOSIT_FAILED' } };
+        if (!data?.success) return { status: data?.code === 'NOT_FOUND' ? 404 : 400, body: { error: data?.error ?? 'Deposit rejected.', code: data?.code } };
+        return { status: 200, body: data };
+      }
 
-        try {
-          await supabaseAdmin
-            .from('admission_merit_lists')
-            .update({
-              status: newStatus === 'Approved' ? 'Admitted' : newStatus,
-              updated_at: new Date().toISOString()
-            })
-            .eq('id', id);
-        } catch (e) { }
+      case 'schedule_admission_tests': {
+        const ids: unknown[] = Array.isArray(body.application_ids) ? body.application_ids : [];
+        const date = String(body.test_date ?? '');
+        if (ids.length === 0 || ids.length > 500 || !ids.every(isUuidStr) || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+          return { status: 400, body: { error: 'application_ids (1-500 uuids) and test_date (YYYY-MM-DD) are required.', code: 'VALIDATION_ERROR' } };
+        }
+        const { data, error } = await supabaseAdmin.rpc('admission_schedule_tests', { p_application_ids: ids, p_test_date: date, p_actor: callerUser.id });
+        if (error) return { status: 500, body: { error: 'The tests could not be scheduled.', code: 'SCHEDULE_FAILED' } };
+        if (!data?.success) return { status: 400, body: { error: data?.error ?? 'Scheduling rejected.', code: data?.code } };
+        return { status: 200, body: data };
+      }
 
-        try {
-          const { data: docs } = await supabaseAdmin
-            .from('admission_document_verifications')
-            .select('*')
-            .eq('document_type', 'APPLICATION_METADATA');
+      case 'record_entrance_result': {
+        const { test_id, status: testStatus, score, max_score } = body;
+        if (!isUuidStr(test_id)) return { status: 400, body: { error: 'test_id (uuid) is required.', code: 'VALIDATION_ERROR' } };
+        const { data, error } = await supabaseAdmin.rpc('admission_record_test_result', {
+          p_test_id: test_id, p_status: String(testStatus ?? ''),
+          p_score: score === '' || score == null ? null : Number(score),
+          p_max_score: max_score === '' || max_score == null ? null : Number(max_score), p_actor: callerUser.id,
+        });
+        if (error) return { status: 500, body: { error: 'The result could not be saved.', code: 'RESULT_FAILED' } };
+        if (!data?.success) return { status: data?.code === 'NOT_FOUND' ? 404 : 400, body: { error: data?.error ?? 'Result rejected.', code: data?.code } };
+        return { status: 200, body: data };
+      }
 
-          for (const d of (docs || [])) {
-            if (d.document_url && (d.document_url.includes(id) || d.id === id)) {
-              try {
-                const meta = JSON.parse(d.document_url);
-                meta.status = newStatus;
-                if (remarks) meta.remarks = remarks;
-                meta.updated_at = new Date().toISOString();
-                meta.reviewed_by = callerUser?.id;
-                meta.reviewed_at = new Date().toISOString();
-                await supabaseAdmin
-                  .from('admission_document_verifications')
-                  .update({
-                    document_url: JSON.stringify(meta),
-                    status: newStatus === 'Approved' ? 'Verified' : 'Pending',
-                    updated_at: new Date().toISOString()
-                  })
-                  .eq('id', d.id);
-              } catch (pe) { }
-            }
-          }
-        } catch (e) { }
+      case 'publish_merit_list': {
+        const { course, academic_year, seats, weight_qualifying, quota } = body;
+        const seatsGiven = seats !== undefined && seats !== null && seats !== '';
+        if (!course || (seatsGiven && !Number.isInteger(Number(seats))) || !Number.isInteger(Number(weight_qualifying))) {
+          return { status: 400, body: { error: 'course and weight_qualifying (whole numbers) are required; seats must be a whole number when given.', code: 'VALIDATION_ERROR' } };
+        }
+        const { data, error } = await supabaseAdmin.rpc('admission_publish_merit', {
+          p_course: String(course), p_academic_year: academic_year ? String(academic_year) : null,
+          p_seats: seatsGiven ? Number(seats) : null, p_weight_qualifying: Number(weight_qualifying),
+          p_quota: quota ? String(quota) : null, p_actor: callerUser.id,
+        });
+        if (error) return { status: 500, body: { error: 'The merit list could not be generated.', code: 'MERIT_FAILED' } };
+        if (!data?.success) return { status: 400, body: { error: data?.error ?? 'Merit list rejected.', code: data?.code } };
+        return { status: 200, body: data };
+      }
 
-        try {
-          await supabaseAdmin
-            .from('admission_applications')
-            .update({ status: newStatus, remarks })
-            .eq('id', id);
-        } catch (e) { }
+      case 'apply_merit_decisions': {
+        const { course, academic_year, quota } = body;
+        if (!course) return { status: 400, body: { error: 'course is required.', code: 'VALIDATION_ERROR' } };
+        const { data, error } = await supabaseAdmin.rpc('admission_apply_merit', {
+          p_course: String(course), p_academic_year: academic_year ? String(academic_year) : null,
+          p_quota: quota ? String(quota) : null, p_actor: callerUser.id,
+        });
+        if (error) return { status: 500, body: { error: 'The decisions could not be applied.', code: 'APPLY_FAILED' } };
+        return { status: 200, body: data };
+      }
 
-        // Note: Admission approval NEVER automatically provisions Student or Parent auth accounts
-        return { status: 200, body: { success: true, message: `Admission status updated to ${newStatus}. Login accounts can be provisioned in Admin User Management.` } };
+      case 'fee_generate': {
+        // preview (execute=false) shows exactly what would be created; execute=true bills it
+        const g = body.generate ?? {};
+        const uuid = (v: unknown) => (typeof v === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v) ? v : null);
+        const planId = g.plan_id ? uuid(g.plan_id) : null;
+        const headId = g.fee_head_id ? uuid(g.fee_head_id) : null;
+        if ((g.plan_id && !planId) || (g.fee_head_id && !headId) || (!planId && !headId)) {
+          return { status: 400, body: { error: 'Choose a fee plan or a fee head.', code: 'VALIDATION_ERROR' } };
+        }
+        const dateOrNull = (v: unknown) => (/^\d{4}-\d{2}-\d{2}$/.test(String(v ?? '')) ? String(v) : null);
+        const intOrNull = (v: unknown) => (v === '' || v == null || !Number.isInteger(Number(v)) ? null : Number(v));
+        const { data, error } = await supabaseAdmin.rpc('fee_generate', {
+          p_execute: body.execute === true, p_plan_id: planId, p_head_id: headId,
+          p_amount: g.amount === '' || g.amount == null ? null : Number(g.amount),
+          p_description: g.description ? String(g.description).slice(0, 200) : null,
+          p_scope_type: String(g.scope_type ?? ''), p_scope_value: g.scope_value ? String(g.scope_value) : null,
+          p_quota: g.quota ? String(g.quota) : null, p_semester: intOrNull(g.semester),
+          p_academic_year: g.academic_year ? String(g.academic_year) : null, p_due_date: dateOrNull(g.due_date),
+          p_include_yearly: g.include_yearly === true, p_include_one_time: g.include_one_time === true, p_actor: callerUser.id,
+        });
+        if (error) return { status: 500, body: { error: 'The fees could not be generated.', code: 'FEE_RUN_FAILED' } };
+        if (!data?.success) return { status: data?.code === 'NOT_FOUND' ? 404 : 400, body: { error: data?.error ?? 'Rejected.', code: data?.code, already_billed: data?.already_billed } };
+        return { status: 200, body: data };
+      }
+
+      case 'fee_adjust': {
+        const a = body.adjustment ?? {};
+        const { data, error } = await supabaseAdmin.rpc('fee_adjust', {
+          p_student_fee_id: a.student_fee_id, p_kind: String(a.kind ?? ''),
+          p_amount: a.amount === '' || a.amount == null ? null : Number(a.amount), p_reason: String(a.reason ?? ''), p_actor: callerUser.id,
+        });
+        if (error) return { status: 500, body: { error: 'The adjustment could not be saved.', code: 'ADJUST_FAILED' } };
+        if (!data?.success) return { status: data?.code === 'NOT_FOUND' ? 404 : 400, body: { error: data?.error ?? 'Rejected.', code: data?.code } };
+        return { status: 200, body: data };
+      }
+
+      case 'fee_cancel_run': {
+        const { run_id, reason } = body;
+        const { data, error } = await supabaseAdmin.rpc('fee_cancel_run', { p_run_id: run_id, p_reason: String(reason ?? ''), p_actor: callerUser.id });
+        if (error) return { status: 500, body: { error: 'The run could not be cancelled.', code: 'CANCEL_FAILED' } };
+        if (!data?.success) return { status: data?.code === 'NOT_FOUND' ? 404 : 400, body: { error: data?.error ?? 'Rejected.', code: data?.code } };
+        return { status: 200, body: data };
+      }
+
+      case 'fee_plan_clone': {
+        const { plan_id, name, academic_year } = body;
+        const { data, error } = await supabaseAdmin.rpc('fee_plan_clone', {
+          p_plan_id: plan_id, p_new_name: String(name ?? ''), p_new_year: String(academic_year ?? ''), p_actor: callerUser.id,
+        });
+        if (error) return { status: 500, body: { error: 'The plan could not be copied.', code: 'CLONE_FAILED' } };
+        if (!data?.success) return { status: data?.code === 'NOT_FOUND' ? 404 : 400, body: { error: data?.error ?? 'Rejected.', code: data?.code } };
+        return { status: 200, body: data };
+      }
+
+      case 'enroll_admission': {
+        const { id, department, class_name } = body;
+        if (!id) return { status: 400, body: { error: 'id is required.', code: 'VALIDATION_ERROR' } };
+        const { data, error } = await supabaseAdmin.rpc('admission_enroll', {
+          p_application_id: id, p_actor: callerUser.id, p_department: department ?? null, p_class_name: class_name ?? null,
+        });
+        if (error) return { status: 500, body: { error: 'Enrolment failed; nothing was changed. Please retry.', code: 'ENROLL_FAILED' } };
+        if (!data?.success) return { status: data?.code === 'NOT_FOUND' ? 404 : 409, body: { error: data?.error ?? 'Enrolment rejected.', code: data?.code } };
+        return { status: 200, body: data };
       }
 
       case 'list_unprovisioned_approved_students': {
@@ -853,6 +849,7 @@ export async function handleAdminUserOperation(token: string, body: any): Promis
 
         // 3. Create Auth user
         const { data: authCreated, error: authErr } = await supabaseAdmin.auth.admin.createUser({
+          app_metadata: { erp_provisioned: true },
           email: cleanEmail,
           password: password,
           email_confirm: true,
@@ -1031,9 +1028,10 @@ export async function handleAdminUserOperation(token: string, body: any): Promis
           if (!resolvedParentUserId && parentNameCandidate.trim()) {
             const genParentLoginId = await generateUniqueParentId(supabaseAdmin);
             const parentAuthEmail = parentEmailCandidate.trim() || `${genParentLoginId.toLowerCase()}@parent.adithyan.edu.in`;
-            const parentPass = `Adithyan@${new Date().getFullYear()}`;
+            const parentPass = strongRandomPassword();
 
             const { data: pAuth, error: pAuthErr } = await supabaseAdmin.auth.admin.createUser({
+          app_metadata: { erp_provisioned: true },
               email: parentAuthEmail,
               password: parentPass,
               email_confirm: true,
@@ -1204,6 +1202,7 @@ export async function handleAdminUserOperation(token: string, body: any): Promis
         } else {
           // Create parent Auth user
           const { data: parentAuth, error: pAuthErr } = await supabaseAdmin.auth.admin.createUser({
+          app_metadata: { erp_provisioned: true },
             email: cleanEmail,
             password: password,
             email_confirm: true,
@@ -1341,6 +1340,7 @@ export async function handleAdminUserOperation(token: string, body: any): Promis
           try {
             // Create Supabase Auth user
             const { data: authCreated, error: authErr } = await supabaseAdmin.auth.admin.createUser({
+          app_metadata: { erp_provisioned: true },
               email: cleanEmail,
               password: cleanPassword,
               email_confirm: true,
@@ -1535,6 +1535,7 @@ export async function handleAdminUserOperation(token: string, body: any): Promis
 
             try {
               const { data: parentAuth, error: pAuthErr } = await supabaseAdmin.auth.admin.createUser({
+          app_metadata: { erp_provisioned: true },
                 email: cleanParentEmail,
                 password: cleanPassword,
                 email_confirm: true,
@@ -1681,6 +1682,7 @@ export async function handleAdminUserOperation(token: string, body: any): Promis
           } else {
             try {
               const { data: stuAuth, error: stuAuthErr } = await supabaseAdmin.auth.admin.createUser({
+          app_metadata: { erp_provisioned: true },
                 email: cleanStudentEmail,
                 password: cleanStudentPassword,
                 email_confirm: true,
@@ -1739,6 +1741,7 @@ export async function handleAdminUserOperation(token: string, body: any): Promis
                 parentUserId = existingParent.id;
               } else {
                 const { data: parentAuth } = await supabaseAdmin.auth.admin.createUser({
+          app_metadata: { erp_provisioned: true },
                   email: cleanParentEmail,
                   password: cleanParentPassword,
                   email_confirm: true,
@@ -1956,6 +1959,7 @@ export async function handleAdminUserOperation(token: string, body: any): Promis
         const teacherDept = newUser.role === 'teacher' ? (newUser.department || 'Paramedical Faculty') : (newUser.department || '');
 
         const { data: createdData, error: createError } = await supabaseAdmin.auth.admin.createUser({
+          app_metadata: { erp_provisioned: true },
           email: cleanEmail,
           password: newUser.password,
           email_confirm: true,
@@ -2273,8 +2277,8 @@ export async function handleAdminUserOperation(token: string, body: any): Promis
           return { status: 403, body: { error: 'Access denied: System Administrator privileges required to reset passwords.', code: 'FORBIDDEN' } };
         }
         const { userId, newPassword } = body;
-        if (!userId || !newPassword || newPassword.length < 6) {
-          return { status: 400, body: { error: 'Valid User ID and minimum 6-character password required.', code: 'WEAK_PASSWORD' } };
+        if (!userId || !newPassword || newPassword.length < 8) {
+          return { status: 400, body: { error: 'Valid User ID and a password of at least 8 characters are required.', code: 'WEAK_PASSWORD' } };
         }
 
         const { error: pwdError } = await supabaseAdmin.auth.admin.updateUserById(userId, {
@@ -2284,8 +2288,10 @@ export async function handleAdminUserOperation(token: string, body: any): Promis
         if (pwdError) {
           return { status: 400, body: { error: pwdError.message, code: pwdError.code || 'PASSWORD_RESET_FAILED' } };
         }
+        // The user must choose their own password at next sign-in.
+        await supabaseAdmin.from('profiles').update({ requires_password_change: true }).eq('id', userId);
 
-        return { status: 200, body: { success: true, message: 'Password reset successfully in Supabase Auth.' } };
+        return { status: 200, body: { success: true, message: 'Password reset. The user will be asked to choose a new password at next sign-in.' } };
       }
 
       case 'delete_user': {
@@ -2303,11 +2309,11 @@ export async function handleAdminUserOperation(token: string, body: any): Promis
         }
 
         // Guard 2: Cannot delete last remaining admin
-        const { data: allUsers } = await supabaseAdmin.auth.admin.listUsers();
-        const target = allUsers.users.find((u: any) => u.id === userId);
-        if (target?.user_metadata?.role === 'admin') {
-          const adminCount = allUsers.users.filter((u: any) => u.user_metadata?.role === 'admin').length;
-          if (adminCount <= 1) {
+        // Role comes from profiles (authoritative), never from user_metadata.
+        const { data: targetProfile } = await supabaseAdmin.from('profiles').select('role').eq('id', userId).maybeSingle();
+        if (targetProfile?.role === 'admin') {
+          const { count: adminCount } = await supabaseAdmin.from('profiles').select('id', { count: 'exact', head: true }).eq('role', 'admin').eq('status', 'active');
+          if ((adminCount ?? 0) <= 1) {
             return { status: 400, body: { error: 'Cannot delete the last remaining Administrator account.', code: 'LAST_ADMIN_PROTECTED' } };
           }
         }
@@ -2433,6 +2439,7 @@ export async function handleAdminUserOperation(token: string, body: any): Promis
 
         // 3. Create parent account in Supabase Auth (No email invites, no OTP, no activation email needed)
         const { data: authCreated, error: authError } = await supabaseAdmin.auth.admin.createUser({
+          app_metadata: { erp_provisioned: true },
           email: cleanEmail,
           password: cleanPassword,
           email_confirm: true,
@@ -2639,14 +2646,22 @@ export async function handleAdminUserOperation(token: string, body: any): Promis
 
         let studentUserId = existingStudentProfile?.id;
         let studentId = existingStudentProfile?.roll_number;
+        // The institution's manually entered student id (set when the application was registered)
+        let preassignedStudentId: string | null = null;
+        if (!studentUserId && application_id) {
+          const { data: appRow } = await supabaseAdmin.from('admission_applications')
+            .select('application_number').eq('id', application_id).maybeSingle();
+          preassignedStudentId = appRow?.application_number || null;
+        }
 
         if (!studentUserId) {
-          // Generate unique permanent Student ID
-          studentId = await generateUniqueStudentId(supabaseAdmin);
-          const initialStudentPassword = `Adithyan@${new Date().getFullYear()}`;
+          // Use the application's student id when there is one; otherwise generate
+          studentId = preassignedStudentId || await generateUniqueStudentId(supabaseAdmin);
+          const initialStudentPassword = strongRandomPassword();
 
           // Create Student account in Supabase Auth
           const { data: studentAuth, error: studentAuthErr } = await supabaseAdmin.auth.admin.createUser({
+          app_metadata: { erp_provisioned: true },
             email: cleanStudentEmail,
             password: initialStudentPassword,
             email_confirm: true,
@@ -2782,7 +2797,7 @@ export async function handleAdminUserOperation(token: string, body: any): Promis
         if (!parentUserId) {
           isNewParent = true;
           parentLoginId = await generateUniqueParentId(supabaseAdmin);
-          const initialParentPassword = `Adithyan@${new Date().getFullYear()}`;
+          const initialParentPassword = strongRandomPassword();
 
           let parentAuthEmail = cleanParentEmail;
           if (!parentAuthEmail) {
@@ -2791,6 +2806,7 @@ export async function handleAdminUserOperation(token: string, body: any): Promis
           }
 
           const { data: parentAuth, error: parentAuthErr } = await supabaseAdmin.auth.admin.createUser({
+          app_metadata: { erp_provisioned: true },
             email: parentAuthEmail,
             password: initialParentPassword,
             email_confirm: true,
@@ -2861,47 +2877,15 @@ export async function handleAdminUserOperation(token: string, body: any): Promis
           updated_at: new Date().toISOString()
         }, { onConflict: 'parent_id,student_id' });
 
-        // 4. Update application status if application_id provided
+        // 4. Approve + enrol the application with the same functions the admissions screen uses:
+        //    ends as 'Enrolled' and linked to the permanent student record (idempotent on retry).
         if (application_id) {
-          try {
-            await supabaseAdmin.from('admission_applications').update({
-              status: 'Approved',
-              remarks: `Admission confirmed. Student ID: ${studentId}, Parent ID: ${parentLoginId}`,
-              updated_at: new Date().toISOString()
-            }).eq('id', application_id);
-          } catch (e) { }
-
-          try {
-            await supabaseAdmin.from('admission_merit_lists').update({
-              status: 'Approved',
-              updated_at: new Date().toISOString()
-            }).eq('id', application_id);
-          } catch (e) { }
-
-          try {
-            const { data: docs } = await supabaseAdmin
-              .from('admission_document_verifications')
-              .select('*')
-              .eq('document_type', 'APPLICATION_METADATA');
-
-            for (const d of (docs || [])) {
-              if (d.document_url && (d.document_url.includes(application_id) || d.student_name === cleanStudentName)) {
-                try {
-                  const meta = JSON.parse(d.document_url);
-                  meta.status = 'Approved';
-                  meta.student_id = studentId;
-                  meta.parent_id = parentLoginId;
-                  meta.approved_at = new Date().toISOString();
-                  meta.remarks = `Admission approved. Student ID: ${studentId}, Parent ID: ${parentLoginId}`;
-                  await supabaseAdmin.from('admission_document_verifications').update({
-                    document_url: JSON.stringify(meta),
-                    status: 'Verified',
-                    updated_at: new Date().toISOString()
-                  }).eq('id', d.id);
-                } catch (pe) { }
-              }
-            }
-          } catch (e) { }
+          await supabaseAdmin.from('admission_applications')
+            .update({ status: 'Approved', updated_at: new Date().toISOString() })
+            .eq('id', application_id).in('status', ['Submitted', 'Under Review', 'Waitlisted', 'Offered']);
+          await supabaseAdmin.rpc('admission_enroll', {
+            p_application_id: application_id, p_actor: callerUser.id, p_department: cleanDepartment, p_class_name: cleanClass,
+          });
         }
 
         // 5. Initial Payment & Official Fee Receipt Generation
@@ -3130,122 +3114,6 @@ export async function handleAdminUserOperation(token: string, body: any): Promis
         return { status: 200, body: { success: true, message: 'Backup restored successfully.' } };
       }
 
-      // =======================================================================
-      // PLATFORM SUPER ADMIN MULTI-COLLEGE GOVERNANCE ACTIONS
-      // =======================================================================
-      case 'platform_provision_college': {
-        if (callerRole !== 'platform_super_admin') {
-          return { status: 403, body: { error: 'Forbidden: Platform Super Admin authorization required.', code: 'FORBIDDEN' } };
-        }
-        const { name, code, contactEmail, institutionType, academicConfig, brandingConfig, adminAccount } = body;
-        if (!name || !code || !contactEmail) {
-          return { status: 400, body: { error: 'College name, unique code, and contact email are required.' } };
-        }
-
-        const collegeId = crypto.randomUUID ? crypto.randomUUID() : `col_${Date.now()}`;
-        
-        // Log in audit trail
-        await supabaseAdmin.from('audit_logs').insert({
-          user_email: callerUser.email || 'superadmin@platform.adithyan.edu',
-          user_role: 'platform_super_admin',
-          action: 'provision_college',
-          entity_type: 'college',
-          entity_id: code,
-          new_values: { collegeId, name, code, contactEmail, institutionType, adminAccount, timestamp: new Date().toISOString() }
-        });
-
-        return { 
-          status: 200, 
-          body: { 
-            success: true, 
-            college: {
-              id: collegeId,
-              name,
-              code,
-              status: 'active',
-              institution_type: institutionType || 'Paramedical',
-              contact_email: contactEmail,
-              admin_email: adminAccount?.email,
-              current_version: 'v1.0.0'
-            } 
-          } 
-        };
-      }
-
-      case 'platform_set_college_status': {
-        if (callerRole !== 'platform_super_admin') {
-          return { status: 403, body: { error: 'Forbidden: Platform Super Admin authorization required.', code: 'FORBIDDEN' } };
-        }
-        const { targetCollegeId, targetStatus } = body;
-        if (!targetCollegeId || !targetStatus) {
-          return { status: 400, body: { error: 'targetCollegeId and targetStatus are required.' } };
-        }
-
-        await supabaseAdmin.from('audit_logs').insert({
-          user_email: callerUser.email || 'superadmin@platform.adithyan.edu',
-          user_role: 'platform_super_admin',
-          action: `set_college_status_${targetStatus}`,
-          entity_type: 'college_status',
-          entity_id: targetCollegeId,
-          new_values: { targetStatus, timestamp: new Date().toISOString() }
-        });
-
-        return { status: 200, body: { success: true, targetCollegeId, status: targetStatus } };
-      }
-
-      case 'platform_save_college_config': {
-        if (callerRole !== 'platform_super_admin') {
-          return { status: 403, body: { error: 'Forbidden: Platform Super Admin authorization required.', code: 'FORBIDDEN' } };
-        }
-        const { targetCollegeId, configType, data } = body;
-        await supabaseAdmin.from('audit_logs').insert({
-          user_email: callerUser.email || 'superadmin@platform.adithyan.edu',
-          user_role: 'platform_super_admin',
-          action: 'save_college_config_draft',
-          entity_type: configType || 'config',
-          entity_id: targetCollegeId,
-          new_values: { data, timestamp: new Date().toISOString() }
-        });
-        return { status: 200, body: { success: true, targetCollegeId, configType } };
-      }
-
-      case 'platform_publish_college_config': {
-        if (callerRole !== 'platform_super_admin') {
-          return { status: 403, body: { error: 'Forbidden: Platform Super Admin authorization required.', code: 'FORBIDDEN' } };
-        }
-        const { targetCollegeId, releaseVersion, summary } = body;
-        const version = releaseVersion || `v1.${Date.now()}.0`;
-        await supabaseAdmin.from('audit_logs').insert({
-          user_email: callerUser.email || 'superadmin@platform.adithyan.edu',
-          user_role: 'platform_super_admin',
-          action: 'publish_college_configuration',
-          entity_type: 'configuration_release',
-          entity_id: targetCollegeId,
-          new_values: { version, summary, publishedAt: new Date().toISOString() }
-        });
-        return { status: 200, body: { success: true, targetCollegeId, version } };
-      }
-
-      case 'verify_tenant_isolation': {
-        // Validation endpoint used in security tests to verify cross-college isolation
-        const { targetCollegeId } = body;
-        if (callerRole === 'platform_super_admin') {
-          return { status: 200, body: { authorized: true, role: callerRole, accessScope: 'global' } };
-        }
-        const effectiveCallerCollege = callerCollegeId || '11111111-1111-1111-1111-111111111111';
-        if (targetCollegeId && targetCollegeId !== effectiveCallerCollege) {
-          return { 
-            status: 403, 
-            body: { 
-              authorized: false, 
-              error: 'Cross-college access rejected. Caller is isolated to their own college.',
-              code: 'CROSS_TENANT_VIOLATION' 
-            } 
-          };
-        }
-        return { status: 200, body: { authorized: true, collegeId: effectiveCallerCollege, accessScope: 'tenant_isolated' } };
-      }
-
       default:
         return { status: 400, body: { error: `Unknown action: "${action}".`, code: 'UNKNOWN_ACTION' } };
     }
@@ -3398,11 +3266,11 @@ export async function handleFirstLoginChallenge(body: any): Promise<{ status: nu
       user_id: user.id,
       name: user.name,
       role: user.role,
-      student_id: user.student_id || user.roll_number,
-      parent_id: user.login_id,
+      student_id: (user as any).student_id || user.roll_number,
+      parent_id: (user as any).login_id,
       masked_phone: maskedPhone,
       masked_email: maskedEmail,
-      is_first_login: user.is_first_login ?? true,
+      is_first_login: (user as any).is_first_login ?? true,
       verification_code: code // Supplied for on-screen verification in testing and production environment
     }
   };

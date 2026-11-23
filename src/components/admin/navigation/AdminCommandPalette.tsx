@@ -331,7 +331,7 @@ export function AdminCommandPalette({ open, onOpenChange }: AdminCommandPaletteP
             <span>Use <kbd className="font-mono bg-white dark:bg-slate-800 px-1 rounded border">↑</kbd> <kbd className="font-mono bg-white dark:bg-slate-800 px-1 rounded border">↓</kbd> to navigate</span>
             <span><kbd className="font-mono bg-white dark:bg-slate-800 px-1 rounded border">↵</kbd> to open</span>
           </div>
-          <span className="font-medium text-slate-500 dark:text-slate-400">Adithyan Command Palette</span>
+          <span className="font-medium text-slate-500 dark:text-slate-400">Command Palette</span>
         </div>
       </DialogContent>
     </Dialog>

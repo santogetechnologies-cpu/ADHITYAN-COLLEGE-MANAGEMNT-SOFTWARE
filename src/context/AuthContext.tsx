@@ -4,7 +4,6 @@ import { Session, User as SupabaseAuthUser } from '@supabase/supabase-js';
 import { queryClient } from '@/lib/queryClient';
 
 export type UserRole =
-  | 'platform_super_admin'
   | 'admin'
   | 'principal'
   | 'student'
@@ -40,6 +39,9 @@ export interface User {
   student_id?: string;
   preferences?: any;
   assigned_classes?: string[];
+  login_id?: string;
+  is_first_login?: boolean;
+  requires_password_change?: boolean;
 }
 
 interface AuthContextType {
@@ -60,16 +62,10 @@ function mapAuthToUser(authUser: SupabaseAuthUser, profileData?: any): User {
   const meta = authUser.user_metadata || {};
   const email = (authUser.email || '').toLowerCase();
 
-  let fallbackRole: UserRole = 'student';
-  if (email.startsWith('superadmin') || email.includes('superadmin@') || meta.role === 'platform_super_admin') {
-    fallbackRole = 'platform_super_admin';
-  } else if (email.startsWith('admin') || email.includes('admin@')) {
-    fallbackRole = 'admin';
-  } else if (email.startsWith('principal') || email.includes('principal@')) {
-    fallbackRole = 'principal';
-  }
-
-  const resolvedRole = (meta.role || profileData?.preferences?.role || profileData?.role || fallbackRole) as UserRole;
+  // SECURITY: the role is authoritative ONLY from public.profiles (RLS-protected, guarded by the
+  // protect_profile_sensitive_columns trigger). user_metadata, profiles.preferences and e-mail
+  // prefixes are user-controllable, so they must never grant a role. No profile => least privilege.
+  const resolvedRole = (profileData?.role || 'student') as UserRole;
   const resolvedName = profileData?.name || meta.name || meta.full_name || email.split('@')[0].replace(/[._]/g, ' ');
   const resolvedAvatar = profileData?.avatar_url || meta.avatar || meta.avatar_url || '';
   const resolvedStudentId = profileData?.student_id || profileData?.roll_number || meta.student_id || meta.roll_number || undefined;
@@ -97,6 +93,9 @@ function mapAuthToUser(authUser: SupabaseAuthUser, profileData?: any): User {
     student_id: resolvedStudentId,
     preferences: profileData?.preferences,
     assigned_classes: assignedClasses,
+    login_id: profileData?.login_id || undefined,
+    is_first_login: profileData?.is_first_login === true,
+    requires_password_change: profileData?.requires_password_change === true,
   };
 }
 

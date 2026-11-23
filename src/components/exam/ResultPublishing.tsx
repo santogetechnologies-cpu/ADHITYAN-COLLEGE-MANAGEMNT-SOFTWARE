@@ -9,6 +9,7 @@ import { useExams, useExamResults, usePublishExam } from '@/hooks/queries/useExa
 import { DataState } from '@/components/shared/DataState';
 import { createMutationToast } from '@/lib/mutationToast';
 import { exportToCSV, printDocument } from '@/lib/exportUtils';
+import { askConfirm, askText } from '@/lib/dialogs';
 
 export const ResultPublishing = () => {
   const { data: exams = [], isLoading: examsLoading, refetch: refetchExams } = useExams();
@@ -18,11 +19,20 @@ export const ResultPublishing = () => {
   const { data: results = [], isLoading: resultsLoading, refetch: refetchResults } = useExamResults(activeExamId);
   const publishMutation = usePublishExam();
 
-  const handleTogglePublish = (examId: string, currentStatus: boolean) => {
+  const handleTogglePublish = async (examId: string, currentStatus: boolean) => {
+    let reason: string | undefined;
+    if (currentStatus) {
+      // withdrawing published results needs a recorded reason
+      const answer = await askText('Why are these results being withdrawn?\nThe reason is saved in the audit log.', { title: 'Withdraw results', required: true, minLength: 3, confirmLabel: 'Withdraw results', destructive: true });
+      if (!answer) return;
+      reason = answer;
+    } else if (!(await askConfirm('Publish these results? Students and parents will be able to see their marks immediately.', { title: 'Publish results', confirmLabel: 'Publish' }))) {
+      return;
+    }
     publishMutation.mutate(
-      { examId, isPublished: !currentStatus },
+      { examId, isPublished: !currentStatus, reason },
       createMutationToast({
-        successTitle: !currentStatus ? 'Examination Published' : 'Examination Unpublished',
+        successTitle: !currentStatus ? 'Results published' : 'Results withdrawn',
         successDescription: () =>
           !currentStatus
             ? 'Results are now visible to students and parents.'

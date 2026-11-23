@@ -40,6 +40,8 @@ import { useToast } from '@/hooks/use-toast';
 import { parentLinkingService, ParentAccountSummary } from '@/services/parentLinkingService';
 import { StudentSearchSelect } from '@/components/shared/StudentSearchSelect';
 import { Profile } from '@/types/database.types';
+import { askConfirm, askText } from '@/lib/dialogs';
+import { generateTempPassword } from '@/lib/tempPassword';
 
 interface ParentAccountManagementDialogProps {
   open: boolean;
@@ -68,7 +70,7 @@ export function ParentAccountManagementDialog({
     phone: '',
     email: '',
     loginId: `PAR-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`,
-    temporaryPassword: 'Adithyan@2026',
+    temporaryPassword: generateTempPassword(),
   });
   const [selectedStudentForCreate, setSelectedStudentForCreate] = useState<Profile | null>(preselectedStudent || null);
 
@@ -161,7 +163,7 @@ export function ParentAccountManagementDialog({
         phone: '',
         email: '',
         loginId: `PAR-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`,
-        temporaryPassword: 'Adithyan@2026',
+        temporaryPassword: generateTempPassword(),
       });
       setSelectedStudentForCreate(null);
       await loadParents();
@@ -221,7 +223,7 @@ export function ParentAccountManagementDialog({
 
   // Handle Unlink Child
   const handleUnlink = async (linkId: string, parentName: string, studentName: string) => {
-    if (!confirm(`Are you sure you want to unlink ${studentName} from parent ${parentName}?`)) return;
+    if (!(await askConfirm(`Unlink ${studentName} from parent ${parentName}? The parent will no longer see this student.`, { title: 'Unlink student', confirmLabel: 'Unlink', destructive: true }))) return;
 
     try {
       await parentLinkingService.unlinkParentStudent(linkId);

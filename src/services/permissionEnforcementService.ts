@@ -22,6 +22,10 @@ class PermissionEnforcementService {
     if (typeof window !== 'undefined') {
       window.addEventListener('system_config_published', () => this.refreshConfig());
       window.addEventListener('role_config_updated', () => this.refreshConfig());
+      // A change published by an administrator on another device reaches everyone else: re-read the live
+      // configuration when the tab becomes visible again and once a minute while it is open.
+      document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') void this.refreshConfig(); });
+      window.setInterval(() => { if (document.visibilityState === 'visible') void this.refreshConfig(); }, 60_000);
     }
   }
 
@@ -37,10 +41,6 @@ class PermissionEnforcementService {
   // Route & Page Level Enforcement
   checkRouteAccess(role: UserRole, pathname: string): RouteAuthorizationResult {
     // 1. Platform Super Admin and College Admin have baseline master access to their zones
-    if (role === 'platform_super_admin') {
-      return { allowed: true };
-    }
-
     if (!this.activeConfig) {
       // Fallback: If config hasn't loaded yet, allow standard navigation but require Auth
       return { allowed: true };
@@ -53,19 +53,18 @@ class PermissionEnforcementService {
       '/admission-management': 'admissions',
       '/alumni-management': 'alumni',
       '/medical-management': 'medical',
-      '/certificate-generation': 'compliance',
+      '/certificate-generation': 'certificates',
       '/sports-management': 'sports',
       '/disciplinary-management': 'disciplinary',
       '/store': 'store',
       '/teachers/create-assignment': 'academics',
-      '/teachers/message-parents': 'communication',
+      '/teachers/message-parents': 'broadcasts',
       '/teachers/generate-report': 'academics',
       '/teachers/daily-update': 'academics',
       '/admin/timetable': 'timetable',
       '/admin/naac': 'naac',
-      '/admin/departments': 'departments',
-      '/track-bus': 'transport',
-      '/message-teacher': 'communication'
+      '/admin/departments': 'academics',
+      '/track-bus': 'transport'
     };
 
     const matchedPrefix = Object.keys(moduleMap).find(prefix => pathname.startsWith(prefix));
@@ -74,7 +73,9 @@ class PermissionEnforcementService {
     // 3. Module Status Check
     if (moduleId && this.activeConfig.modules) {
       const mod = this.activeConfig.modules.find(m => m.id === moduleId);
-      if (mod && mod.status === 'disabled') {
+      // ModuleDefinition has `enabled` (there is no `status` field), so the old `mod.status === 'disabled'` test
+      // was never true and disabling a module in the Control Center never blocked its pages.
+      if (mod && mod.enabled === false) {
         return {
           allowed: false,
           reason: `Institutional module "${mod.name}" is currently disabled by Super Admin.`,
@@ -117,7 +118,7 @@ class PermissionEnforcementService {
     entity: string, 
     action: 'view' | 'create' | 'edit' | 'delete' | 'approve' | 'export' | 'import'
   ): CrudAuthorizationResult {
-    if (role === 'platform_super_admin' || role === 'admin') {
+    if (role === 'admin') {
       return { allowed: true };
     }
 

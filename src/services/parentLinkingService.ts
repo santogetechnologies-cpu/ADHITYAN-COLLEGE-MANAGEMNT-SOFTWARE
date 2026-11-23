@@ -1,5 +1,6 @@
 import { supabase } from '@/lib/supabase';
 import { Profile } from '@/types/database.types';
+import { apiUrl } from '@/lib/apiBase';
 
 export interface CreateParentAccountInput {
   login_id: string;
@@ -59,7 +60,7 @@ export const parentLinkingService = {
 
     // 1. Try Vite middleware / server endpoint
     try {
-      const response = await fetch('/api/auth/resolve-login-id', {
+      const response = await fetch(apiUrl('/api/auth/resolve-login-id'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ login_id: cleanId }),
@@ -119,7 +120,7 @@ export const parentLinkingService = {
       throw new Error('Authentication required. Please log in as Receptionist or Administrator.');
     }
 
-    const response = await fetch('/api/admin/users', {
+    const response = await fetch(apiUrl('/api/admin/users'), {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -151,7 +152,7 @@ export const parentLinkingService = {
     // 1. Try server endpoint
     if (token) {
       try {
-        const response = await fetch('/api/admin/users', {
+        const response = await fetch(apiUrl('/api/admin/users'), {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -203,7 +204,7 @@ export const parentLinkingService = {
 
     if (token) {
       try {
-        const response = await fetch('/api/admin/users', {
+        const response = await fetch(apiUrl('/api/admin/users'), {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -244,7 +245,7 @@ export const parentLinkingService = {
 
     if (token) {
       try {
-        const response = await fetch('/api/admin/users', {
+        const response = await fetch(apiUrl('/api/admin/users'), {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',

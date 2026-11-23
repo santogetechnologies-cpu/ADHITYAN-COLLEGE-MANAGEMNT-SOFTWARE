@@ -54,7 +54,7 @@ export function ParentMyChildrenView({
               <CardContent className="pt-0 pb-6 px-6 relative">
                 <div className="-mt-10 mb-4 flex items-end justify-between">
                   <Avatar className="h-20 w-20 border-4 border-background shadow-md">
-                    <AvatarImage src={s.avatar_url || s.avatar} alt={s.name} className="object-cover" />
+                    <AvatarImage src={s.avatar_url} alt={s.name} className="object-cover" />
                     <AvatarFallback className="text-xl font-bold bg-primary text-primary-foreground">
                       {s.name?.charAt(0) || 'S'}
                     </AvatarFallback>

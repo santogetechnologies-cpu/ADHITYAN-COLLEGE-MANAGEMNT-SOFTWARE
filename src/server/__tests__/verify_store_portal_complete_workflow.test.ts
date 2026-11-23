@@ -91,7 +91,7 @@ async function runStoreWorkflowSuite() {
     // -------------------------------------------------------------------------
     console.log('\n--- 3. Store Product Lifecycle ---');
     const testProductName = `Test Autoclave Sterilization Cassette ${Date.now()}`;
-    const createdProduct = await db.createStoreProduct({
+    const createdProduct = await db.createStoreProduct(<any>{
       name: testProductName,
       category: 'Clinical Equipment',
       price: 1850,

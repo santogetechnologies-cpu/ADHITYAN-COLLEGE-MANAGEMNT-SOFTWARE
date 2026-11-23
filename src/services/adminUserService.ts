@@ -2,6 +2,7 @@ import { supabase } from '@/lib/supabase';
 import { UserRole } from '@/context/AuthContext';
 import { handleSupabaseError } from './api/errors';
 import { parentLinkingService } from './parentLinkingService';
+import { apiUrl } from '@/lib/apiBase';
 
 export interface AdminManagedUser {
   id: string;
@@ -109,7 +110,7 @@ export const adminUserService = {
       const token = session?.access_token;
 
       if (token) {
-        const response = await fetch('/api/admin/users', {
+        const response = await fetch(apiUrl('/api/admin/users'), {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -139,7 +140,7 @@ export const adminUserService = {
 
       if (token) {
         try {
-          const response = await fetch('/api/admin/users', {
+          const response = await fetch(apiUrl('/api/admin/users'), {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
@@ -233,7 +234,7 @@ export const adminUserService = {
 
       if (token) {
         try {
-          const response = await fetch('/api/admin/users', {
+          const response = await fetch(apiUrl('/api/admin/users'), {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
@@ -268,7 +269,7 @@ export const adminUserService = {
       const token = session?.access_token;
 
       if (token) {
-        const response = await fetch('/api/admin/users', {
+        const response = await fetch(apiUrl('/api/admin/users'), {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -295,7 +296,7 @@ export const adminUserService = {
 
       if (token) {
         try {
-          const response = await fetch('/api/admin/users', {
+          const response = await fetch(apiUrl('/api/admin/users'), {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
@@ -340,7 +341,7 @@ export const adminUserService = {
       const { data: { session } } = await supabase.auth.getSession();
       const token = session?.access_token;
       if (token) {
-        const res = await fetch('/api/admin/users', {
+        const res = await fetch(apiUrl('/api/admin/users'), {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -380,7 +381,7 @@ export const adminUserService = {
       const { data: { session } } = await supabase.auth.getSession();
       const token = session?.access_token;
       if (token) {
-        const res = await fetch('/api/admin/users', {
+        const res = await fetch(apiUrl('/api/admin/users'), {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -460,7 +461,7 @@ export const adminUserService = {
       const token = session?.access_token;
       if (!token) throw new Error('Administrative session required to provision student accounts.');
 
-      const res = await fetch('/api/admin/users', {
+      const res = await fetch(apiUrl('/api/admin/users'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -491,7 +492,7 @@ export const adminUserService = {
       const { data: { session } } = await supabase.auth.getSession();
       const token = session?.access_token;
       if (token) {
-        const res = await fetch('/api/admin/users', {
+        const res = await fetch(apiUrl('/api/admin/users'), {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -546,7 +547,7 @@ export const adminUserService = {
       const token = session?.access_token;
       if (!token) throw new Error('Administrative session required to create parent accounts.');
 
-      const res = await fetch('/api/admin/users', {
+      const res = await fetch(apiUrl('/api/admin/users'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

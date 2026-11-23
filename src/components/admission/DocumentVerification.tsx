@@ -1,3 +1,4 @@
+import { resolveDocumentUrl } from '@/lib/privateDocs';
 import { useState, useEffect, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -168,10 +169,8 @@ export const DocumentVerification = () => {
                       </>
                     )}
                     {doc.document_url && (
-                      <Button variant="ghost" size="sm" asChild>
-                        <a href={doc.document_url} target="_blank" rel="noopener noreferrer">
-                          <ExternalLink className="w-3.5 h-3.5" />
-                        </a>
+                      <Button variant="ghost" size="sm" aria-label="Open document" onClick={async () => { try { window.open(await resolveDocumentUrl(doc.document_url), '_blank', 'noopener'); } catch (e: any) { toast({ title: 'Could not open the document', description: e?.message || 'The file may have been removed.', variant: 'destructive' }); } }}>
+                        <ExternalLink className="w-3.5 h-3.5" />
                       </Button>
                     )}
                   </div>

@@ -14,6 +14,7 @@ import {
   Clock,
   Sparkles
 } from 'lucide-react';
+import { InstitutionName } from '@/lib/institution';
 
 interface SidebarProps {
   currentView: string;
@@ -39,6 +40,7 @@ export function CampusProDesktopSidebar({
     { id: 'fees', label: 'Fees & Receipts', icon: CreditCard },
     { id: 'store', label: 'Store', icon: ShoppingBag },
     { id: 'transport', label: 'Bus Tracking', icon: Bus },
+    { id: 'placement', label: 'Placements', icon: GraduationCap },
     { id: 'complaints', label: 'Raise Complaints', icon: AlertCircle },
   ];
 
@@ -56,7 +58,7 @@ export function CampusProDesktopSidebar({
           </div>
           <div className="min-w-0">
             <h1 className="text-base font-bold text-white tracking-tight leading-snug truncate">
-              Adithyan College
+              <InstitutionName />
             </h1>
             <p className="text-[10px] font-medium text-blue-200/70">Student Portal</p>
           </div>

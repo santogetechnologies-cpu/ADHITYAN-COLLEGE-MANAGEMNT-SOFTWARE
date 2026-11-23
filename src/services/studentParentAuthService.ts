@@ -1,5 +1,6 @@
 import { supabase } from '@/lib/supabase';
 import { FeeReceipt } from '@/types/database.types';
+import { apiUrl } from '@/lib/apiBase';
 
 export interface AdmissionConfirmationInput {
   application_id?: string;
@@ -96,7 +97,7 @@ export const studentParentAuthService = {
       throw new Error('Authentication required. Please sign in as Administrator or Receptionist.');
     }
 
-    const response = await fetch('/api/admin/users', {
+    const response = await fetch(apiUrl('/api/admin/users'), {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -139,7 +140,7 @@ export const studentParentAuthService = {
 
     // 1. Try backend server endpoint
     try {
-      const response = await fetch('/api/auth/first-login-challenge', {
+      const response = await fetch(apiUrl('/api/auth/first-login-challenge'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ identifier: cleanId, expected_role: expectedRole }),
@@ -223,7 +224,7 @@ export const studentParentAuthService = {
 
     // 1. Try backend server endpoint
     try {
-      const response = await fetch('/api/auth/complete-first-login', {
+      const response = await fetch(apiUrl('/api/auth/complete-first-login'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -301,7 +302,7 @@ export const studentParentAuthService = {
 
     // Try server endpoint
     try {
-      const res = await fetch('/api/auth/resolve-login-id', {
+      const res = await fetch(apiUrl('/api/auth/resolve-login-id'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ login_id: clean, expected_role: expectedRole }),

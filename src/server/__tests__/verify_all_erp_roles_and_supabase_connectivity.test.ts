@@ -37,7 +37,7 @@ async function verifyAllRolesAndModules() {
     const instSettings = await db.getInstitutionalSettings();
     assert(instSettings !== null && typeof instSettings === 'object', 'Admin: db.getInstitutionalSettings() returns configuration');
 
-    const notifications = await db.getNotifications();
+    const notifications = await db.getNotifications('00000000-0000-0000-0000-000000000000');
     assert(Array.isArray(notifications), 'Admin: db.getNotifications() returns system notifications array');
   } catch (e: any) {
     assert(false, 'Admin Domain check exception', e.message);

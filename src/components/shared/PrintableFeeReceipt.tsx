@@ -2,6 +2,7 @@ import React from 'react';
 import { Button } from '@/components/ui/button';
 import { Printer, Download, CheckCircle2, ShieldCheck } from 'lucide-react';
 import { FeeReceipt } from '@/types/database.types';
+import { InstitutionName } from '@/lib/institution';
 
 interface PrintableReceiptProps {
   receipt: FeeReceipt;
@@ -78,7 +79,7 @@ export function PrintableFeeReceipt({ receipt, onClose }: PrintableReceiptProps)
               className="w-12 h-12 object-contain rounded-md"
             />
             <h1 className="text-lg sm:text-xl font-black tracking-tight text-slate-900 uppercase">
-              Adithyan College
+              <InstitutionName />
             </h1>
           </div>
           <p className="text-[11px] text-slate-600 font-medium">
@@ -197,7 +198,7 @@ export function PrintableFeeReceipt({ receipt, onClose }: PrintableReceiptProps)
               Authorized Finance Cashier
             </div>
             <div className="text-[10px] text-slate-400">
-              Adithyan College Central Accounts Office
+              <InstitutionName /> Central Accounts Office
             </div>
           </div>
         </div>

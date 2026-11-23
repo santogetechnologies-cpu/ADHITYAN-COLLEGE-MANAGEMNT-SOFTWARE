@@ -59,6 +59,7 @@ import { AdminCommandPalette } from './navigation/AdminCommandPalette';
 import { AdminNotificationCenter } from './navigation/AdminNotificationCenter';
 import { AdminQuickCreateMenu } from './navigation/AdminQuickCreateMenu';
 import { AdminMegaMenu } from './navigation/AdminMegaMenu';
+import { InstitutionName } from '@/lib/institution';
 
 export function AdminExecutiveNavbar() {
   const { user, logout } = useAuth();
@@ -182,7 +183,7 @@ export function AdminExecutiveNavbar() {
                 <div className="flex flex-col">
                   <div className="flex items-center gap-1.5">
                     <span className="text-sm sm:text-base font-bold tracking-tight text-slate-900 dark:text-slate-100 group-hover:text-blue-700 dark:group-hover:text-blue-400 transition-colors">
-                      Adithyan College
+                      <InstitutionName />
                     </span>
                     <Badge
                       variant="outline"
@@ -440,7 +441,7 @@ export function AdminExecutiveNavbar() {
                       />
                       <div>
                         <SheetTitle className="text-sm font-bold text-slate-900 dark:text-slate-100">
-                          Adithyan College
+                          <InstitutionName />
                         </SheetTitle>
                         <p className="text-[11px] text-slate-400">Institutional Command Center</p>
                       </div>

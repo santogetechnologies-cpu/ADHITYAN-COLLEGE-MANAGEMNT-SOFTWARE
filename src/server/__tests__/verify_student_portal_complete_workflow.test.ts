@@ -350,7 +350,7 @@ async function runStudentPortalCompleteWorkflowTests() {
     });
 
     assert(orderRes.success === true, 'Student places order for campus lab supplies/uniform');
-    if (orderRes.orderId) createdOrderId = orderRes.orderId;
+    if ((orderRes as any).orderId) createdOrderId = (orderRes as any).orderId;
 
     const studentOrders = await db.getUserStoreOrders(studentAuthId);
     assert(studentOrders.length > 0, 'Placed order appears in student store order history');

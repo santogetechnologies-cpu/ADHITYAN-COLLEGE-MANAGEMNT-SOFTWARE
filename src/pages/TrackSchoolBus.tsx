@@ -12,6 +12,7 @@ import { useAuth } from '@/context/AuthContext';
 import { useRealtimeSubscription } from '@/hooks/useRealtimeSubscription';
 import { TransportVehicle, TransportStop, Profile } from '@/types/database.types';
 import { ROLE_CONFIGS } from '@/config/roles';
+import { InstitutionName } from '@/lib/institution';
 
 interface StopItem {
   time: string;
@@ -175,7 +176,7 @@ const TrackSchoolBus = () => {
               </Button>
               <div>
                 <h1 className="text-xl sm:text-2xl font-bold text-foreground">Track Campus Bus & Transit</h1>
-                <p className="text-xs text-muted-foreground">Adithyan Institute of Paramedical Sciences – Fleet Telematics</p>
+                <p className="text-xs text-muted-foreground"><InstitutionName /> – Fleet Telematics</p>
               </div>
             </div>
 

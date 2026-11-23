@@ -1,321 +1,264 @@
-import { useState, useEffect, useCallback } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Badge } from '@/components/ui/badge';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from '@/components/ui/dialog';
-import { Trophy, Medal, Award, Plus, Loader2 } from 'lucide-react';
+import { AlertTriangle, Loader2, Trophy } from 'lucide-react';
 import { db } from '@/services/supabase/database';
-import { useRealtimeSubscription } from '@/hooks/useRealtimeSubscription';
 import { useToast } from '@/hooks/use-toast';
-import { OFFICIAL_COURSES } from '@/constants/courses';
-import type { AdmissionMeritEntry } from '@/types/database.types';
+import { STATUS_STYLE, type AdmissionStatus } from '@/lib/admissionWorkflow';
+import { supabase } from '@/lib/supabase';
+import { askConfirm, askText } from '@/lib/dialogs';
+
+const ANY_QUOTA = '__all__';
+
+/** Applications that take part in ranking (mirrors admission_publish_merit in migration 039). */
+const RANKABLE = ['Under Review', 'Approved', 'Waitlisted', 'Offered'];
 
 export const MeritList = () => {
   const { toast } = useToast();
   const [loading, setLoading] = useState(true);
-  const [meritList, setMeritList] = useState<AdmissionMeritEntry[]>([]);
-  const [selectedCourse, setSelectedCourse] = useState<string>('All');
-  const [isAddOpen, setIsAddOpen] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [applications, setApplications] = useState<any[]>([]);
+  const [merit, setMerit] = useState<any[]>([]);
 
-  const [formData, setFormData] = useState({
-    student_name: '',
-    course_name: OFFICIAL_COURSES[0].name,
-    merit_score: 90,
-    rank: 1,
-    category: 'General',
-    status: 'Selected' as 'Selected' | 'Waitlist' | 'Admitted'
-  });
+  const [course, setCourse] = useState('');
+  const [year, setYear] = useState('all');
+  const [seats, setSeats] = useState('');
+  const [quota, setQuota] = useState(ANY_QUOTA);
+  const [quotas, setQuotas] = useState<{ code: string; name: string }[]>([]);
+  const [weightQ, setWeightQ] = useState('50');
+  const [generating, setGenerating] = useState(false);
+  const [applying, setApplying] = useState(false);
+  const [excluded, setExcluded] = useState<{ name: string; reason: string }[]>([]);
+  const [skipped, setSkipped] = useState<{ name: string; reason: string }[]>([]);
 
-  const loadMerit = useCallback(async () => {
+  const load = useCallback(async () => {
     try {
-      const data = await db.getAdmissionMeritLists();
-      setMeritList(data);
-    } catch (err) {
-      console.error('Failed to load merit list:', err);
+      const [apps, rows, q] = await Promise.all([
+        db.getAdmissionApplications(), db.getAdmissionMeritLists(),
+        supabase.from('admission_quotas' as any).select('code, name').eq('active', true).order('sort_order'),
+      ]);
+      setApplications(apps as any[]);
+      setMerit(rows);
+      setQuotas(((q as any).data || []) as any[]);
+      setLoadError(null);
+    } catch (err: any) {
+      setLoadError(err?.message || 'Could not load the merit list.');
     } finally {
       setLoading(false);
     }
   }, []);
 
+  useEffect(() => { void load(); }, [load]);
+
+  const courses = useMemo(
+    () => Array.from(new Set(applications.filter((a) => RANKABLE.includes(a.status)).map((a) => a.class_name).filter(Boolean))).sort() as string[],
+    [applications]
+  );
   useEffect(() => {
-    loadMerit();
-  }, [loadMerit]);
+    if (!course && courses.length > 0) setCourse(courses[0]);
+  }, [courses, course]);
 
-  useRealtimeSubscription({ table: 'admission_merit_lists', onChange: loadMerit, onReconnect: loadMerit });
+  const years = useMemo(
+    () => Array.from(new Set(applications.filter((a) => a.class_name === course).map((a) => a.academic_year).filter(Boolean))).sort() as string[],
+    [applications, course]
+  );
+  const appById = useMemo(() => new Map(applications.map((a) => [a.id, a])), [applications]);
+  const candidates = applications.filter((a) => a.class_name === course && RANKABLE.includes(a.status) && (year === 'all' || a.academic_year === year) && (quota === ANY_QUOTA || a.quota === quota));
+  const rows = merit.filter((m) => m.course_name === course && (year === 'all' || m.academic_year === year) && (quota === ANY_QUOTA || m.quota === quota));
+  const selected = rows.filter((r) => r.status === 'Selected').length;
 
-  const handleAddCandidate = async () => {
-    if (!formData.student_name.trim()) {
-      toast({ title: 'Validation Error', description: 'Student name is required.', variant: 'destructive' });
+  const seatsBlank = seats.trim() === '';
+  const seatsNum = Number(seats);
+  const wq = Number(weightQ);
+  // blank seats = take them from the seat matrix (needs a quota and an academic year)
+  const seatsOk = seatsBlank ? (quota !== ANY_QUOTA && year !== 'all') : Number.isInteger(seatsNum) && seatsNum >= 1;
+  const inputsOk = seatsOk && Number.isInteger(wq) && wq >= 0 && wq <= 100;
+
+  const generate = async () => {
+    if (!inputsOk) {
+      toast({ title: 'Check the inputs', description: seatsBlank ? 'Leave seats blank only when a quota and an academic year are chosen (seats then come from the seat matrix). Otherwise enter the number of seats.' : 'Seats must be a whole number of at least 1 and the weight a whole number from 0 to 100.', variant: 'destructive' });
       return;
     }
-
-    setSubmitting(true);
+    if (rows.length > 0 && !(await askConfirm(`This replaces the current merit list for ${course}. Continue?`, { title: 'Replace merit list', confirmLabel: 'Replace' }))) return;
+    setGenerating(true);
     try {
-      const created = await db.addAdmissionMeritEntry({
-        student_name: formData.student_name.trim(),
-        course_name: formData.course_name,
-        merit_score: Number(formData.merit_score) || 0,
-        rank: Number(formData.rank) || 1,
-        category: formData.category,
-        status: formData.status
+      const r = await db.publishMeritList({ course, academicYear: year === 'all' ? undefined : year, seats: seatsBlank ? undefined : seatsNum, weightQualifying: wq, quota: quota === ANY_QUOTA ? undefined : quota });
+      setExcluded(r.excluded ?? []);
+      setSkipped([]);
+      toast({
+        title: 'Merit list generated',
+        description: `${r.seats} seat${r.seats === 1 ? '' : 's'}; ${r.ranked} ranked: ${r.selected} selected, ${r.waitlisted} waitlisted${r.excluded?.length ? `, ${r.excluded.length} could not be ranked` : ''}.`,
       });
-
-      if (created) {
-        toast({ title: 'Candidate Added', description: `${formData.student_name} added to merit list.` });
-        setIsAddOpen(false);
-        setFormData({
-          student_name: '',
-          course_name: OFFICIAL_COURSES[0].name,
-          merit_score: 90,
-          rank: meritList.length + 1,
-          category: 'General',
-          status: 'Selected'
-        });
-        loadMerit();
-      }
+      await load();
     } catch (err: any) {
-      toast({ title: 'Error', description: err.message, variant: 'destructive' });
+      toast({ title: 'Merit list not generated', description: err?.message, variant: 'destructive' });
     } finally {
-      setSubmitting(false);
+      setGenerating(false);
     }
   };
 
-  const handleUpdateStatus = async (id: string, status: 'Selected' | 'Waitlist' | 'Admitted') => {
+  const apply = async () => {
+    if (!(await askConfirm('Selected applicants will be marked Approved and the rest Waitlisted. Continue?', { title: 'Apply merit decisions', confirmLabel: 'Apply' }))) return;
+    setApplying(true);
     try {
-      await db.updateMeritStatus(id, status);
-      toast({ title: 'Status Updated', description: `Candidate status changed to ${status}.` });
-      loadMerit();
+      const r = await db.applyMeritDecisions({ course, academicYear: year === 'all' ? undefined : year, quota: quota === ANY_QUOTA ? undefined : quota });
+      setSkipped(r.skipped ?? []);
+      toast({
+        title: 'Decisions applied',
+        description: `${r.updated} application${r.updated === 1 ? '' : 's'} updated${r.skipped?.length ? `, ${r.skipped.length} left unchanged (see below)` : ''}.`,
+      });
+      await load();
     } catch (err: any) {
-      toast({ title: 'Error', description: err.message, variant: 'destructive' });
+      toast({ title: 'Decisions not applied', description: err?.message, variant: 'destructive' });
+    } finally {
+      setApplying(false);
     }
   };
-
-  const filteredList = selectedCourse === 'All' 
-    ? meritList 
-    : meritList.filter(m => m.course_name === selectedCourse);
-
-  const selectedCount = meritList.filter(m => m.status === 'Selected' || m.status === 'Admitted').length;
-  const waitlistCount = meritList.filter(m => m.status === 'Waitlist').length;
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div>
-          <h2 className="text-2xl font-semibold">Merit List & Seat Allocation</h2>
-          <p className="text-muted-foreground">Official rank lists and candidate seat allocations for all 9 programs</p>
-        </div>
-        <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
-          <DialogTrigger asChild>
-            <Button className="flex items-center gap-2">
-              <Plus className="w-4 h-4" />
-              Add Candidate to Merit
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="max-w-md">
-            <DialogHeader>
-              <DialogTitle>Add Candidate to Merit List</DialogTitle>
-              <DialogDescription>Rank and allocate seat for applicant</DialogDescription>
-            </DialogHeader>
-            <div className="space-y-3 py-2">
-              <div className="space-y-1">
-                <Label htmlFor="m-name">Student Full Name</Label>
-                <Input
-                  id="m-name"
-                  value={formData.student_name}
-                  onChange={(e) => setFormData({ ...formData, student_name: e.target.value })}
-                  placeholder="e.g. Priya Sundaram"
-                />
-              </div>
-              <div className="space-y-1">
-                <Label htmlFor="m-course">Program / Course</Label>
-                <Select
-                  value={formData.course_name}
-                  onValueChange={(val) => setFormData({ ...formData, course_name: val })}
-                >
-                  <SelectTrigger id="m-course">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {OFFICIAL_COURSES.map(c => (
-                      <SelectItem key={c.id} value={c.name}>{c.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <Label htmlFor="m-score">Merit Score (out of 100)</Label>
-                  <Input
-                    id="m-score"
-                    type="number"
-                    step="0.1"
-                    value={formData.merit_score}
-                    onChange={(e) => setFormData({ ...formData, merit_score: parseFloat(e.target.value) || 0 })}
-                  />
+      <div>
+        <h2 className="text-2xl font-semibold">Merit List</h2>
+        <p className="text-muted-foreground">Rank applicants of a course from their qualifying marks and entrance-test score, then apply the result.</p>
+      </div>
+
+      {loadError ? (
+        <Card><CardContent className="p-8 text-center">
+          <p className="text-sm text-destructive flex items-center justify-center gap-1.5"><AlertTriangle className="h-4 w-4" /> {loadError}</p>
+          <Button size="sm" variant="outline" className="mt-3" onClick={() => { setLoading(true); void load(); }}>Retry</Button>
+        </CardContent></Card>
+      ) : loading ? (
+        <div className="flex justify-center py-10"><Loader2 className="w-5 h-5 animate-spin text-muted-foreground" /></div>
+      ) : courses.length === 0 ? (
+        <Card><CardContent className="p-8 text-center text-muted-foreground">
+          No applications are under review yet. Move applications to “Under Review” in the Applications tab to rank them.
+        </CardContent></Card>
+      ) : (
+        <>
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-lg flex items-center gap-2"><Trophy className="h-5 w-5 text-amber-500" /> Ranking settings</CardTitle>
+              <CardDescription>
+                Score = qualifying marks × {Number.isFinite(wq) ? wq : '–'}% + entrance score × {Number.isFinite(wq) ? 100 - wq : '–'}%. Both are percentages out of 100.
+                Applicants missing a required score are listed as “could not be ranked”.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 md:grid-cols-6 gap-3 items-end">
+                <div className="space-y-1.5 md:col-span-2">
+                  <Label className="text-xs font-semibold">Course</Label>
+                  <Select value={course} onValueChange={(v) => { setCourse(v); setYear('all'); setExcluded([]); setSkipped([]); }}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>{courses.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
+                  </Select>
                 </div>
-                <div className="space-y-1">
-                  <Label htmlFor="m-rank">Rank</Label>
-                  <Input
-                    id="m-rank"
-                    type="number"
-                    value={formData.rank}
-                    onChange={(e) => setFormData({ ...formData, rank: parseInt(e.target.value, 10) || 1 })}
-                  />
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <Label htmlFor="m-cat">Category</Label>
-                  <Select
-                    value={formData.category}
-                    onValueChange={(val) => setFormData({ ...formData, category: val })}
-                  >
-                    <SelectTrigger id="m-cat"><SelectValue /></SelectTrigger>
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-semibold">Academic year</Label>
+                  <Select value={year} onValueChange={setYear}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="General">General</SelectItem>
-                      <SelectItem value="OBC">OBC</SelectItem>
-                      <SelectItem value="SC/ST">SC/ST</SelectItem>
-                      <SelectItem value="Management">Management</SelectItem>
+                      <SelectItem value="all">All</SelectItem>
+                      {years.map((y) => <SelectItem key={y} value={y}>{y}</SelectItem>)}
                     </SelectContent>
                   </Select>
                 </div>
-                <div className="space-y-1">
-                  <Label htmlFor="m-status">Allocation Status</Label>
-                  <Select
-                    value={formData.status}
-                    onValueChange={(val: any) => setFormData({ ...formData, status: val })}
-                  >
-                    <SelectTrigger id="m-status"><SelectValue /></SelectTrigger>
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-semibold">Quota</Label>
+                  <Select value={quota} onValueChange={(v) => { setQuota(v); setExcluded([]); setSkipped([]); }}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="Selected">Selected</SelectItem>
-                      <SelectItem value="Waitlist">Waitlist</SelectItem>
-                      <SelectItem value="Admitted">Admitted</SelectItem>
+                      <SelectItem value={ANY_QUOTA}>All quotas</SelectItem>
+                      {quotas.map((q) => <SelectItem key={q.code} value={q.code}>{q.name}</SelectItem>)}
                     </SelectContent>
                   </Select>
                 </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-semibold">Seats</Label>
+                  <Input type="number" min="1" step="1" value={seats} onChange={(e) => setSeats(e.target.value)} className="font-mono" placeholder="from seat matrix" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-semibold">Qualifying weight %</Label>
+                  <Input type="number" min="0" max="100" step="1" value={weightQ} onChange={(e) => setWeightQ(e.target.value)} className="font-mono" />
+                </div>
               </div>
-            </div>
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setIsAddOpen(false)}>Cancel</Button>
-              <Button onClick={handleAddCandidate} disabled={submitting}>
-                {submitting ? 'Adding...' : 'Add to Merit List'}
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-      </div>
+              <div className="flex flex-wrap items-center gap-2 mt-4">
+                <Button onClick={generate} disabled={generating || applying || !inputsOk || candidates.length === 0}>
+                  {generating ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : null}
+                  {rows.length > 0 ? 'Regenerate ranking' : 'Generate ranking'}
+                </Button>
+                <Button variant="outline" onClick={apply} disabled={applying || generating || rows.length === 0}>
+                  {applying ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : null}
+                  Apply to applications
+                </Button>
+                <span className="text-xs text-muted-foreground">{candidates.length} applicant{candidates.length === 1 ? '' : 's'} eligible for ranking</span>
+              </div>
+            </CardContent>
+          </Card>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Card>
-          <CardContent className="p-6 text-center">
-            <Trophy className="h-8 w-8 mx-auto text-primary mb-2" />
-            <p className="text-2xl font-bold">{loading ? '…' : meritList.length}</p>
-            <p className="text-sm text-muted-foreground">Ranked Candidates</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-6 text-center">
-            <Medal className="h-8 w-8 mx-auto text-green-600 mb-2" />
-            <p className="text-2xl font-bold">{loading ? '…' : selectedCount}</p>
-            <p className="text-sm text-muted-foreground">Selected / Admitted</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-6 text-center">
-            <Award className="h-8 w-8 mx-auto text-amber-500 mb-2" />
-            <p className="text-2xl font-bold">{loading ? '…' : waitlistCount}</p>
-            <p className="text-sm text-muted-foreground">Waitlisted</p>
-          </CardContent>
-        </Card>
-      </div>
-
-      <Card>
-        <CardHeader className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-          <CardTitle>Institutional Merit List</CardTitle>
-          <div className="w-full sm:w-72">
-            <Select value={selectedCourse} onValueChange={setSelectedCourse}>
-              <SelectTrigger>
-                <SelectValue placeholder="Filter by program" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="All">All 9 Programs</SelectItem>
-                {OFFICIAL_COURSES.map(c => (
-                  <SelectItem key={c.id} value={c.name}>{c.name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-        </CardHeader>
-        <CardContent>
-          {loading ? (
-            <div className="flex justify-center py-10">
-              <Loader2 className="h-6 w-6 animate-spin text-primary" />
-            </div>
-          ) : filteredList.length === 0 ? (
-            <p className="text-center py-8 text-muted-foreground">No merit entries found for this program filter.</p>
-          ) : (
-            <div className="overflow-x-auto">
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-lg">Ranking{rows.length > 0 ? ` — ${selected} selected, ${rows.length - selected} waitlisted` : ''}</CardTitle>
+            </CardHeader>
+            <CardContent>
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Rank</TableHead>
-                    <TableHead>Student Name</TableHead>
+                    <TableHead className="w-16">Rank</TableHead>
+                    <TableHead>Applicant</TableHead>
+                    <TableHead>Student ID</TableHead>
                     <TableHead>Score</TableHead>
-                    <TableHead>Program / Course</TableHead>
-                    <TableHead>Category</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead className="text-right">Action</TableHead>
+                    <TableHead>Merit result</TableHead>
+                    <TableHead>Application</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredList.map((student) => (
-                    <TableRow key={student.id}>
-                      <TableCell className="font-bold">#{student.rank}</TableCell>
-                      <TableCell className="font-medium">{student.student_name}</TableCell>
-                      <TableCell>{student.merit_score}/100</TableCell>
-                      <TableCell className="text-xs max-w-[200px] truncate">{student.course_name}</TableCell>
-                      <TableCell className="text-xs">{student.category || 'General'}</TableCell>
-                      <TableCell>
-                        <Badge variant={student.status === 'Selected' ? 'default' : student.status === 'Admitted' ? 'outline' : 'secondary'}>
-                          {student.status}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-right">
-                        {student.status === 'Selected' ? (
-                          <Button 
-                            variant="outline" 
-                            size="sm" 
-                            className="text-xs"
-                            onClick={() => handleUpdateStatus(student.id, 'Admitted')}
-                          >
-                            Mark Admitted
-                          </Button>
-                        ) : student.status === 'Waitlist' ? (
-                          <Button 
-                            variant="outline" 
-                            size="sm" 
-                            className="text-xs"
-                            onClick={() => handleUpdateStatus(student.id, 'Selected')}
-                          >
-                            Promote
-                          </Button>
-                        ) : (
-                          <span className="text-xs text-muted-foreground">Finalized</span>
-                        )}
-                      </TableCell>
-                    </TableRow>
-                  ))}
+                  {rows.length === 0 ? (
+                    <TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground">No ranking yet for this course. Set the seats and weights, then generate it.</TableCell></TableRow>
+                  ) : rows.map((r) => {
+                    const app = appById.get(r.application_id);
+                    return (
+                      <TableRow key={r.id}>
+                        <TableCell className="font-mono font-semibold">{r.rank}</TableCell>
+                        <TableCell className="text-sm font-medium">{r.student_name}</TableCell>
+                        <TableCell className="font-mono text-xs">{app?.application_no ?? '—'}</TableCell>
+                        <TableCell className="font-mono text-sm">{Number(r.merit_score).toFixed(2)}</TableCell>
+                        <TableCell>
+                          <Badge variant="outline" className={r.status === 'Selected' ? 'bg-emerald-100 text-emerald-800 border-emerald-200' : 'bg-orange-100 text-orange-800 border-orange-200'}>{r.status}</Badge>
+                        </TableCell>
+                        <TableCell>
+                          {app ? <Badge variant="outline" className={STATUS_STYLE[app.status as AdmissionStatus] ?? ''}>{app.status}</Badge> : '—'}
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
                 </TableBody>
               </Table>
-            </div>
+            </CardContent>
+          </Card>
+
+          {excluded.length > 0 && (
+            <Card className="border-amber-200">
+              <CardHeader className="pb-2"><CardTitle className="text-base flex items-center gap-2"><AlertTriangle className="h-4 w-4 text-amber-600" /> Could not be ranked ({excluded.length})</CardTitle></CardHeader>
+              <CardContent className="text-sm space-y-1">
+                {excluded.map((e, i) => <p key={i}><span className="font-medium">{e.name}</span> — {e.reason}</p>)}
+              </CardContent>
+            </Card>
           )}
-        </CardContent>
-      </Card>
+          {skipped.length > 0 && (
+            <Card className="border-amber-200">
+              <CardHeader className="pb-2"><CardTitle className="text-base flex items-center gap-2"><AlertTriangle className="h-4 w-4 text-amber-600" /> Left unchanged ({skipped.length})</CardTitle></CardHeader>
+              <CardContent className="text-sm space-y-1">
+                {skipped.map((e, i) => <p key={i}><span className="font-medium">{e.name}</span> — {e.reason}</p>)}
+              </CardContent>
+            </Card>
+          )}
+        </>
+      )}
     </div>
   );
 };

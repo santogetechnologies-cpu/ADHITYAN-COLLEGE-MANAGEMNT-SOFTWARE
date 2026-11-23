@@ -266,7 +266,7 @@ export function AdminNavigation() {
           {!isCollapsed && (
             <div className="min-w-0 flex-1 leading-tight">
               <h2 className="text-sm font-semibold tracking-tight text-sidebar-foreground truncate">
-                Adhityan ERP
+                Institutional ERP
               </h2>
               <p className="text-xs text-muted-foreground truncate">
                 Admin Console

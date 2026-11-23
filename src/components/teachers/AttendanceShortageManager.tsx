@@ -123,11 +123,14 @@ export function AttendanceShortageManager() {
         roll_number: student.roll_number,
         department: student.department,
         class_name: student.class_name,
-        current_attendance_pct: student.percentage,
+        subject_code: 'ALL',
+        subject_title: 'Overall attendance',
+        total_conducted: student.conducted,
+        total_attended: student.attended,
+        percentage: student.percentage,
         warning_level: warningLevel,
         issued_date: new Date().toISOString().split('T')[0],
-        status: 'Dispatched',
-        parent_contacted: true,
+        parent_notified: true,
       });
 
       if (res.success) {
@@ -139,7 +142,8 @@ export function AttendanceShortageManager() {
       } else {
         toast({
           title: 'Warning Dispatch Notice',
-          description: res.error || 'Notice logged in institution records.',
+          description: 'The warning could not be saved. Check your permissions and try again.',
+          variant: 'destructive',
         });
       }
     } catch (err: any) {

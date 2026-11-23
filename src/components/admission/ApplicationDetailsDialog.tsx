@@ -1,3 +1,4 @@
+import { resolveDocumentUrl } from '@/lib/privateDocs';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import {
@@ -12,6 +13,8 @@ import { Badge } from '@/components/ui/badge';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
+import { actionsFor, STATUS_STYLE, type AdmissionAction, type AdmissionStatus } from '@/lib/admissionWorkflow';
+import { askConfirm, askText } from '@/lib/dialogs';
 import { 
   CheckCircle2, 
   XCircle, 
@@ -33,67 +36,44 @@ interface ApplicationDetailsDialogProps {
   application: any;
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onStatusUpdate: (applicationId: string | number, status: string, remarks?: string) => void;
+  /** Runs a pipeline action. Resolves true on success, false when the server refused (the page shows the reason). */
+  onAction: (application: any, action: AdmissionAction, remarks?: string) => Promise<boolean>;
 }
 
 export const ApplicationDetailsDialog = ({ 
   application, 
   open, 
   onOpenChange, 
-  onStatusUpdate 
+  onAction 
 }: ApplicationDetailsDialogProps) => {
   const [remarks, setRemarks] = useState('');
-  const [reviewAction, setReviewAction] = useState<'none' | 'approving' | 'rejecting'>('none');
+  const [busyAction, setBusyAction] = useState<string | null>(null);
   const [previewDoc, setPreviewDoc] = useState<{ name: string; url: string } | null>(null);
   const { toast } = useToast();
 
   if (!application) return null;
 
-  const handleApprove = () => {
-    onStatusUpdate(application.id, 'Approved', remarks || 'Approved by Administrative Academic Review');
-    toast({
-      title: "Admission Approved",
-      description: `Application for ${application.name} has been approved. Portal login accounts can now be provisioned in Admin User Management.`,
-    });
-    setRemarks('');
-    setReviewAction('none');
-    onOpenChange(false);
-  };
-
-  const handleReject = () => {
-    if (!remarks.trim()) {
-      toast({
-        title: "Remarks Required",
-        description: "Please provide a reason or remarks for rejecting this application.",
-        variant: "destructive"
-      });
+  const run = async (action: AdmissionAction) => {
+    if (action.reasonRequired && !remarks.trim()) {
+      toast({ title: 'A reason is required', description: `Enter the reason in the remarks box to ${action.label.toLowerCase()}.`, variant: 'destructive' });
       return;
     }
-    onStatusUpdate(application.id, 'Rejected', remarks);
-    toast({
-      title: "Application Rejected",
-      description: `Application for ${application.name} has been marked as Rejected.`,
-      variant: "destructive"
-    });
-    setRemarks('');
-    setReviewAction('none');
-    onOpenChange(false);
-  };
-
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case 'Approved':
-      case 'Admitted':
-        return <Badge className="bg-emerald-600 text-white hover:bg-emerald-700 flex items-center gap-1"><CheckCircle2 className="w-3 h-3" /> Approved</Badge>;
-      case 'Rejected':
-        return <Badge variant="destructive" className="flex items-center gap-1"><XCircle className="w-3 h-3" /> Rejected</Badge>;
-      case 'Submitted':
-      case 'Under Review':
-      case 'Pending':
-      default:
-        return <Badge className="bg-amber-500 text-white hover:bg-amber-600 flex items-center gap-1"><Clock className="w-3 h-3" /> Pending Review</Badge>;
+    if (action.confirm && !(await askConfirm(action.confirm, { title: action.label }))) return;
+    setBusyAction(action.id);
+    const ok = await onAction(application, action, remarks.trim() || undefined);
+    setBusyAction(null);
+    if (ok) {
+      setRemarks('');
+      onOpenChange(false);
     }
   };
+
+  const getStatusBadge = (status: string) => (
+    <Badge variant="outline" className={`${STATUS_STYLE[status as AdmissionStatus] ?? STATUS_STYLE.Submitted} flex items-center gap-1`}>
+      {status === 'Enrolled' || status === 'Approved' ? <CheckCircle2 className="w-3 h-3" /> : status === 'Rejected' || status === 'Cancelled' ? <XCircle className="w-3 h-3" /> : <Clock className="w-3 h-3" />}
+      {status}
+    </Badge>
+  );
 
   const studentId = application.studentId || application.student_id || application.applicationId;
   const docsList: any[] = Array.isArray(application.documents) ? application.documents : [];
@@ -237,10 +217,10 @@ export const ApplicationDetailsDialog = ({
                         <Button
                           size="sm"
                           variant="outline"
-                          onClick={() => setPreviewDoc({ 
-                            name: doc.type || 'Document Preview', 
-                            url: doc.file_url || doc.document_url 
-                          })}
+                          onClick={async () => {
+                            try { setPreviewDoc({ name: doc.type || 'Document Preview', url: await resolveDocumentUrl(doc.file_url || doc.document_url) }); }
+                            catch (e: any) { toast({ title: 'Cannot open the document', description: e.message, variant: 'destructive' }); }
+                          }}
                           className="h-7 px-2 text-[11px] shrink-0"
                         >
                           <Eye className="h-3 w-3 mr-1 text-blue-600" /> View
@@ -261,7 +241,7 @@ export const ApplicationDetailsDialog = ({
               <Textarea
                 value={remarks}
                 onChange={(e) => setRemarks(e.target.value)}
-                placeholder="Enter review remarks, eligibility notes, or approval/rejection justification..."
+                placeholder="Remarks for the record. Required when rejecting or cancelling."
                 rows={2}
                 className="text-xs"
               />
@@ -269,7 +249,7 @@ export const ApplicationDetailsDialog = ({
               <div className="p-2.5 bg-muted/40 rounded-lg border text-[11px] text-muted-foreground flex items-center gap-1.5">
                 <ShieldCheck className="h-4 w-4 text-primary shrink-0" />
                 <span>
-                  <strong>Separation of Concerns:</strong> Approving this admission updates the registry status. It does <strong>not</strong> automatically generate login accounts. Student & Parent portal credentials are provisioned in Admin User Management.
+                  <strong>Note:</strong> Approving changes the application status. <strong>Enroll student</strong> creates the permanent student record. Portal login accounts are created separately in Admin User Management.
                 </span>
               </div>
             </div>
@@ -280,34 +260,25 @@ export const ApplicationDetailsDialog = ({
               Close
             </Button>
 
-            {application.status !== 'Approved' && application.status !== 'Admitted' && (
-              <>
-                <Button 
-                  type="button" 
-                  variant="destructive" 
-                  size="sm"
-                  onClick={handleReject}
-                  className="font-semibold text-xs"
-                >
-                  <XCircle className="w-3.5 h-3.5 mr-1" /> Reject Application
-                </Button>
-
-                <Button 
-                  type="button" 
-                  size="sm"
-                  onClick={handleApprove}
-                  className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs"
-                >
-                  <CheckCircle2 className="w-3.5 h-3.5 mr-1" /> Approve Admission
-                </Button>
-              </>
-            )}
-
-            {(application.status === 'Approved' || application.status === 'Admitted') && (
+            {application.status === 'Enrolled' && (
               <Badge className="bg-emerald-600 text-white py-1.5 px-3 text-xs flex items-center gap-1.5">
-                <CheckCircle2 className="w-3.5 h-3.5" /> Approved • Provision Login in User Management
+                <CheckCircle2 className="w-3.5 h-3.5" /> Enrolled as {studentId}
               </Badge>
             )}
+            {actionsFor(application.status).map((action) => (
+              <Button
+                key={action.id}
+                type="button"
+                size="sm"
+                variant={action.tone === 'danger' ? 'destructive' : action.tone === 'neutral' ? 'outline' : 'default'}
+                disabled={busyAction !== null}
+                onClick={() => run(action)}
+                className={`font-semibold text-xs ${action.tone === 'primary' ? 'bg-emerald-600 hover:bg-emerald-700 text-white' : ''}`}
+              >
+                {busyAction === action.id ? <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" /> : null}
+                {action.label}
+              </Button>
+            ))}
           </DialogFooter>
         </DialogContent>
       </Dialog>

@@ -27,11 +27,13 @@ import {
   BookOpen,
   FileText
 } from 'lucide-react';
+import { payOnline } from '@/lib/onlinePay';
 import { db } from '@/services/supabase/database';
 import { useAuth } from '@/context/AuthContext';
 import { useRealtimeSubscription } from '@/hooks/useRealtimeSubscription';
 import { StoreProduct, StoreOrder } from '@/types/database.types';
 import { useToast } from '@/hooks/use-toast';
+import { askConfirm, askText } from '@/lib/dialogs';
 
 const CATEGORY_ICONS: Record<string, any> = {
   'Textbooks': BookOpen,
@@ -263,6 +265,26 @@ export function StudentStoreTab() {
   const cartItemCount = useMemo(() => {
     return cart.reduce((sum, item) => sum + item.quantity, 0);
   }, [cart]);
+
+  const [onlineEnabled, setOnlineEnabled] = useState(false);
+  const [payingId, setPayingId] = useState<string | null>(null);
+  useEffect(() => { db.getInstitutionalSettings().then((i: any) => setOnlineEnabled(i?.online_payments_enabled === true)).catch(() => setOnlineEnabled(false)); }, []);
+  const payOrder = async (orderId: string) => {
+    setPayingId(orderId);
+    try {
+      const r = await payOnline({ store_order_id: orderId }, 'Campus store order');
+      if (r.status === 'paid') toast({ title: 'Payment received', description: 'Your order is paid.' });
+      else if (r.status === 'pending') toast({ title: 'Payment is being confirmed', description: r.message });
+      else if (r.status === 'failed') toast({ title: 'Payment failed', description: r.message, variant: 'destructive' });
+      await loadData();
+    } catch (e: any) { toast({ title: 'Payment not started', description: e.message, variant: 'destructive' }); }
+    finally { setPayingId(null); }
+  };
+  const cancelOrder = async (orderId: string) => {
+    if (!(await askConfirm('Cancel this order? Its items go back to stock.', { title: 'Cancel order', confirmLabel: 'Cancel order', cancelLabel: 'Keep order', destructive: true }))) return;
+    try { await db.updateStoreOrderStatus(orderId, 'Cancelled'); toast({ title: 'Order cancelled' }); await loadData(); }
+    catch (e: any) { toast({ title: 'Not cancelled', description: e.message, variant: 'destructive' }); }
+  };
 
   const handleCheckout = async () => {
     if (!user?.id || cart.length === 0) return;
@@ -592,9 +614,16 @@ export function StudentStoreTab() {
                         </div>
                       </div>
 
-                      <div className="text-left sm:text-right">
+                      <div className="text-left sm:text-right space-y-1">
                         <span className="text-[10px] text-muted-foreground uppercase font-bold">Total Amount</span>
                         <div className="text-base font-bold text-primary">₹{order.total_amount}</div>
+                        <div className="text-[10px] text-muted-foreground">{(order as any).payment_status === 'Paid' ? 'Paid online' : (order as any).payment_status === 'Refunded' ? 'Refunded' : 'Pay at the counter on collection'}</div>
+                        {['Pending', 'Processing'].includes(order.status) && (order as any).payment_status === 'Unpaid' && onlineEnabled && (
+                          <Button size="sm" className="h-7 text-xs" disabled={payingId === order.id} onClick={() => payOrder(order.id)}>{payingId === order.id ? 'Opening…' : 'Pay online'}</Button>
+                        )}
+                        {order.status === 'Pending' && (
+                          <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => cancelOrder(order.id)}>Cancel order</Button>
+                        )}
                       </div>
                     </div>
 
@@ -608,7 +637,7 @@ export function StudentStoreTab() {
                             <div className="font-semibold text-foreground truncate">{item.name}</div>
                             <div className="text-[11px] text-muted-foreground flex justify-between">
                               <span>Qty: {item.quantity}</span>
-                              <span>₹{item.price * item.quantity}</span>
+                              <span>₹{(item.unit_price ?? item.price ?? 0) * item.quantity}</span>
                             </div>
                           </div>
                         ))}

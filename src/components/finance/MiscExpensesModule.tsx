@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from '@/components/ui/dialog';
 import { format } from 'date-fns';
+import { exportToCSV } from '@/lib/exportUtils';
 import { cn } from '@/lib/utils';
 import { db } from '@/services/supabase/database';
 import { useRealtimeSubscription } from '@/hooks/useRealtimeSubscription';
@@ -33,6 +34,7 @@ import {
 export function MiscExpensesModule() {
   const { toast } = useToast();
   const [selectedCategory, setSelectedCategory] = useState('all');
+  const [statusFilter, setStatusFilter] = useState('all');
   const [searchTerm, setSearchTerm] = useState('');
   const [addDialogOpen, setAddDialogOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -120,8 +122,9 @@ export function MiscExpensesModule() {
 
   const filteredExpenses = recentExpenses.filter(exp => {
     const matchesCategory = selectedCategory === 'all' || exp.category === selectedCategory;
+    const matchesStatus = statusFilter === 'all' || exp.status === statusFilter;
     const matchesSearch = !searchTerm || exp.description.toLowerCase().includes(searchTerm.toLowerCase()) || exp.vendor.toLowerCase().includes(searchTerm.toLowerCase());
-    return matchesCategory && matchesSearch;
+    return matchesCategory && matchesStatus && matchesSearch;
   });
 
   const monthlyStats = expenseCategories.map(cat => {
@@ -329,11 +332,14 @@ export function MiscExpensesModule() {
             ))}
           </SelectContent>
         </Select>
-        <Button variant="outline" className="gap-2">
-          <Filter className="h-4 w-4" />
-          More Filters
-        </Button>
-        <Button variant="outline" className="gap-2">
+        <Select value={statusFilter} onValueChange={setStatusFilter}>
+          <SelectTrigger className="w-40" aria-label="Filter by status"><Filter className="h-4 w-4 mr-1" /><SelectValue placeholder="Status" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Any status</SelectItem>
+            {[...new Set(recentExpenses.map(e => e.status))].map(st => <SelectItem key={st} value={st} className="capitalize">{st}</SelectItem>)}
+          </SelectContent>
+        </Select>
+        <Button variant="outline" className="gap-2" disabled={filteredExpenses.length === 0} onClick={() => exportToCSV(`expenses-${new Date().toISOString().slice(0, 10)}.csv`, ['Date', 'Category', 'Description', 'Vendor', 'Amount', 'Status'], filteredExpenses.map(e => [e.date, e.category, e.description, e.vendor, e.amount, e.status]))}>
           <Download className="h-4 w-4" />
           Export
         </Button>
@@ -372,9 +378,7 @@ export function MiscExpensesModule() {
                     {expense.status}
                   </Badge>
                   <div className="text-xs text-muted-foreground mt-1">
-                    <Button variant="link" size="sm" className="p-0 h-auto">
-                      {expense.receipt}
-                    </Button>
+                    <span>{expense.receipt}</span>
                   </div>
                 </div>
               </div>

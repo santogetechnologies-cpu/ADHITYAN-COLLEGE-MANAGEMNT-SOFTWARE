@@ -17,9 +17,11 @@ import {
   FileText,
   UserX
 } from 'lucide-react';
+import { toast } from 'sonner';
 import { db } from '@/services/supabase/database';
 import { StaffLeaveApplication, Profile } from '@/types/database.types';
 import { useAuth } from '@/context/AuthContext';
+import { askConfirm, askText } from '@/lib/dialogs';
 
 const IS_UUID = (v?: string | null): v is string => !!v && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v);
 
@@ -51,7 +53,7 @@ export function StaffLeaveManager() {
       setLoading(true);
       const [leavesData, profilesData] = await Promise.all([
         db.getStaffLeaveApplications(),
-        db.getProfiles()
+        db.getAllProfiles().catch(() => [])
       ]);
       setLeaves(leavesData || []);
       const staffOnly = (profilesData || []).filter(p => p.role !== 'student' && p.role !== 'parent');
@@ -71,14 +73,17 @@ export function StaffLeaveManager() {
   const handleUpdateStatus = async (id: string, newStatus: string) => {
     try {
       const approverId = IS_UUID(user?.id) ? user.id : undefined;
-      const success = await db.updateStaffLeaveStatus(id, newStatus, approverId);
-      if (success) {
-        setLeaves(prev => prev.map(l => l.id === id ? { ...l, status: newStatus as any, approved_by: approverId } : l));
-      } else {
-        setLeaves(prev => prev.map(l => l.id === id ? { ...l, status: newStatus as any } : l));
+      let reason: string | undefined;
+      if (newStatus === 'Rejected') {
+        reason = (await askText('Reason for rejecting this leave', { title: 'Reject leave', required: true, minLength: 3, confirmLabel: 'Reject', destructive: true })) ?? undefined;
+        if (!reason) return;
       }
-    } catch (err) {
-      console.error('Error updating leave status:', err);
+      await db.updateStaffLeaveStatus(id, newStatus, approverId, reason?.trim());
+      toast.success(newStatus === 'Rejected' ? 'Leave rejected' : 'Leave approved');
+      await loadLeaves();
+    } catch (err: any) {
+      toast.error(err?.message || 'The leave could not be updated.');
+      await loadLeaves();
     }
   };
 
@@ -105,10 +110,16 @@ export function StaffLeaveManager() {
         user_id: targetUserId
       };
 
-      const result = await db.submitStaffLeaveApplication(newLeave);
-      if (result) {
-        setLeaves(prev => [result, ...prev]);
+      const days = Number(formData.total_days);
+      const span = Math.floor((new Date(formData.end_date).getTime() - new Date(formData.start_date).getTime()) / 86400000) + 1;
+      if (!(span >= 1) || !(days >= 1) || days > span) {
+        toast.error(`Days must be between 1 and ${Math.max(span, 1)} for these dates.`);
+        return;
       }
+      const result = await db.submitStaffLeaveApplication(newLeave);
+      if (!result) { toast.error('The leave could not be recorded (check the balance and your permissions).'); return; }
+      setLeaves(prev => [result, ...prev]);
+      toast.success('Leave recorded');
       setDialogOpen(false);
       setFormData({
         staff_profile_id: '',
@@ -121,8 +132,8 @@ export function StaffLeaveManager() {
         reason: '',
         substitute_teacher_name: '',
       });
-    } catch (err) {
-      console.error('Failed to submit leave:', err);
+    } catch (err: any) {
+      toast.error(err?.message || 'Failed to record leave');
     } finally {
       setSubmitting(false);
     }
@@ -341,7 +352,7 @@ export function StaffLeaveManager() {
                       setFormData(prev => ({
                         ...prev,
                         staff_profile_id: prof.id,
-                        staff_name: prof.full_name || prof.email,
+                        staff_name: prof.name || prof.email,
                         department: prof.department || prev.department
                       }));
                     } else {
@@ -353,7 +364,7 @@ export function StaffLeaveManager() {
                   <option value="">-- Choose registered faculty / staff member --</option>
                   {staffProfiles.map(p => (
                     <option key={p.id} value={p.id}>
-                      {p.full_name || p.email} ({p.role.toUpperCase()} - {p.department || 'General'})
+                      {p.name || p.email} ({p.role.toUpperCase()} - {p.department || 'General'})
                     </option>
                   ))}
                 </select>

@@ -397,7 +397,7 @@ export function CombinedBulkImportTab({ onSuccess }: CombinedBulkImportTabProps)
                       </Badge>
                     </td>
                     <td className="p-2.5">
-                      {r.parentLinked ? (
+                      {(r as any).parentLinked ? (
                         <Badge className="bg-violet-100 text-violet-800">Linked</Badge>
                       ) : (
                         <span className="text-slate-400 text-[11px]">N/A</span>

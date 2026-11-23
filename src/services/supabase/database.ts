@@ -1,10 +1,14 @@
 import { supabase } from './client';
 import * as T from '@/types/database.types';
 import { matchesStudentClass, getAllAcademicClasses } from '@/config/academicClassRegistry';
+import { apiUrl } from '@/lib/apiBase';
 
 async function callAdminBackendAction(action: string, payload: Record<string, any>): Promise<any> {
   const { data: { session } } = await supabase.auth.getSession();
-  const token = session?.access_token || (typeof process !== 'undefined' ? 'mock-test-role:admin:ed0ef274-5dd5-4775-accb-97119899cc00' : '');
+  // Node-based test runs have no browser session; they opt in to the test token explicitly. A browser never uses it.
+  const isNodeTest = typeof window === 'undefined' && typeof process !== 'undefined';
+  if (isNodeTest && !session?.access_token) process.env.ALLOW_MOCK_TEST_TOKENS = '1';
+  const token = session?.access_token || (isNodeTest ? 'mock-test-role:admin:ed0ef274-5dd5-4775-accb-97119899cc00' : '');
   if (!token) return null;
 
   // If in Node.js test environment, call handleAdminUserOperation directly
@@ -21,7 +25,7 @@ async function callAdminBackendAction(action: string, payload: Record<string, an
   // In browser environment, use fetch
   if (typeof fetch !== 'undefined') {
     try {
-      const res = await fetch('/api/admin/users', {
+      const res = await fetch(apiUrl('/api/admin/users'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ action, ...payload }),
@@ -43,6 +47,29 @@ async function getAdminClient() {
   if (!adminKey || !url) return null;
   const { createClient } = await import('@supabase/supabase-js');
   return createClient(url, adminKey, { auth: { autoRefreshToken: false, persistSession: false } });
+}
+
+/** POST to the admin API with the signed-in user's token; throws Error(serverMessage) with `.code` on failure. */
+async function callAdminApi(action: string, payload: Record<string, unknown> = {}): Promise<any> {
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session?.access_token) {
+    throw Object.assign(new Error('Your session has expired. Please sign in again.'), { code: 'SESSION_EXPIRED' });
+  }
+  let response: Response;
+  try {
+    response = await fetch(apiUrl('/api/admin/users'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+      body: JSON.stringify({ action, ...payload }),
+    });
+  } catch {
+    throw Object.assign(new Error('Could not reach the server. Check your connection and try again.'), { code: 'NETWORK' });
+  }
+  const json = await response.json().catch(() => ({} as any));
+  if (!response.ok || json.success === false) {
+    throw Object.assign(new Error(json.error || `Request failed (${response.status}).`), { code: json.code, allowed: json.allowed, fields: json.fields });
+  }
+  return json;
 }
 
 export const db = {
@@ -90,6 +117,14 @@ export const db = {
       }
       return false;
     }
+  },
+
+  /** Enrolled students (central `students` table) shaped like profiles; readable by the staff roles that need to look students up. */
+  async getStudentDirectory(): Promise<T.Profile[]> {
+    const sb: any = supabase;
+    const { data, error } = await sb.from('students').select('id, user_id, student_id, roll_number, name, email, phone, department, class_name').eq('status', 'active').limit(5000);
+    if (error) throw new Error(error.message);
+    return (data || []).map((r: any) => ({ id: r.user_id || '', name: r.name, email: r.email || '', role: 'student', phone: r.phone, department: r.department, class_name: r.class_name, roll_number: r.roll_number || r.student_id, student_id: r.student_id })) as T.Profile[];
   },
 
   async getAllProfiles(): Promise<T.Profile[]> {
@@ -509,44 +544,13 @@ export const db = {
     }
   },
 
+  /** Grading runs on the server: only the teacher who set the work (or admin/principal) can grade, score 0–100. */
   async gradeAssignmentSubmission(submissionId: string, score: number, feedback?: string): Promise<boolean> {
-    try {
-      let client: any = supabase;
-      let { data, error } = await client
-        .from('assignment_submissions')
-        .update({
-          score,
-          feedback,
-          status: 'graded',
-        })
-        .eq('id', submissionId)
-        .select();
-
-      if (error || !data || data.length === 0) {
-        const admin = await getAdminClient();
-        if (admin) {
-          const res = await admin
-            .from('assignment_submissions')
-            .update({
-              score,
-              feedback,
-              status: 'graded',
-            })
-            .eq('id', submissionId)
-            .select();
-          if (!res.error && res.data && res.data.length > 0) {
-            return true;
-          }
-          error = res.error;
-        }
-      }
-
-      if (error) throw error;
-      return true;
-    } catch (err) {
-      console.error('gradeAssignmentSubmission error:', err);
-      return false;
-    }
+    const sb: any = supabase;
+    const { data, error } = await sb.rpc('assignment_grade', { p_submission: submissionId, p_score: score, p_feedback: feedback ?? null });
+    if (error) throw new Error(error.message);
+    if (!data?.success) throw new Error(data?.error || 'The grade was not saved.');
+    return true;
   },
 
   async getStudentsByClass(className?: string): Promise<T.Profile[]> {
@@ -848,7 +852,7 @@ export const db = {
       let assignedClasses: string[] = [];
       if (teacherId) {
         const teacherSlots = await this.getTeacherTimetables(teacherId);
-        assignedClasses = Array.from(new Set(teacherSlots.map(s => s.class_name))).filter(Boolean);
+        assignedClasses = Array.from(new Set(teacherSlots.map(s => s.class_name))).filter(Boolean) as string[];
       }
 
       const mappedParents = parents.map(p => {
@@ -954,265 +958,52 @@ export const db = {
   // ---------------------------------------------------------------------------
   // CONCERNS & GRIEVANCES
   // ---------------------------------------------------------------------------
+  // Concerns live in public.concerns only (the old fallback that stored them as JSON inside the admission document table is gone).
   async getConcerns(): Promise<T.Concern[]> {
-    const results: T.Concern[] = [];
-    const seenIds = new Set<string>();
-
-    try {
-      const { data, error } = await supabase.from('concerns').select('*').order('created_at', { ascending: false });
-      if (!error && data) {
-        for (const d of data) {
-          seenIds.add(d.id);
-          results.push({
-            id: d.id,
-            user_id: d.user_id,
-            student_id: d.student_id,
-            student_name: d.student_name || 'Student',
-            class_name: d.class_name || 'Semester 1',
-            category: d.category || d.concern_type || 'General',
-            concern_type: d.concern_type || d.category || 'General',
-            subject: d.subject,
-            description: d.description,
-            priority: d.priority || 'medium',
-            status: d.status || 'Pending',
-            is_anonymous: !!d.is_anonymous,
-            resolution_notes: d.resolution_notes || '',
-            created_at: d.created_at,
-          });
-        }
-      }
-    } catch (err) {}
-
-    try {
-      const { data: metaDocs } = await supabase
-        .from('admission_document_verifications')
-        .select('*')
-        .eq('document_type', 'STUDENT_CONCERN')
-        .order('created_at', { ascending: false });
-
-      if (metaDocs) {
-        for (const doc of metaDocs) {
-          try {
-            const c: T.Concern = JSON.parse(doc.document_url);
-            if (!seenIds.has(c.id)) {
-              seenIds.add(c.id);
-              results.push(c);
-            }
-          } catch (e) {}
-        }
-      }
-    } catch (err) {}
-
-    return results;
+    const { data, error } = await supabase.from('concerns').select('*').order('created_at', { ascending: false });
+    if (error) throw new Error(`Could not load concerns: ${error.message}`);
+    return (data || []).map((d: any) => ({ ...d, category: d.concern_type, student_name: d.user_name })) as T.Concern[];
   },
 
   async getStudentConcerns(userId: string, childIds: string[] = []): Promise<T.Concern[]> {
-    const results: T.Concern[] = [];
-    const seenIds = new Set<string>();
-
-    try {
-      let orClause = `student_id.eq.${userId},user_id.eq.${userId}`;
-      if (childIds && childIds.length > 0) {
-        const childFilters = childIds.map(cid => `student_id.eq.${cid}`).join(',');
-        orClause += `,${childFilters}`;
-      }
-      const { data, error } = await supabase
-        .from('concerns')
-        .select('*')
-        .or(orClause)
-        .order('created_at', { ascending: false });
-      if (!error && data) {
-        for (const d of data) {
-          seenIds.add(d.id);
-          results.push({
-            id: d.id,
-            user_id: d.user_id,
-            student_id: d.student_id,
-            student_name: d.student_name || 'Student',
-            class_name: d.class_name || 'Semester 1',
-            category: d.category || d.concern_type || 'General',
-            concern_type: d.concern_type || d.category || 'General',
-            subject: d.subject,
-            description: d.description,
-            priority: d.priority || 'medium',
-            status: d.status || 'Pending',
-            is_anonymous: !!d.is_anonymous,
-            resolution_notes: d.resolution_notes || '',
-            created_at: d.created_at,
-          });
-        }
-      }
-    } catch (err) {}
-
-    try {
-      const { data: metaDocs } = await supabase
-        .from('admission_document_verifications')
-        .select('*')
-        .eq('document_type', 'STUDENT_CONCERN')
-        .order('created_at', { ascending: false });
-
-      if (metaDocs) {
-        const relevantUserIds = new Set([userId, ...childIds]);
-        for (const doc of metaDocs) {
-          try {
-            const c: T.Concern = JSON.parse(doc.document_url);
-            if (relevantUserIds.has(c.user_id) || relevantUserIds.has(c.student_id) || relevantUserIds.has(doc.verified_by)) {
-              if (!seenIds.has(c.id)) {
-                seenIds.add(c.id);
-                results.push(c);
-              }
-            }
-          } catch (e) {}
-        }
-      }
-    } catch (err) {}
-
-    if (results.length === 0) {
-      const admin = await getAdminClient();
-      if (admin) {
-        try {
-          const { data: metaDocs } = await admin
-            .from('admission_document_verifications')
-            .select('*')
-            .eq('document_type', 'STUDENT_CONCERN')
-            .order('created_at', { ascending: false });
-
-          if (metaDocs) {
-            const relevantUserIds = new Set([userId, ...childIds]);
-            for (const doc of metaDocs) {
-              try {
-                const c: T.Concern = JSON.parse(doc.document_url);
-                if (relevantUserIds.has(c.user_id) || relevantUserIds.has(c.student_id) || relevantUserIds.has(doc.verified_by)) {
-                  if (!seenIds.has(c.id)) {
-                    seenIds.add(c.id);
-                    results.push(c);
-                  }
-                }
-              } catch (e) {}
-            }
-          }
-        } catch (err) {}
-      }
-    }
-
-    return results;
+    const ids = [userId, ...childIds].filter(Boolean);
+    const { data, error } = await supabase.from('concerns').select('*')
+      .or(ids.map((i) => `student_id.eq.${i},user_id.eq.${i}`).join(',')).order('created_at', { ascending: false });
+    if (error) throw new Error(`Could not load your concerns: ${error.message}`);
+    return (data || []).map((d: any) => ({ ...d, category: d.concern_type, student_name: d.user_name })) as T.Concern[];
   },
 
   async createConcern(concern: any): Promise<T.Concern | null> {
-    try {
-      // 1. Try privileged adminBackend action
-      const res = await callAdminBackendAction('create_concern', { concern });
-      if (res?.concern) return res.concern;
-
-      // 2. Direct client insert into concerns table
-      const generatedId = crypto.randomUUID();
-      const now = new Date().toISOString();
-      const concernRecord: T.Concern = {
-        id: generatedId,
-        user_id: concern.user_id || concern.student_id,
-        student_id: concern.student_id || concern.user_id,
-        student_name: concern.student_name || 'Student',
-        class_name: concern.class_name || 'Semester 1',
-        category: concern.category || concern.concern_type || 'General',
-        concern_type: concern.concern_type || concern.category || 'General',
-        subject: concern.subject || 'Concern / Grievance',
-        description: concern.description || '',
-        priority: concern.priority || 'medium',
-        status: concern.status || 'Pending',
-        is_anonymous: !!concern.is_anonymous,
-        resolution_notes: concern.resolution_notes || '',
-        created_at: now,
-      };
-
-      try {
-        const { data, error } = await supabase.from('concerns').insert({
-          user_id: concernRecord.user_id,
-          student_id: concernRecord.student_id,
-          subject: concernRecord.subject,
-          description: concernRecord.description,
-          priority: concernRecord.priority,
-          status: concernRecord.status,
-          concern_type: concernRecord.concern_type,
-        }).select().single();
-        if (!error && data) {
-          return { ...concernRecord, id: data.id };
-        }
-      } catch (e) {}
-
-      // 3. Fallback to admission_document_verifications
-      const { data: metaData, error: metaErr } = await supabase
-        .from('admission_document_verifications')
-        .insert({
-          student_name: concernRecord.student_name,
-          document_type: 'STUDENT_CONCERN',
-          document_url: JSON.stringify(concernRecord),
-          status: concernRecord.status,
-          verified_by: concernRecord.user_id,
-        })
-        .select()
-        .single();
-
-      if (!metaErr) {
-        return concernRecord;
-      }
-      return concernRecord;
-    } catch (err) {
-      console.error('createConcern error:', err);
-      return null;
-    }
+    const row = {
+      user_id: concern.user_id || concern.student_id || null,
+      student_id: concern.student_id || null,
+      user_name: concern.is_anonymous ? null : (concern.student_name || concern.user_name || null),
+      concern_type: concern.concern_type || concern.category || 'General',
+      priority: concern.priority || 'medium',
+      subject: String(concern.subject || '').trim(),
+      description: String(concern.description || '').trim(),
+      is_anonymous: !!concern.is_anonymous,
+      status: 'Pending',
+      attachments: concern.attachments || [],
+    };
+    if (!row.subject || !row.description) throw new Error('A subject and a description are required.');
+    const { data, error } = await (supabase as any).from('concerns').insert(row).select().single();
+    if (error) throw new Error(`Concern not submitted: ${error.message}`);
+    return { ...data, category: data.concern_type, student_name: data.user_name } as T.Concern;
   },
 
   async updateConcernStatus(id: string, status: T.Concern['status'], resolutionNotes?: string): Promise<boolean> {
-    try {
-      try {
-        await supabase
-          .from('concerns')
-          .update({ status, resolution_notes: resolutionNotes })
-          .eq('id', id);
-      } catch (e) {}
-
-      try {
-        const { data: docs } = await supabase
-          .from('admission_document_verifications')
-          .select('*')
-          .eq('application_id', id);
-        if (docs && docs.length > 0) {
-          for (const d of docs) {
-            try {
-              const parsed = JSON.parse(d.document_url);
-              parsed.status = status;
-              if (resolutionNotes) parsed.resolution_notes = resolutionNotes;
-              await supabase
-                .from('admission_document_verifications')
-                .update({
-                  verification_status: status,
-                  document_url: JSON.stringify(parsed),
-                })
-                .eq('id', d.id);
-            } catch (pErr) {}
-          }
-        }
-      } catch (e) {}
-
-      try {
-        const { data: cData } = await supabase.from('concerns').select('*').eq('id', id).single();
-        if (cData && (cData.user_id || cData.student_id)) {
-          await this.createNotification({
-            user_id: cData.user_id || cData.student_id,
-            title: `Grievance Response: ${cData.subject || 'Ticket Resolved'}`,
-            message: resolutionNotes || `Your grievance #${id.slice(0, 8)} status was updated to ${status}.`,
-            type: 'info',
-            priority: 'medium',
-            is_read: false,
-          });
-        }
-      } catch {}
-
-      return true;
-    } catch (err) {
-      console.error('updateConcernStatus error:', err);
-      return false;
+    const { data, error } = await (supabase as any).from('concerns').update({ status, resolution_notes: resolutionNotes ?? null }).eq('id', id).select().maybeSingle();
+    if (error) throw new Error(error.message);
+    if (!data) throw new Error('The concern was not updated (it may not exist, or you may not have permission).');
+    const target = data.user_id || data.student_id;
+    if (target) {
+      await this.createNotification({
+        user_id: target, title: `Grievance update: ${data.subject || 'your concern'}`,
+        message: resolutionNotes || `Your concern #${String(id).slice(0, 8)} is now ${status}.`, type: 'info', priority: 'medium', is_read: false,
+      });
     }
+    return true;
   },
 
   async submitComplaint(complaint: any): Promise<T.Concern | null> {
@@ -1689,15 +1480,7 @@ export const db = {
 
       const { data: admins } = await client.from('profiles').select('id').in('role', ['admin', 'principal', 'transport_driver', 'driver']);
       if (admins && admins.length > 0) {
-        const notifications = admins.map(a => ({
-          user_id: a.id,
-          title: `TRANSPORT EMERGENCY: Bus ${params.vehicleNumber}`,
-          message: `Bus ${params.vehicleNumber} on Route ${params.routeName} reported an emergency: ${params.message}`,
-          type: 'error' as const,
-          priority: 'high' as const,
-          is_read: false
-        }));
-        await client.from('notifications').insert(notifications);
+        await db.notifyMany(admins.map((a: any) => a.id), `TRANSPORT EMERGENCY: Bus ${params.vehicleNumber}`, `Bus ${params.vehicleNumber} on Route ${params.routeName} reported an emergency: ${params.message}`, 'error', 'high');
       }
       return true;
     } catch (err) {
@@ -1765,29 +1548,11 @@ export const db = {
   },
 
   async updateStoreOrderStatus(orderId: string, status: 'Pending' | 'Processing' | 'Delivered' | 'Cancelled' | string): Promise<boolean> {
-    try {
-      const admin = await getAdminClient();
-      const client = admin || supabase;
-      const { error } = await client.from('store_orders').update({ status }).eq('id', orderId);
-      if (error) throw error;
-      return true;
-    } catch (err) {
-      console.error('updateStoreOrderStatus error:', err);
-      return false;
-    }
-  },
-
-  async createStoreOrder(order: Omit<T.StoreOrder, 'id' | 'created_at'>): Promise<T.StoreOrder | null> {
-    try {
-      const admin = await getAdminClient();
-      const client = admin || supabase;
-      const { data, error } = await client.from('store_orders').insert(order).select().single();
-      if (error) throw error;
-      return data;
-    } catch (err) {
-      console.error('createStoreOrder error:', err);
-      return null;
-    }
+    const sb: any = supabase;
+    const { data, error } = await sb.rpc('store_order_set_status', { p_order: orderId, p_status: status });
+    if (error) throw new Error(error.message);
+    if (!data?.success) throw new Error(data?.error || 'The order could not be updated.');
+    return true;
   },
 
   async getInventoryItems(): Promise<T.InventoryItem[]> {
@@ -1891,390 +1656,116 @@ export const db = {
     }
   },
 
-  async issueItemDistribution(params: {
-    itemId?: string;
-    itemName: string;
-    quantity: number;
-    studentName: string;
-    category?: string;
-    barcode?: string;
-    department?: string;
-  }): Promise<{ success: boolean; error?: string }> {
-    try {
-      const admin = await getAdminClient();
-      const client = admin || supabase;
-      let itemRecord: any = null;
-      if (params.itemId) {
-        const { data, error } = await client.from('inventory_items').select('*').eq('id', params.itemId).maybeSingle();
-        if (!error && data) itemRecord = data;
-      }
-      if (!itemRecord) {
-        const { data, error } = await client.from('inventory_items').select('*').ilike('name', `%${params.itemName}%`).limit(1).maybeSingle();
-        if (!error && data) itemRecord = data;
-      }
-
-      if (itemRecord) {
-        if (itemRecord.current_stock < params.quantity) {
-          return { success: false, error: `Insufficient stock! Only ${itemRecord.current_stock} available.` };
-        }
-        const newStock = Math.max(0, itemRecord.current_stock - params.quantity);
-        await client.from('inventory_items').update({ current_stock: newStock }).eq('id', itemRecord.id);
-      }
-
-      const { error: txErr } = await client.from('inventory_transactions').insert({
-        type: 'Issue',
-        item_name: params.itemName,
-        quantity: params.quantity,
-        department: params.studentName || params.department || 'Student Distribution',
-        status: 'completed'
-      });
-      if (txErr) throw txErr;
-
-      return { success: true };
-    } catch (err: any) {
-      return { success: false, error: err.message || 'Failed to issue item.' };
-    }
+  // Stock movements run on the server (exact item match, row locks, no negative stock, returns limited to what was issued).
+  async issueItemDistribution(params: { itemId?: string; itemName: string; quantity: number; studentName: string; category?: string; barcode?: string; department?: string }): Promise<{ success: boolean; error?: string }> {
+    const sb: any = supabase;
+    const { data, error } = await sb.rpc('inventory_issue', { p_item_name: params.itemName, p_qty: params.quantity, p_recipient: params.studentName, p_department: params.department ?? null });
+    if (error) return { success: false, error: error.message };
+    return data?.success ? { success: true } : { success: false, error: data?.error || 'Failed to issue item.' };
   },
 
-  async returnItemDistribution(params: {
-    itemId?: string;
-    itemName: string;
-    quantity: number;
-    studentName: string;
-  }): Promise<{ success: boolean; error?: string }> {
-    try {
-      const admin = await getAdminClient();
-      const client = admin || supabase;
-      let itemRecord: any = null;
-      if (params.itemId) {
-        const { data, error } = await client.from('inventory_items').select('*').eq('id', params.itemId).maybeSingle();
-        if (!error && data) itemRecord = data;
-      }
-      if (!itemRecord) {
-        const { data, error } = await client.from('inventory_items').select('*').ilike('name', `%${params.itemName}%`).limit(1).maybeSingle();
-        if (!error && data) itemRecord = data;
-      }
-
-      if (itemRecord) {
-        const newStock = itemRecord.current_stock + params.quantity;
-        await client.from('inventory_items').update({ current_stock: newStock }).eq('id', itemRecord.id);
-      }
-
-      const { error: txErr } = await client.from('inventory_transactions').insert({
-        type: 'Adjustment',
-        item_name: params.itemName,
-        quantity: params.quantity,
-        supplier: params.studentName || 'Returned by Student',
-        status: 'completed'
-      });
-      if (txErr) throw txErr;
-
-      return { success: true };
-    } catch (err: any) {
-      return { success: false, error: err.message || 'Failed to return item.' };
-    }
+  async returnItemDistribution(params: { itemId?: string; itemName: string; quantity: number; studentName: string; reason?: string }): Promise<{ success: boolean; error?: string }> {
+    const sb: any = supabase;
+    const { data, error } = await sb.rpc('inventory_return', { p_item_name: params.itemName, p_qty: params.quantity, p_recipient: params.studentName, p_reason: params.reason ?? null });
+    if (error) return { success: false, error: error.message };
+    return data?.success ? { success: true } : { success: false, error: data?.error || 'Failed to return item.' };
   },
 
-  async createPurchaseOrder(params: {
-    itemName: string;
-    quantity: number;
-    supplier: string;
-    department?: string;
-  }): Promise<{ success: boolean; error?: string }> {
-    try {
-      const admin = await getAdminClient();
-      const client = admin || supabase;
-      const { error } = await client.from('inventory_transactions').insert({
-        type: 'Order',
-        item_name: params.itemName,
-        quantity: params.quantity,
-        supplier: params.supplier,
-        department: params.department || 'Procurement',
-        status: 'pending'
-      });
-      if (error) throw error;
-      return { success: true };
-    } catch (err: any) {
-      return { success: false, error: err.message || 'Failed to create purchase order.' };
-    }
+  async createPurchaseOrder(params: { itemName: string; quantity: number; supplier: string; department?: string }): Promise<{ success: boolean; error?: string }> {
+    const sb: any = supabase;
+    const { data, error } = await sb.rpc('inventory_order', { p_item_name: params.itemName, p_qty: params.quantity, p_supplier: params.supplier, p_department: params.department ?? null });
+    if (error) return { success: false, error: error.message };
+    return data?.success ? { success: true } : { success: false, error: data?.error || 'Failed to create purchase order.' };
+  },
+
+  async receivePurchaseOrder(orderId: string, quantity: number): Promise<{ success: boolean; error?: string; complete?: boolean }> {
+    const sb: any = supabase;
+    const { data, error } = await sb.rpc('inventory_receive', { p_order: orderId, p_qty: quantity });
+    if (error) return { success: false, error: error.message };
+    return data?.success ? { success: true, complete: data.complete } : { success: false, error: data?.error || 'Could not receive the goods.' };
+  },
+
+  async cancelPurchaseOrder(orderId: string, reason: string): Promise<{ success: boolean; error?: string }> {
+    const sb: any = supabase;
+    const { data, error } = await sb.rpc('inventory_cancel_order', { p_order: orderId, p_reason: reason });
+    if (error) return { success: false, error: error.message };
+    return data?.success ? { success: true } : { success: false, error: data?.error || 'Could not cancel the order.' };
   },
 
   // ---------------------------------------------------------------------------
   // ADMISSIONS
   // ---------------------------------------------------------------------------
+  /** Admission applications (single source: public.admission_applications). */
   async getAdmissionApplications(): Promise<T.AdmissionApplication[]> {
-    try {
-      const results: T.AdmissionApplication[] = [];
-      const seenIds = new Set<string>();
-
-      // 1. Fetch from admission_applications
-      try {
-        const { data: directApps } = await supabase
-          .from('admission_applications')
-          .select('*')
-          .order('created_at', { ascending: false });
-        
-        if (directApps && directApps.length > 0) {
-          for (const d of directApps) {
-            results.push(d);
-            seenIds.add(d.id);
-          }
-        }
-      } catch (err) {}
-
-      // 2. Fetch from admission_document_verifications (APPLICATION_METADATA) & admission_merit_lists
-      try {
-        const { data: docList } = await supabase
-          .from('admission_document_verifications')
-          .select('*')
-          .eq('document_type', 'APPLICATION_METADATA')
-          .order('created_at', { ascending: false });
-
-        if (docList && docList.length > 0) {
-          for (const d of docList) {
-            if (d.document_url) {
-              try {
-                const meta = JSON.parse(d.document_url);
-                const appId = meta.id || d.id;
-                if (!seenIds.has(appId)) {
-                  seenIds.add(appId);
-                  results.push({
-                    id: appId,
-                    application_number: meta.application_number || meta.application_no || `APP-${d.id.slice(0, 6)}`,
-                    application_no: meta.application_number || meta.application_no || `APP-${d.id.slice(0, 6)}`,
-                    applicant_name: meta.applicant_name || meta.name || d.student_name,
-                    name: meta.applicant_name || meta.name || d.student_name,
-                    email: meta.email || '',
-                    phone: meta.phone || '',
-                    class_name: meta.class_name || meta.class_applied || 'Paramedical Sciences',
-                    class_applied: meta.class_name || meta.class_applied || 'Paramedical Sciences',
-                    parent_name: meta.parent_name || 'Guardian',
-                    parent_phone: meta.parent_phone || '',
-                    status: (meta.status || 'Submitted') as any,
-                    submission_date: meta.submission_date || d.submission_date || new Date().toISOString().split('T')[0],
-                    remarks: meta.remarks || '',
-                    documents: meta.documents || [],
-                    created_at: meta.created_at || d.created_at,
-                    student_id: meta.student_id,
-                    parent_id: meta.parent_id
-                  } as any);
-                }
-              } catch (parseErr) {}
-            }
-          }
-        }
-      } catch (err) {}
-
-      // 3. Also include existing merit list candidates who are Selected or Admitted
-      try {
-        const { data: meritList } = await supabase
-          .from('admission_merit_lists')
-          .select('*')
-          .order('created_at', { ascending: false });
-
-        if (meritList && meritList.length > 0) {
-          for (const m of meritList) {
-            if (!seenIds.has(m.id)) {
-              seenIds.add(m.id);
-              results.push({
-                id: m.id,
-                application_number: `APP-2026-${m.rank?.toString().padStart(4, '0') || m.id.slice(0, 4)}`,
-                application_no: `APP-2026-${m.rank?.toString().padStart(4, '0') || m.id.slice(0, 4)}`,
-                applicant_name: m.student_name,
-                name: m.student_name,
-                email: `${m.student_name.toLowerCase().replace(/[^a-z0-9]/g, '.')}@adithyan.edu.in`,
-                phone: '9840' + Math.floor(100000 + Math.random() * 900000),
-                class_name: m.course_name,
-                class_applied: m.course_name,
-                parent_name: `Parent of ${m.student_name}`,
-                parent_phone: '9840' + Math.floor(100000 + Math.random() * 900000),
-                status: (m.status === 'Admitted' ? 'Approved' : m.status === 'Selected' ? 'Under Review' : 'Submitted') as any,
-                submission_date: m.created_at ? m.created_at.split('T')[0] : '2026-11-09',
-                remarks: `Merit score: ${m.merit_score}% | Rank: ${m.rank} (${m.category || 'General'})`,
-                documents: [],
-                created_at: m.created_at
-              } as any);
-            }
-          }
-        }
-      } catch (err) {}
-
-      return results;
-    } catch (err) {
-      console.warn('getAdmissionApplications warning:', err);
-      return [];
-    }
+    const { data, error } = await supabase
+      .from('admission_applications')
+      .select('*')
+      .order('created_at', { ascending: false });
+    if (error) throw new Error(`Could not load applications: ${error.message}`);
+    return (data || []).map((d: any) => ({
+      ...d,
+      name: d.applicant_name,
+      application_no: d.application_number,
+      class_applied: d.class_name,
+      // the institution's manually entered student id; it becomes students.student_id on enrolment
+      student_id: d.application_number,
+      parent_id: undefined,
+    })) as any;
   },
 
-  async createAdmissionApplication(app: any): Promise<T.AdmissionApplication | null> {
-    try {
-      // Try backend endpoint first if session is available (handles RLS permissions cleanly)
-      try {
-        const { data: { session } } = await supabase.auth.getSession();
-        const token = session?.access_token;
-        if (token && typeof fetch !== 'undefined') {
-          const res = await fetch('/api/admin/users', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              Authorization: `Bearer ${token}`
-            },
-            body: JSON.stringify({
-              action: 'create_admission_application',
-              application: app
-            })
-          });
-          if (res.ok) {
-            const json = await res.json();
-            if (json.success && json.application) {
-              return json.application;
-            }
-          }
-        }
-      } catch (apiErr) {}
-
-      const studentName = app.name || app.applicant_name || 'Applicant';
-      const courseName = app.class_applied || app.class_name || 'Paramedical Sciences';
-      const appNo = app.application_no || app.application_number || `APP-2026-${Math.floor(1000 + Math.random() * 9000)}`;
-
-      // 1. Create merit record
-      const { data: merit } = await supabase.from('admission_merit_lists').insert({
-        student_name: studentName,
-        course_name: courseName,
-        merit_score: Number(app.qualifying_marks || app.qualifyingScore || 85),
-        rank: 1,
-        category: app.merit_category || 'Institutional Merit',
-        status: app.status || 'Submitted',
-        academic_year: '2026-2027'
-      }).select().single();
-
-      const newId = merit?.id || crypto.randomUUID();
-
-      // 2. Create metadata record in admission_document_verifications
-      const meta = {
-        ...app,
-        id: newId,
-        application_id: newId,
-        application_no: appNo,
-        application_number: appNo,
-        name: studentName,
-        applicant_name: studentName,
-        class_name: courseName,
-        class_applied: courseName,
-        status: app.status || 'Submitted',
-        created_at: new Date().toISOString()
-      };
-
-      await supabase.from('admission_document_verifications').insert({
-        student_name: studentName,
-        document_type: 'APPLICATION_METADATA',
-        document_url: JSON.stringify(meta),
-        status: 'Pending',
-        submission_date: new Date().toISOString().split('T')[0]
-      });
-
-      // 3. Best-effort insert into admission_applications
-      try {
-        await supabase.from('admission_applications').insert({
-          id: newId,
-          application_number: appNo,
-          applicant_name: studentName,
-          email: app.email,
-          phone: app.phone || '',
-          class_name: courseName,
-          parent_name: app.parent_name || 'Guardian',
-          parent_phone: app.parent_phone || '',
-          status: app.status || 'Submitted',
-          submission_date: new Date().toISOString().split('T')[0],
-          remarks: app.remarks || ''
-        });
-      } catch (e) {}
-
-      return meta as any;
-    } catch (err) {
-      console.error('createAdmissionApplication error:', err);
-      return null;
-    }
+  async createAdmissionApplication(app: any): Promise<T.AdmissionApplication> {
+    const json = await callAdminApi('create_admission_application', { application: app });
+    return json.application;
   },
 
-  async updateAdmissionStatus(id: string, status: T.AdmissionApplication['status'], remarks?: string): Promise<boolean> {
-    try {
-      // Try backend endpoint first if session is available
-      try {
-        const { data: { session } } = await supabase.auth.getSession();
-        const token = session?.access_token;
-        if (token && typeof fetch !== 'undefined') {
-          const res = await fetch('/api/admin/users', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              Authorization: `Bearer ${token}`
-            },
-            body: JSON.stringify({
-              action: 'update_admission_status',
-              id,
-              status,
-              remarks
-            })
-          });
-          if (res.ok) {
-            const json = await res.json();
-            if (json.success) return true;
-          }
-        }
-      } catch (apiErr) {}
+  /** Moves an application through the admission pipeline. Throws the server's message when refused. */
+  async updateAdmissionStatus(id: string, status: T.AdmissionApplication['status'] | string, remarks?: string): Promise<boolean> {
+    await callAdminApi('update_admission_status', { id, status, remarks });
+    return true;
+  },
 
-      // 1. Update admission_merit_lists
-      try {
-        await supabase
-          .from('admission_merit_lists')
-          .update({
-            status: status === 'Approved' ? 'Admitted' : status,
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', id);
-      } catch (e) {}
+  /** Admission deposit: payment + receipt + ledger saved atomically by the server. Retrying with the same key never double-charges. */
+  async recordAdmissionDeposit(params: {
+    applicationId: string; amount: number; paymentMode: string; reference?: string; idempotencyKey: string;
+  }): Promise<{ duplicate: boolean; receipt?: any }> {
+    return await callAdminApi('record_admission_deposit', { deposit: {
+      application_id: params.applicationId, amount: params.amount, payment_mode: params.paymentMode,
+      transaction_reference: params.reference || null, idempotency_key: params.idempotencyKey,
+    } });
+  },
 
-      // 2. Update admission_document_verifications metadata
-      try {
-        const { data: docs } = await supabase
-          .from('admission_document_verifications')
-          .select('*')
-          .eq('document_type', 'APPLICATION_METADATA');
+  // ---- Fee engine (migration 040). All writes are server-side, atomic and idempotent. ----
+  /** execute=false returns a preview of exactly what would be billed; execute=true bills it. */
+  async feeGenerate(execute: boolean, generate: {
+    planId?: string; feeHeadId?: string; amount?: number; description?: string;
+    scopeType: 'student' | 'class' | 'department' | 'all'; scopeValue?: string; quota?: string; semester?: number | null;
+    academicYear?: string; dueDate?: string; includeYearly?: boolean; includeOneTime?: boolean;
+  }): Promise<any> {
+    return await callAdminApi('fee_generate', { execute, generate: {
+      plan_id: generate.planId, fee_head_id: generate.feeHeadId, amount: generate.amount, description: generate.description,
+      scope_type: generate.scopeType, scope_value: generate.scopeValue, quota: generate.quota, semester: generate.semester,
+      academic_year: generate.academicYear, due_date: generate.dueDate,
+      include_yearly: generate.includeYearly, include_one_time: generate.includeOneTime,
+    } });
+  },
 
-        for (const d of (docs || [])) {
-          if (d.document_url && (d.document_url.includes(id) || d.id === id)) {
-            try {
-              const meta = JSON.parse(d.document_url);
-              meta.status = status;
-              if (remarks) meta.remarks = remarks;
-              meta.updated_at = new Date().toISOString();
-              await supabase
-                .from('admission_document_verifications')
-                .update({
-                  document_url: JSON.stringify(meta),
-                  status: status === 'Approved' ? 'Verified' : 'Pending',
-                  updated_at: new Date().toISOString()
-                })
-                .eq('id', d.id);
-            } catch (pe) {}
-          }
-        }
-      } catch (e) {}
+  async feeAdjust(studentFeeId: string, kind: 'waiver' | 'concession' | 'cancellation', amount: number | undefined, reason: string): Promise<any> {
+    return await callAdminApi('fee_adjust', { adjustment: { student_fee_id: studentFeeId, kind, amount, reason } });
+  },
 
-      // 3. Best-effort update admission_applications
-      try {
-        await supabase
-          .from('admission_applications')
-          .update({ status, remarks })
-          .eq('id', id);
-      } catch (e) {}
+  async feeCancelRun(runId: string, reason: string): Promise<{ cancelled: number; kept_because_paid: number; run_closed: boolean }> {
+    return await callAdminApi('fee_cancel_run', { run_id: runId, reason });
+  },
 
-      return true;
-    } catch (err) {
-      console.error('updateAdmissionStatus error:', err);
-      return false;
-    }
+  async feePlanClone(planId: string, name: string, academicYear: string): Promise<{ plan_id: string }> {
+    return await callAdminApi('fee_plan_clone', { plan_id: planId, name, academic_year: academicYear });
+  },
+
+  /** Enrols an Approved/Offered applicant: creates (or links) the permanent student record. Idempotent. */
+  async enrollAdmission(id: string, opts: { department?: string; class_name?: string } = {}): Promise<{
+    student_id: string; student_record_id: string; already_enrolled: boolean; linked_existing?: boolean;
+  }> {
+    return await callAdminApi('enroll_admission', { id, ...opts });
   },
 
   async getPendingAdmissionsCount(): Promise<number> {
@@ -2479,32 +1970,39 @@ export const db = {
     }
   },
 
-  async requestCertificate(cert: Omit<T.Certificate, 'id' | 'created_at'>): Promise<T.Certificate | null> {
-    try {
-      const { data, error } = await supabase.from('certificates').insert(cert).select().single();
-      if (error) throw error;
-      return data;
-    } catch (err) {
-      console.error('requestCertificate error:', err);
-      return null;
-    }
+  /** Staff issue a certificate; number, QR hash, name and class are produced by the server (migration 048). */
+  async issueCertificate(studentRef: string, type: string, purpose: string, details?: string): Promise<{ id: string; certificate_number: string }> {
+    const sb: any = supabase;
+    const { data, error } = await sb.rpc('certificate_issue', { p_student_ref: studentRef, p_type: type, p_purpose: purpose, p_details: details || null });
+    if (error) throw new Error(error.message);
+    if (!data?.success) throw new Error(data?.error || 'Could not issue the certificate');
+    return data;
   },
 
-  async updateCertificateStatus(id: string, status: T.Certificate['status']): Promise<boolean> {
-    try {
-      let { data, error } = await supabase.from('certificates').update({ status }).eq('id', id).select();
-      if (error || !data || data.length === 0) {
-        const admin = await getAdminClient();
-        if (admin) {
-          const res = await admin.from('certificates').update({ status }).eq('id', id).select();
-          if (!res.error && res.data && res.data.length > 0) return true;
-        }
-      }
-      return !error && !!data && data.length > 0;
-    } catch (err) {
-      console.error('updateCertificateStatus error:', err);
-      return false;
-    }
+  /** A student requests a certificate for themselves. */
+  async requestCertificate(type: string, purpose: string): Promise<{ id: string; certificate_number: string }> {
+    const sb: any = supabase;
+    const { data, error } = await sb.rpc('certificate_request', { p_type: type, p_purpose: purpose });
+    if (error) throw new Error(error.message);
+    if (!data?.success) throw new Error(data?.error || 'Could not submit the request');
+    return data;
+  },
+
+  /** Issue ('Approved'/'Issued') or reject a pending request. Rejection needs a reason. */
+  async updateCertificateStatus(id: string, status: T.Certificate['status'], note?: string): Promise<boolean> {
+    const decision = status === 'Rejected' ? 'Reject' : 'Issue';
+    const sb: any = supabase;
+    const { data, error } = await sb.rpc('certificate_decide', { p_id: id, p_decision: decision, p_note: note || null });
+    if (error) throw new Error(error.message);
+    if (!data?.success) throw new Error(data?.error || 'Could not update the request');
+    return true;
+  },
+
+  async verifyCertificate(number: string): Promise<{ valid: boolean; type?: string; student?: string; issued_on?: string }> {
+    const sb: any = supabase;
+    const { data, error } = await sb.rpc('certificate_verify', { p_number: number });
+    if (error) throw new Error(error.message);
+    return data || { valid: false };
   },
 
   // ---------------------------------------------------------------------------
@@ -2613,13 +2111,13 @@ export const db = {
   },
 
   async getExamResults(studentId?: string): Promise<T.ExamResult[]> {
+    // Pass/fail and grade are decided by the server when marks are saved (exam_save_marks); nothing is invented here.
     const formatResult = (r: any) => ({
       ...r,
       marks: r.marks_obtained,
-      total: r.max_marks || 100,
-      percentage: r.percentage ?? (r.max_marks ? Math.round((r.marks_obtained / r.max_marks) * 100) : r.marks_obtained),
-      status: r.status || (r.marks_obtained >= 50 ? 'pass' : 'fail'),
-      grade: r.grade || (r.marks_obtained >= 80 ? 'Distinction' : r.marks_obtained >= 60 ? 'First Class' : 'Pass')
+      total: r.max_marks,
+      percentage: r.max_marks ? Math.round((Number(r.marks_obtained) / Number(r.max_marks)) * 100) : null,
+      status: r.result_status ? String(r.result_status).toLowerCase() : null,
     });
 
     try {
@@ -2903,26 +2401,47 @@ export const db = {
     return this.getNotifications(userId);
   },
 
+  /** Send one notification to many users (chunks of 500) through the server. Returns how many were delivered. */
+  async notifyMany(userIds: string[], title: string, message: string, type: 'info' | 'warning' | 'error' | 'success' = 'info', priority: 'low' | 'medium' | 'high' = 'medium'): Promise<number> {
+    const sb: any = supabase;
+    let sent = 0;
+    const ids = Array.from(new Set(userIds.filter(Boolean)));
+    for (let i = 0; i < ids.length; i += 500) {
+      const { data, error } = await sb.rpc('notify_users', { p_user_ids: ids.slice(i, i + 500), p_title: title, p_message: message, p_type: type, p_priority: priority });
+      if (error || !data?.success) { console.warn('notifyMany warning:', error?.message || data?.error); continue; }
+      sent += data.sent ?? 0;
+    }
+    return sent;
+  },
+
+  /**
+   * Notifications for yourself are written directly; notifications for other people go through the server
+   * (`notify_users` / `notify_roles`), because RLS only lets you write your own rows.
+   * `user_id` may be a UUID or a role name such as 'admin'. Returns null (and logs) if nothing was delivered.
+   */
   async createNotification(notification: Omit<T.NotificationItem, 'id' | 'created_at'>): Promise<T.NotificationItem | null> {
+    const sb: any = supabase;
+    const target = String(notification.user_id ?? '');
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(target);
+    const pr = ['low', 'medium', 'high'].includes(notification.priority as string) ? notification.priority : 'medium';
+    const ty = ['info', 'warning', 'error', 'success'].includes(notification.type as string) ? notification.type : 'info';
     try {
-      let { data, error } = await supabase.from('notifications').insert(notification).select().single();
-      if (error) {
-        const admin = await getAdminClient();
-        if (admin) {
-          const res = await admin.from('notifications').insert(notification).select().single();
-          if (!res.error && res.data) {
-            data = res.data;
-            error = null;
-          }
-        }
+      const { data: { session } } = await supabase.auth.getSession();
+      if (isUuid && session?.user?.id === target) {
+        const { data, error } = await sb.from('notifications').insert({ ...notification, priority: pr, type: ty }).select().single();
+        if (error) throw error;
+        return data;
       }
-      if (error) {
-        if ((error as any).code !== 'PGRST205') console.warn('createNotification warning:', error);
-        return null;
-      }
-      return data;
-    } catch (err) {
-      console.warn('createNotification error:', err);
+      const res = isUuid
+        ? await sb.rpc('notify_users', { p_user_ids: [target], p_title: notification.title, p_message: notification.message, p_type: ty, p_priority: pr })
+        : target === 'all'
+          ? { data: { success: false, error: 'Broadcasting to everyone is not supported; address a role or a user.' }, error: null }
+          : await sb.rpc('notify_roles', { p_roles: [target], p_title: notification.title, p_message: notification.message, p_type: ty, p_priority: pr });
+      if (res.error) throw res.error;
+      if (!res.data?.success) throw new Error(res.data?.error || 'Notification not sent');
+      return { ...(notification as any), id: '', created_at: new Date().toISOString() } as T.NotificationItem;
+    } catch (err: any) {
+      console.warn('createNotification warning:', err?.message || err);
       return null;
     }
   },
@@ -4040,83 +3559,25 @@ export const db = {
   // ---------------------------------------------------------------------------
   // ATOMIC STORE ORDER
   // ---------------------------------------------------------------------------
+  /** Orders are priced and stocked by the server (`checkout_store_order`); the browser's total is only a cross-check. */
   async placeStoreOrderAtomic(params: {
     userId: string;
     userName: string;
     items: Array<{ id: string | number; name: string; price: number; quantity: number }>;
     totalAmount: number;
   }): Promise<{ success: boolean; order?: any; error?: string }> {
-    try {
-      // 1. Try PostgreSQL RPC
-      const { data, error } = await supabase.rpc('place_store_order', {
-        p_user_id: params.userId,
-        p_user_name: params.userName,
-        p_items: params.items,
-        p_total_amount: params.totalAmount,
-      });
-
-      if (!error && data) {
-        return { success: true, order: data };
-      }
-
-      const admin = await getAdminClient();
-      const client = admin || supabase;
-
-      // 2. Fallback if RPC function not found in schema cache: Client-side transactional stock validation
-      for (const item of params.items) {
-        const { data: prod, error: pErr } = await client
-          .from('store_products')
-          .select('stock, name')
-          .eq('id', item.id)
-          .single();
-
-        if (pErr || !prod) {
-          return { success: false, error: `Product "${item.name}" not found in catalog.` };
-        }
-        if (prod.stock < item.quantity) {
-          return {
-            success: false,
-            error: `Insufficient stock for "${prod.name}": ${item.quantity} requested, but only ${prod.stock} available.`,
-          };
-        }
-      }
-
-      // Deduct stock for each item
-      for (const item of params.items) {
-        const { data: prod } = await client.from('store_products').select('stock').eq('id', item.id).single();
-        if (prod) {
-          await client
-            .from('store_products')
-            .update({ stock: Math.max(0, prod.stock - item.quantity) })
-            .eq('id', item.id);
-        }
-      }
-
-      // Create order
-      const { data: newOrder, error: oErr } = await client
-        .from('store_orders')
-        .insert({
-          user_id: params.userId,
-          user_name: params.userName,
-          items: params.items,
-          total_amount: params.totalAmount,
-          status: 'Pending',
-        })
-        .select()
-        .single();
-
-      if (oErr) {
-        // Fallback via backend action
-        const res = await callAdminBackendAction('place_store_order', { order: params });
-        if (res?.order) return { success: true, order: res.order };
-
-        return { success: false, error: oErr.message };
-      }
-
-      return { success: true, order: newOrder };
-    } catch (err: any) {
-      return { success: false, error: err.message || 'Failed to place store order.' };
+    const sb: any = supabase;
+    const { data, error } = await sb.rpc('checkout_store_order', {
+      p_student_id: params.userId,
+      p_items: params.items.map(i => ({ product_id: i.id, quantity: i.quantity })),
+      p_total_amount: params.totalAmount,
+    });
+    if (error) {
+      const m = String(error.message || '');
+      return { success: false, error: m.includes('PRICE_MISMATCH') ? 'Prices changed while you were shopping. Please review your cart and try again.' : m };
     }
+    if (!data?.success) return { success: false, error: data?.error || 'Order was not placed.' };
+    return { success: true, order: data };
   },
 
   // ---------------------------------------------------------------------------
@@ -4504,130 +3965,57 @@ export const db = {
     }
   },
 
+  /**
+   * Desk fee collection (finance staff). One atomic server-side operation: payment row, fee balance,
+   * receipt and ledger entry are written in a single transaction and a retry with the same
+   * idempotencyKey returns the original receipt instead of charging twice.
+   * Online self-service payment is NOT handled here (needs a payment gateway; see FEES module notes).
+   */
   async recordFeePayment(params: {
     studentId: string;
     studentName: string;
     amount: number;
-    paymentMethod: string;
+    paymentMethod: 'Cash' | 'UPI' | 'Card' | 'Bank_Transfer' | 'Cheque' | 'Online_Gateway';
+    studentFeeId?: string;
+    reference?: string;
     notes?: string;
-  }): Promise<{ success: boolean; transaction?: any; receipt?: any; error?: string }> {
+    idempotencyKey?: string;
+  }): Promise<{ success: boolean; receipt?: any; duplicate?: boolean; error?: string; code?: string }> {
     try {
-      // 1. Create finance transaction
-      let tx: any = null;
-      const { data, error: txErr } = await supabase
-        .from('finance_transactions')
-        .insert({
-          type: 'Fee Payment',
-          amount: params.amount,
-          department: 'Academic Fees',
-          description: `Fee payment of ₹${params.amount} for ${params.studentName} via ${params.paymentMethod}`,
-          payment_method: params.paymentMethod,
-          date: new Date().toISOString().split('T')[0],
-          status: 'Approved',
-        })
-        .select()
-        .single();
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) return { success: false, error: 'Your session has expired. Please sign in again.', code: 'SESSION_EXPIRED' };
 
-      if (!txErr && data) {
-        tx = data;
-      } else {
-        const admin = await getAdminClient();
-        if (admin) {
-          const { data: aData } = await admin
-            .from('finance_transactions')
-            .insert({
-              type: 'Fee Payment',
-              amount: params.amount,
-              department: 'Academic Fees',
-              description: `Fee payment of ₹${params.amount} for ${params.studentName} via ${params.paymentMethod}`,
-              payment_method: params.paymentMethod,
-              date: new Date().toISOString().split('T')[0],
-              status: 'Approved',
-            })
-            .select()
-            .single();
-          if (aData) tx = aData;
-        }
+      let feeId = params.studentFeeId;
+      if (!feeId) {
+        const open = (await this.getStudentFees(params.studentId)).filter((f: any) => Number(f.total_due) > 0);
+        if (open.length === 0) return { success: false, error: 'This student has no outstanding fee record.', code: 'NOTHING_DUE' };
+        if (open.length > 1) return { success: false, error: 'This student has several open invoices. Choose the invoice to pay.', code: 'AMBIGUOUS_INVOICE' };
+        feeId = open[0].id;
       }
 
-      // 2. Update student_fees record
-      let targetFee: any = null;
-      let newDue = 0;
-      let newPaid = params.amount;
-      const fees = await this.getStudentFees(params.studentId);
-
-      if (fees && fees.length > 0) {
-        const fee = fees[0];
-        targetFee = fee;
-        newPaid = Number(fee.paid_amount || 0) + Number(params.amount);
-        newDue = Math.max(0, Number(fee.total_due || 0) - Number(params.amount));
-        const newStatus = newDue === 0 ? 'paid' : 'partially_paid';
-
-        const admin = await getAdminClient();
-        const targetClient = admin || supabase;
-        await targetClient
-          .from('student_fees')
-          .update({
-            paid_amount: newPaid,
-            total_due: newDue,
-            status: newStatus,
-          })
-          .eq('id', fee.id);
-      }
-
-      // 3. Issue official verifiable FeeReceipt
-      const studentProfile = params.studentId ? await this.getProfile(params.studentId) : null;
-      const receiptNo = `REC-${new Date().getFullYear()}-${Math.floor(10000 + Math.random() * 90000)}`;
-      const generatedReceipt = await this.generateFeeReceipt({
-        receipt_number: receiptNo,
-        student_fee_id: targetFee?.id || null,
-        student_id: params.studentId,
-        student_name: params.studentName,
-        roll_number: studentProfile?.student_id || studentProfile?.roll_number || 'STU-2026-1001',
-        department: studentProfile?.department || targetFee?.class_name || 'Paramedical Sciences',
-        academic_year: '2026-2027',
-        semester: studentProfile?.semester || 'Semester 1',
-        fee_type: 'Tuition & Academic Composite Fee',
-        gross_amount: Number(targetFee?.total_due || 0) + Number(targetFee?.paid_amount || 0) || params.amount,
-        discount_applied: 0,
-        amount_paid: params.amount,
-        balance_remaining: newDue,
-        payment_mode: params.paymentMethod,
-        transaction_reference: tx?.id || `TXN-${Date.now()}`,
-        qr_verification_token: `QR-AIP-${Date.now()}-${Math.random().toString(36).substring(2, 7).toUpperCase()}`,
+      const response = await fetch(apiUrl('/api/admin/users'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+        body: JSON.stringify({
+          action: 'collect_fee_payment',
+          payment: {
+            student_fee_id: feeId,
+            amount: params.amount,
+            payment_mode: params.paymentMethod,
+            transaction_reference: params.reference || null,
+            idempotency_key: params.idempotencyKey || crypto.randomUUID(),
+            remarks: params.notes || null,
+          },
+        }),
       });
-
-      // 4. Notify Student and linked Parents
-      if (params.studentId) {
-        await this.createNotification({
-          user_id: params.studentId,
-          title: 'Fee Payment Received',
-          message: `Payment of ₹${params.amount.toLocaleString('en-IN')} received via ${params.paymentMethod}. Official receipt #${receiptNo} generated. Balance due: ₹${newDue.toLocaleString('en-IN')}.`,
-          type: 'success',
-          priority: 'high',
-          is_read: false
-        });
-
-        const parentIds = await this.getParentsForStudent(params.studentId);
-        for (const pid of parentIds) {
-          await this.createNotification({
-            user_id: pid,
-            title: 'Ward Fee Payment Received',
-            message: `Payment of ₹${params.amount.toLocaleString('en-IN')} for ${params.studentName} received via ${params.paymentMethod}. Receipt #${receiptNo}. Outstanding balance: ₹${newDue.toLocaleString('en-IN')}.`,
-            type: 'success',
-            priority: 'high',
-            is_read: false
-          });
-        }
+      const json = await response.json().catch(() => ({} as any));
+      if (!response.ok || !json.success) {
+        return { success: false, error: json.error || 'Payment could not be recorded.', code: json.code };
       }
-
-      return {
-        success: true,
-        transaction: tx || { id: 'TXN-' + Date.now(), amount: params.amount },
-        receipt: generatedReceipt
-      };
+      const { data: receipt } = await supabase.from('fee_receipts').select('*').eq('id', json.receipt_id).maybeSingle();
+      return { success: true, receipt: receipt || undefined, duplicate: !!json.duplicate };
     } catch (err: any) {
-      return { success: false, error: err.message || 'Payment processing failed.' };
+      return { success: false, error: err?.message || 'Payment processing failed.' };
     }
   },
 
@@ -4870,28 +4258,14 @@ export const db = {
     }
   },
 
-  async updateStaffLeaveStatus(id: string, status: string, approvedBy?: string, rejectionReason?: string): Promise<boolean> {
-    try {
-      const isUuid = approvedBy && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(approvedBy);
-      const updates = {
-        status,
-        approved_by: isUuid ? approvedBy : null,
-        rejection_reason: rejectionReason || null,
-        updated_at: new Date().toISOString()
-      };
-      let { data, error } = await supabase.from('staff_leave_applications').update(updates).eq('id', id).select();
-      if (error || !data || data.length === 0) {
-        const admin = await getAdminClient();
-        if (admin) {
-          const res = await admin.from('staff_leave_applications').update(updates).eq('id', id).select();
-          if (!res.error && res.data && res.data.length > 0) return true;
-        }
-      }
-      return !error && !!data && data.length > 0;
-    } catch (err) {
-      console.error('updateStaffLeaveStatus error:', err);
-      return false;
-    }
+  /** Decisions run on the server: no self-approval, rejection needs a reason, and the balance ledger refuses over-quota approvals. */
+  async updateStaffLeaveStatus(id: string, status: string, _approvedBy?: string, rejectionReason?: string): Promise<boolean> {
+    const decision = String(status).toLowerCase().startsWith('reject') ? 'Reject' : 'Approve';
+    const sb: any = supabase;
+    const { data, error } = await sb.rpc('staff_leave_decide', { p_id: id, p_decision: decision, p_reason: rejectionReason ?? null });
+    if (error) throw new Error(error.message);
+    if (!data?.success) throw new Error(data?.error || 'The leave could not be updated.');
+    return true;
   },
 
   async getStaffPayrollRuns(): Promise<T.StaffPayrollRun[]> {
@@ -5076,89 +4450,24 @@ export const db = {
     }
   },
 
-  async updateScholarshipStatus(id: string, status: string, sanctionedAmount?: number, approvedBy?: string): Promise<boolean> {
-    try {
-      const isUuid = approvedBy && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(approvedBy);
-      const updates = {
-        status,
-        sanctioned_amount: sanctionedAmount !== undefined ? sanctionedAmount : undefined,
-        approved_by: isUuid ? approvedBy : null,
-        updated_at: new Date().toISOString()
-      };
-      const admin = await getAdminClient();
-      const targetClient = admin || supabase;
-      let { data, error } = await targetClient.from('scholarship_applications').update(updates).eq('id', id).select();
-      if (error && admin && targetClient !== admin) {
-        const res = await admin.from('scholarship_applications').update(updates).eq('id', id).select();
-        if (!res.error) data = res.data;
-      }
-
-      // If approved with sanctioned amount, apply concession to student_fees
-      if (status === 'Approved' && sanctionedAmount && sanctionedAmount > 0) {
-        const { data: appData } = await targetClient
-          .from('scholarship_applications')
-          .select('*')
-          .eq('id', id)
-          .single();
-
-        if (appData?.student_id) {
-          const fees = await this.getStudentFees(appData.student_id);
-          if (fees && fees.length > 0) {
-            const fee = fees[0];
-            const currentDue = Number(fee.total_due || 0);
-            const concession = Math.min(currentDue, Number(sanctionedAmount));
-            const newDue = Math.max(0, currentDue - concession);
-            const newStatus = newDue === 0 ? 'paid' : fee.status;
-
-            await targetClient
-              .from('student_fees')
-              .update({
-                total_due: newDue,
-                status: newStatus
-              })
-              .eq('id', fee.id);
-          }
-
-          // Record in finance_transactions
-          await targetClient.from('finance_transactions').insert({
-            type: 'Scholarship / Concession',
-            amount: Number(sanctionedAmount),
-            department: 'Academic Accounts',
-            description: `Scholarship waiver of ₹${sanctionedAmount} approved for ${appData.student_name} (${appData.scholarship_name})`,
-            status: 'Approved',
-            date: new Date().toISOString().split('T')[0]
-          });
-
-          // Notify student
-          await this.createNotification({
-            user_id: appData.student_id,
-            title: 'Scholarship Concession Sanctioned',
-            message: `Congratulations! Your scholarship concession of ₹${Number(sanctionedAmount).toLocaleString('en-IN')} for ${appData.scholarship_name} has been approved and applied to your fee ledger.`,
-            type: 'success',
-            priority: 'high',
-            is_read: false
-          });
-
-          // Notify linked parents
-          const parentIds = await this.getParentsForStudent(appData.student_id);
-          for (const pid of parentIds) {
-            await this.createNotification({
-              user_id: pid,
-              title: 'Ward Scholarship Concession Approved',
-              message: `A fee concession of ₹${Number(sanctionedAmount).toLocaleString('en-IN')} for ${appData.scholarship_name} has been applied to ${appData.student_name}'s academic account.`,
-              type: 'success',
-              priority: 'high',
-              is_read: false
-            });
-          }
-        }
-      }
-
-      return true;
-    } catch (err) {
-      console.error('updateScholarshipStatus error:', err);
-      return false;
+  /** Scholarship decisions run on the server: the concession is applied through the fee ledger (audited, waived amount tracked). */
+  async updateScholarshipStatus(id: string, status: string, sanctionedAmount?: number, _approvedBy?: string, reason?: string, studentFeeId?: string): Promise<boolean> {
+    const sb: any = supabase;
+    const decision = String(status).toLowerCase().startsWith('reject') ? 'Reject' : 'Approve';
+    const { data, error } = await sb.rpc('scholarship_decide', { p_id: id, p_decision: decision, p_amount: sanctionedAmount ?? null, p_student_fee_id: studentFeeId ?? null, p_reason: reason ?? null });
+    if (error) throw new Error(error.message);
+    if (!data?.success) throw new Error(data?.error || 'The scholarship could not be updated.');
+    // tell the student (best effort; the money has already moved)
+    const { data: app } = await sb.from('scholarship_applications').select('student_id, scholarship_name').eq('id', id).maybeSingle();
+    if (app?.student_id) {
+      await this.createNotification({
+        user_id: app.student_id,
+        title: decision === 'Approve' ? 'Scholarship concession sanctioned' : 'Scholarship application declined',
+        message: decision === 'Approve' ? `₹${Number(sanctionedAmount).toLocaleString('en-IN')} for ${app.scholarship_name ?? 'your scholarship'} has been applied to your fees.` : `Your application for ${app.scholarship_name ?? 'the scholarship'} was not approved.${reason ? ` Reason: ${reason}` : ''}`,
+        type: decision === 'Approve' ? 'success' : 'info', priority: 'high', is_read: false
+      } as any);
     }
+    return true;
   },
 
   async getFeeReceipts(studentId?: string, rollNumber?: string): Promise<T.FeeReceipt[]> {
@@ -5452,14 +4761,14 @@ export const db = {
 
       const classSubjectPairs = Array.from(new Set(slots.map(s => `${s.class_name}|${s.subject}|${s.room || ''}`)))
         .map(str => {
-          const [className, subject, room] = str.split('|');
+          const [className, subject, room] = String(str).split('|');
           return { className, subject, room };
         });
 
       return {
         assignedSlots: slots,
         assignedClasses: allAssignedClasses,
-        assignedSubjects,
+        assignedSubjects: assignedSubjects as string[],
         classSubjectPairs,
         hasAssignments: allAssignedClasses.length > 0
       };
@@ -5516,7 +4825,7 @@ export const db = {
 
           const semMatch = yrSem.match(/Semester\s*(\d)/i);
           if (semMatch) {
-            semester = `Semester ${semMatch[1]}`;
+            semester = `Semester ${semMatch[1]}` as any;
           } else if (yrSem.includes('Year 2')) {
             semester = 'Semester 3';
           } else if (yrSem.includes('Year 3')) {
@@ -6204,41 +5513,6 @@ export const db = {
     }
   },
 
-  async allocateHostelRoom(roomId: string): Promise<{ success: boolean; message: string }> {
-    try {
-      let client: any = supabase;
-      let { data: room, error } = await client.from('hostel_rooms').select('*').eq('id', roomId).single();
-      if (error || !room) {
-        const admin = await getAdminClient();
-        if (admin) {
-          const res = await admin.from('hostel_rooms').select('*').eq('id', roomId).single();
-          if (!res.error && res.data) {
-            room = res.data;
-            client = admin;
-          }
-        }
-      }
-      if (!room) return { success: false, message: 'Room not found' };
-
-      const current = room.current_occupancy || 0;
-      const capacity = room.capacity || 3;
-      if (current >= capacity) {
-        return { success: false, message: `Room ${room.room_number} is already at full capacity (${current}/${capacity})` };
-      }
-
-      const nextOcc = current + 1;
-      const nextStatus = nextOcc >= capacity ? 'Occupied' : 'Available';
-      await client.from('hostel_rooms').update({
-        current_occupancy: nextOcc,
-        status: nextStatus
-      }).eq('id', roomId);
-
-      return { success: true, message: `Allocated to Room ${room.room_number}. New occupancy: ${nextOcc}/${capacity}` };
-    } catch (err: any) {
-      return { success: false, message: err?.message || 'Failed to allocate room' };
-    }
-  },
-
   async createPlacementDrive(drive: Partial<T.PlacementDrive>): Promise<T.PlacementDrive | null> {
     try {
       const payload: any = {
@@ -6432,64 +5706,38 @@ export const db = {
   // ===========================================================================
   // ADMISSION MERIT LISTS
   // ===========================================================================
-  async getAdmissionMeritLists(): Promise<T.AdmissionMeritEntry[]> {
-    try {
-      const { data, error } = await supabase.from('admission_merit_lists').select('*').order('rank', { ascending: true });
-      if (error) throw error;
-      return data || [];
-    } catch (err) {
-      console.warn('getAdmissionMeritLists warning:', err);
-      return [];
-    }
+  /** Published merit rows (linked to applications). */
+  async getAdmissionMeritLists(): Promise<any[]> {
+    const { data, error } = await supabase.from('admission_merit_lists').select('*').not('application_id', 'is', null).order('rank', { ascending: true });
+    if (error) throw new Error(`Could not load the merit list: ${error.message}`);
+    return data || [];
   },
 
-  async addAdmissionMeritEntry(entry: Partial<T.AdmissionMeritEntry>): Promise<T.AdmissionMeritEntry | null> {
-    try {
-      const { data, error } = await supabase.from('admission_merit_lists').insert(entry).select().single();
-      if (error) throw error;
-      return data;
-    } catch (err) {
-      console.error('addAdmissionMeritEntry error:', err);
-      return null;
-    }
+  async publishMeritList(params: { course: string; academicYear?: string; seats?: number; weightQualifying: number; quota?: string }): Promise<any> {
+    return await callAdminApi('publish_merit_list', {
+      course: params.course, academic_year: params.academicYear || null, seats: params.seats ?? null,
+      weight_qualifying: params.weightQualifying, quota: params.quota || null,
+    });
   },
 
-  async updateMeritStatus(id: string, status: 'Selected' | 'Waitlist' | 'Admitted' | 'Declined'): Promise<boolean> {
-    try {
-      const { error } = await supabase.from('admission_merit_lists').update({
-        status,
-        updated_at: new Date().toISOString()
-      }).eq('id', id);
-      if (error) throw error;
-      return true;
-    } catch (err) {
-      console.error('updateMeritStatus error:', err);
-      return false;
-    }
+  async applyMeritDecisions(params: { course: string; academicYear?: string; quota?: string }): Promise<{ updated: number; skipped: any[] }> {
+    return await callAdminApi('apply_merit_decisions', { course: params.course, academic_year: params.academicYear || null, quota: params.quota || null });
   },
 
   // ===========================================================================
-  // ADMISSION ENTRANCE TESTS
+  // ADMISSION ENTRANCE TESTS (one record per applicant)
   // ===========================================================================
-  async getAdmissionEntranceTests(): Promise<T.AdmissionEntranceTest[]> {
-    try {
-      const { data, error } = await supabase.from('admission_entrance_tests').select('*').order('test_date', { ascending: true });
-      if (error) throw error;
-      return data || [];
-    } catch (err) {
-      console.warn('getAdmissionEntranceTests warning:', err);
-      return [];
-    }
+  async getAdmissionEntranceTests(): Promise<any[]> {
+    const { data, error } = await supabase.from('admission_entrance_tests').select('*').order('test_date', { ascending: true });
+    if (error) throw new Error(`Could not load entrance tests: ${error.message}`);
+    return data || [];
   },
 
-  async addAdmissionEntranceTest(test: Partial<T.AdmissionEntranceTest>): Promise<T.AdmissionEntranceTest | null> {
-    try {
-      const { data, error } = await supabase.from('admission_entrance_tests').insert(test).select().single();
-      if (error) throw error;
-      return data;
-    } catch (err) {
-      console.error('addAdmissionEntranceTest error:', err);
-      return null;
-    }
+  async scheduleEntranceTests(applicationIds: string[], testDate: string): Promise<{ scheduled: number; rescheduled: number; skipped: any[] }> {
+    return await callAdminApi('schedule_admission_tests', { application_ids: applicationIds, test_date: testDate });
+  },
+
+  async recordEntranceResult(testId: string, result: { status: 'Completed' | 'Absent'; score?: number; maxScore?: number }): Promise<void> {
+    await callAdminApi('record_entrance_result', { test_id: testId, status: result.status, score: result.score ?? null, max_score: result.maxScore ?? null });
   },
 };

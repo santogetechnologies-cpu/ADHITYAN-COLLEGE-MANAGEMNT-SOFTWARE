@@ -45,8 +45,9 @@ import { FeeReceipt } from '@/types/database.types';
 import { useToast } from '@/hooks/use-toast';
 import { db } from '@/services/supabase/database';
 import { supabase } from '@/lib/supabase';
+import { uploadAdmissionDocument, resolveDocumentUrl } from '@/lib/privateDocs';
 import { storageService } from '@/services/supabase/storage';
-import { DynamicFormFields } from '@/components/customizer/DynamicFormFields';
+import { ConfiguredFields, type FormFieldDef } from '@/components/admission/ConfiguredFields';
 import { EditableText } from '@/components/customizer/EditableText';
 
 interface ComprehensiveAdmissionDialogProps {
@@ -70,6 +71,7 @@ interface UploadedDocument {
   required: boolean;
   file_name: string;
   file_url: string;
+  preview_url?: string;
   file_size?: number;
   status: 'Pending' | 'Uploaded';
 }
@@ -84,6 +86,8 @@ export function ComprehensiveAdmissionDialog({
   const { collegeCourses: coursesList } = useCollegeCourses();
   const [activeTab, setActiveTab] = useState('student');
   const [submitting, setSubmitting] = useState(false);
+  // one key per deposit attempt: a retry returns the same receipt instead of charging twice
+  const depositKeyRef = useRef<string>(crypto.randomUUID());
 
   // Preview Dialog State
   const [previewDoc, setPreviewDoc] = useState<{ name: string; url: string; type: string } | null>(null);
@@ -107,6 +111,12 @@ export function ComprehensiveAdmissionDialog({
 
   // Dynamic Custom Form Fields
   const [customFields, setCustomFields] = useState<Record<string, any>>({});
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  // configuration from Admission setup (shared by all staff, validated by the server)
+  const [cfgFields, setCfgFields] = useState<FormFieldDef[]>([]);
+  const [cfgRoutes, setCfgRoutes] = useState<{ code: string; name: string }[]>([]);
+  const [cfgQuotas, setCfgQuotas] = useState<{ code: string; name: string }[]>([]);
+  const [cfgDocs, setCfgDocs] = useState<{ doc_type: string; course_name: string | null; required: boolean }[]>([]);
 
   // Student ID Uniqueness Validation State
   const [studentIdCheck, setStudentIdCheck] = useState<{
@@ -135,6 +145,8 @@ export function ComprehensiveAdmissionDialog({
     qualifyingScore: '',
     scienceScore: '',
     meritCategory: 'General Merit',
+    admissionType: '',
+    quota: '',
     eligibilityVerified: true,
   });
 
@@ -144,10 +156,17 @@ export function ComprehensiveAdmissionDialog({
     paymentMethod: 'Cash',
     transactionReference: '',
     remarks: '',
-    generateReceipt: false,
+    generateReceipt: true,
   });
 
   // 5. Individual Document Uploads State
+  const courseNameNow = academicData.courseName;
+  const fieldsFor = (section: FormFieldDef['section']) =>
+    cfgFields.filter((f) => f.section === section && (!f.course_name || f.course_name === courseNameNow));
+  const setCustom = (key: string, value: string) => {
+    setCustomFields((prev) => ({ ...prev, [key]: value }));
+    setFieldErrors((prev) => { if (!prev[key]) return prev; const n = { ...prev }; delete n[key]; return n; });
+  };
   const [documents, setDocuments] = useState<UploadedDocument[]>([
     { id: 'photo', type: 'Student Passport Photo', required: true, file_name: '', file_url: '', status: 'Pending' },
     { id: 'marksheet_10th', type: '10th Standard Marksheet / Age Proof', required: true, file_name: '', file_url: '', status: 'Pending' },
@@ -159,6 +178,31 @@ export function ComprehensiveAdmissionDialog({
   ]);
 
   // Pre-fill from initialData (e.g. Receptionist enquiry conversion)
+  useEffect(() => {
+    const relevant = cfgDocs.filter((d) => !d.course_name || d.course_name === academicData.courseName);
+    if (relevant.length === 0) return;               // nothing configured: keep the standard checklist
+    setDocuments((prev) => relevant.map((d, i) => prev.find((x) => x.type.toLowerCase() === d.doc_type.toLowerCase())
+      ?? { id: `cfg_${i}`, type: d.doc_type, required: d.required, file_name: '', file_url: '', status: 'Pending' }));
+  }, [cfgDocs, academicData.courseName]);
+
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    (async () => {
+      const q = (t: string, extra?: (b: any) => any) => { const b: any = supabase.from(t as any).select('*'); return (extra ? extra(b) : b).order('sort_order'); };
+      const [f, r, qu, d] = await Promise.all([
+        q('admission_form_fields', (b) => b.eq('active', true)), q('admission_routes', (b) => b.eq('active', true)),
+        q('admission_quotas', (b) => b.eq('active', true)), q('admission_required_documents', (b) => b.eq('active', true)),
+      ]);
+      if (cancelled) return;
+      setCfgFields(((f as any).data || []) as FormFieldDef[]);
+      setCfgRoutes(((r as any).data || []) as any[]);
+      setCfgQuotas(((qu as any).data || []) as any[]);
+      setCfgDocs(((d as any).data || []) as any[]);
+    })();
+    return () => { cancelled = true; };
+  }, [open]);
+
   useEffect(() => {
     if (open && initialData) {
       if (initialData.studentName || initialData.studentEmail || initialData.studentPhone) {
@@ -238,26 +282,18 @@ export function ComprehensiveAdmissionDialog({
     }
 
     try {
-      // 1. Attempt upload to Supabase storage 'documents'
-      const sanitizedName = `${studentData.studentId || 'app'}_${documents[index].id}_${Date.now()}.${file.name.split('.').pop()}`;
-      const uploadRes = await storageService.uploadFile('documents', 'admissions', file);
-
-      let finalUrl = uploadRes.url;
-      if (!finalUrl) {
-        // Fallback to local Data URL for seamless preview & persistence
-        finalUrl = await new Promise<string>((resolve) => {
-          const reader = new FileReader();
-          reader.onloadend = () => resolve(reader.result as string);
-          reader.readAsDataURL(file);
-        });
-      }
+      // Stored in the PRIVATE admission-documents bucket; the application keeps only a reference. No local fallback: if the upload
+      // fails the document is NOT recorded, so nothing sensitive is silently embedded in the application record.
+      const finalUrl = await uploadAdmissionDocument(file, studentData.studentId || 'application');
+      const previewUrl = URL.createObjectURL(file);
 
       setDocuments(prev => {
         const next = [...prev];
         next[index] = {
           ...next[index],
           file_name: file.name,
-          file_url: finalUrl || '',
+          file_url: finalUrl,
+          preview_url: previewUrl,
           file_size: file.size,
           status: 'Uploaded'
         };
@@ -357,10 +393,42 @@ export function ComprehensiveAdmissionDialog({
       return;
     }
 
+    // route / quota are required once they are configured; configured required fields must be answered
+    if ((cfgRoutes.length > 0 && !academicData.admissionType) || (cfgQuotas.length > 0 && !academicData.quota)) {
+      toast({ title: 'Choose the admission route and quota', description: 'Both are required. They decide how this candidate is processed.', variant: 'destructive' });
+      setActiveTab('academic');
+      return;
+    }
+    const missing: Record<string, string> = {};
+    let firstSection: FormFieldDef['section'] | null = null;
+    for (const f of cfgFields.filter((x) => !x.course_name || x.course_name === academicData.courseName)) {
+      const v = customFields[f.field_key];
+      const empty = v === undefined || v === null || String(v).trim() === '' || (f.field_type === 'checkbox' && String(v) !== 'true');
+      if (f.required && empty) { missing[f.field_key] = `${f.label} is required.`; firstSection = firstSection ?? f.section; }
+    }
+    if (firstSection) {
+      setFieldErrors(missing);
+      toast({ title: 'Complete the required questions', description: Object.values(missing)[0], variant: 'destructive' });
+      setActiveTab(firstSection === 'parent' ? 'parent' : firstSection === 'academic' ? 'academic' : 'student');
+      return;
+    }
+
+    const depositCheck = Number(feeData.depositAmount) || 0;
+    if (depositCheck < 0 || (feeData.depositAmount.trim() !== '' && !Number.isFinite(Number(feeData.depositAmount)))) {
+      toast({ title: 'Check the deposit', description: 'Enter a valid deposit amount or leave it blank.', variant: 'destructive' });
+      setActiveTab('fee');
+      return;
+    }
+    if (depositCheck > 0 && feeData.paymentMethod !== 'Cash' && feeData.transactionReference.trim().length < 4) {
+      toast({ title: 'Reference required', description: 'Enter the transaction reference for a non-cash deposit.', variant: 'destructive' });
+      setActiveTab('fee');
+      return;
+    }
+
     setSubmitting(true);
 
     try {
-      const depositAmount = Number(feeData.depositAmount) || 0;
+      const depositAmount = depositCheck;
       const selectedCourse = coursesList.find(c => c.name === academicData.courseName) || coursesList[0] || OFFICIAL_COURSES[0];
 
       // Payload strictly submitted as "Pending"
@@ -394,9 +462,12 @@ export function ComprehensiveAdmissionDialog({
         admission_batch: academicData.admissionBatch,
         qualifying_board: academicData.qualifyingBoard,
         passing_year: academicData.passingYear,
-        qualifying_marks: Number(academicData.qualifyingScore) || 85,
-        science_score: Number(academicData.scienceScore) || 88,
+        // blank stays blank: no invented marks
+        qualifying_marks: academicData.qualifyingScore.trim() === '' ? undefined : Number(academicData.qualifyingScore),
+        science_score: academicData.scienceScore.trim() === '' ? undefined : Number(academicData.scienceScore),
         merit_category: academicData.meritCategory,
+        admission_type: academicData.admissionType || undefined,
+        quota: academicData.quota || undefined,
         eligibility_verified: academicData.eligibilityVerified,
 
         // Uploaded Documents
@@ -419,77 +490,53 @@ export function ComprehensiveAdmissionDialog({
           remarks: feeData.remarks
         },
 
-        status: 'Pending',
+        status: 'Submitted',
         remarks: `Manual Student ID: ${cleanStudentId}. Registered via Admission Form.`,
         custom_fields: customFields
       };
 
-      const result = await db.createAdmissionApplication(applicationPayload);
+      const application: any = await db.createAdmissionApplication(applicationPayload);
 
-      // Optional Receipt Generation
-      let generatedReceipt: FeeReceipt | null = null;
-      if (depositAmount > 0 && feeData.generateReceipt) {
-        const receiptNo = `REC-${new Date().getFullYear()}-${Math.floor(10000 + Math.random() * 90000)}`;
-        const qrToken = `VERIF-${receiptNo}-${Date.now()}`;
-        generatedReceipt = {
-          id: crypto.randomUUID(),
-          receipt_number: receiptNo,
-          student_name: studentData.name.trim(),
-          roll_number: cleanStudentId,
-          department: selectedCourse.name,
-          academic_year: academicData.academicYear,
-          semester: 'Semester 1',
-          fee_type: 'Admission Counter Deposit',
-          gross_amount: depositAmount,
-          discount_applied: 0,
-          discount_reason: '',
-          amount_paid: depositAmount,
-          balance_remaining: 0,
-          payment_date: new Date().toISOString().split('T')[0],
-          payment_mode: feeData.paymentMethod,
-          transaction_reference: feeData.transactionReference.trim() || `TXN-REC-${Date.now().toString().slice(-6)}`,
-          remarks: feeData.remarks || 'Admission application initial deposit',
-          qr_verification_token: qrToken,
-          created_at: new Date().toISOString()
-        } as any;
-
+      // Optional counter deposit: saved by the server together with its receipt (never fabricated in the browser)
+      let depositReceipt: any = null;
+      let depositError: string | null = null;
+      if (depositAmount > 0) {
         try {
-          await supabase.from('fee_receipts').insert({
-            receipt_number: receiptNo,
-            student_name: studentData.name.trim(),
-            roll_number: cleanStudentId,
-            department: selectedCourse.name,
-            academic_year: academicData.academicYear,
-            semester: 'Semester 1',
-            fee_type: 'Admission Counter Deposit',
-            gross_amount: depositAmount,
-            discount_applied: 0,
-            discount_reason: '',
-            amount_paid: depositAmount,
-            balance_remaining: 0,
-            payment_date: new Date().toISOString().split('T')[0],
-            payment_mode: feeData.paymentMethod,
-            transaction_reference: feeData.transactionReference.trim() || `TXN-REC-${Date.now().toString().slice(-6)}`,
-            remarks: feeData.remarks || 'Admission application initial deposit',
-            qr_verification_token: qrToken,
-            created_at: new Date().toISOString()
+          const dep = await db.recordAdmissionDeposit({
+            applicationId: application.id,
+            amount: depositAmount,
+            paymentMode: feeData.paymentMethod,
+            reference: feeData.transactionReference.trim() || undefined,
+            idempotencyKey: depositKeyRef.current,
           });
-        } catch (re) {}
+          depositReceipt = dep.receipt ?? null;
+          depositKeyRef.current = crypto.randomUUID();
+        } catch (depErr: any) {
+          depositError = depErr?.message || 'The deposit could not be recorded.';
+        }
       }
 
       toast({
-        title: "Application Submitted for Approval",
-        description: `Application with Student ID "${cleanStudentId}" registered as Pending. Admin / Principal can review and approve it. Login accounts can be provisioned in Admin User Management after approval.`,
+        title: depositError ? 'Application saved, deposit NOT recorded' : 'Application submitted for review',
+        description: depositError
+          ? `Student ID "${cleanStudentId}" is registered, but the ₹${depositAmount.toLocaleString('en-IN')} deposit was not saved (${depositError}). Use "Collect deposit" on the application to record it.`
+          : `Student ID "${cleanStudentId}" is registered and awaiting review.${depositReceipt ? ' Deposit receipt ' + depositReceipt.receipt_number + ' issued.' : ''}`,
+        variant: depositError ? 'destructive' : 'default',
       });
 
-      if (generatedReceipt) {
-        setReceiptData(generatedReceipt);
+      if (depositReceipt && feeData.generateReceipt) {
+        setReceiptData(depositReceipt as any);
         setReceiptModalOpen(true);
       }
 
       onOpenChange(false);
       if (onSuccess) onSuccess();
     } catch (err: any) {
+      if (Array.isArray(err?.fields) && err.fields.length > 0) {
+        const map: Record<string, string> = {};
+        err.fields.forEach((e: any) => { map[e.field] = e.message; });
+        setFieldErrors(map);
+      }
       console.error('Admission submission error:', err);
       toast({
         title: "Submission Error",
@@ -512,7 +559,7 @@ export function ComprehensiveAdmissionDialog({
               </div>
               <div>
                 <DialogTitle className="text-xl font-bold tracking-tight">
-                  Adithyan Paramedical Admission Form
+                  Admission Form
                 </DialogTitle>
                 <p className="text-xs text-muted-foreground mt-0.5">
                   Complete official candidate enrollment, academic qualifications, document uploads & counter fee registry
@@ -688,13 +735,9 @@ export function ComprehensiveAdmissionDialog({
                   </div>
                 </div>
 
-                {/* Dynamic Form Customizer Fields for Student Registration */}
+                {/* Fields configured in Admission setup (shared by all staff, validated by the server) */}
                 <div className="pt-2 border-t border-slate-100 dark:border-slate-800">
-                  <DynamicFormFields
-                    formId="student_registration"
-                    values={customFields}
-                    onChange={(key, val) => setCustomFields(prev => ({ ...prev, [key]: val }))}
-                  />
+                  <ConfiguredFields fields={[...fieldsFor('student'), ...fieldsFor('other')]} values={customFields} errors={fieldErrors} onChange={setCustom} />
                 </div>
 
                 <div className="flex justify-end pt-2">
@@ -778,6 +821,8 @@ export function ComprehensiveAdmissionDialog({
                   </div>
                 </div>
 
+                <ConfiguredFields fields={fieldsFor('parent')} values={customFields} errors={fieldErrors} onChange={setCustom} />
+
                 <div className="flex justify-between pt-2">
                   <Button type="button" variant="outline" onClick={() => setActiveTab('student')} className="text-xs">
                     ← Back to Student
@@ -837,7 +882,7 @@ export function ComprehensiveAdmissionDialog({
                   </div>
 
                   <div className="space-y-1.5">
-                    <Label className="text-xs font-semibold">Quota / Category</Label>
+                    <Label className="text-xs font-semibold">Merit category</Label>
                     <Select
                       value={academicData.meritCategory}
                       onValueChange={(val) => setAcademicData({ ...academicData, meritCategory: val })}
@@ -854,6 +899,31 @@ export function ComprehensiveAdmissionDialog({
                     </Select>
                   </div>
                 </div>
+
+                {(cfgRoutes.length > 0 || cfgQuotas.length > 0) && (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    {cfgRoutes.length > 0 && (
+                      <div className="space-y-1.5">
+                        <Label className="text-xs font-semibold">Admission route *</Label>
+                        <Select value={academicData.admissionType || undefined} onValueChange={(val) => setAcademicData({ ...academicData, admissionType: val })}>
+                          <SelectTrigger className="text-xs"><SelectValue placeholder="How is this candidate admitted?" /></SelectTrigger>
+                          <SelectContent>{cfgRoutes.map((r) => <SelectItem key={r.code} value={r.code}>{r.name}</SelectItem>)}</SelectContent>
+                        </Select>
+                      </div>
+                    )}
+                    {cfgQuotas.length > 0 && (
+                      <div className="space-y-1.5">
+                        <Label className="text-xs font-semibold">Seat quota *</Label>
+                        <Select value={academicData.quota || undefined} onValueChange={(val) => setAcademicData({ ...academicData, quota: val })}>
+                          <SelectTrigger className="text-xs"><SelectValue placeholder="Which quota?" /></SelectTrigger>
+                          <SelectContent>{cfgQuotas.map((q) => <SelectItem key={q.code} value={q.code}>{q.name}</SelectItem>)}</SelectContent>
+                        </Select>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                <ConfiguredFields fields={fieldsFor('academic')} values={customFields} errors={fieldErrors} onChange={setCustom} />
 
                 <div className="border-t pt-3 space-y-3">
                   <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
@@ -1010,7 +1080,7 @@ export function ComprehensiveAdmissionDialog({
                                 type="button"
                                 size="sm"
                                 variant="outline"
-                                onClick={() => setPreviewDoc({ name: doc.type, url: doc.file_url, type: doc.file_name })}
+                                onClick={async () => { try { setPreviewDoc({ name: doc.type, url: (doc as any).preview_url || await resolveDocumentUrl(doc.file_url), type: doc.file_name }); } catch (e: any) { toast({ title: 'Cannot open the document', description: e.message, variant: 'destructive' }); } }}
                                 className="h-8 px-2 text-xs"
                                 title="Preview Document"
                               >
@@ -1083,7 +1153,7 @@ export function ComprehensiveAdmissionDialog({
                         <SelectContent>
                           <SelectItem value="Cash">Cash at Counter</SelectItem>
                           <SelectItem value="UPI">UPI / QR Code</SelectItem>
-                          <SelectItem value="Bank Transfer">Bank Transfer / NEFT</SelectItem>
+                          <SelectItem value="Bank_Transfer">Bank Transfer / NEFT</SelectItem>
                           <SelectItem value="Card">POS Card</SelectItem>
                         </SelectContent>
                       </Select>
@@ -1107,7 +1177,7 @@ export function ComprehensiveAdmissionDialog({
                       onCheckedChange={(c) => setFeeData({ ...feeData, generateReceipt: !!c })}
                     />
                     <label htmlFor="gen-receipt" className="text-xs text-muted-foreground cursor-pointer">
-                      Automatically generate printable counter fee receipt upon submission
+                      Open the printable deposit receipt after submission
                     </label>
                   </div>
                 </div>
@@ -1119,7 +1189,7 @@ export function ComprehensiveAdmissionDialog({
                     Important Notice: Admission Approval & User Accounts
                   </p>
                   <p className="text-[11px] text-amber-800 dark:text-amber-300">
-                    Submitting this form records the candidate application as <strong>Pending</strong>. It does <strong>NOT</strong> create Student or Parent login accounts. Once approved by the Admin or Principal in the Application Portal, portal login accounts are provisioned via Admin User Management.
+                    Submitting this form registers the application for review. It does <strong>NOT</strong> create Student or Parent login accounts. After approval and enrolment in the Application Portal, portal login accounts are created in Admin User Management.
                   </p>
                 </div>
 

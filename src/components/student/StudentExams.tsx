@@ -25,9 +25,12 @@ import { db } from '@/services/supabase/database';
 import { Exam, ExamSchedule, ExamResult, HallTicket } from '@/types/database.types';
 import { useAuth } from '@/context/AuthContext';
 import { useRealtimeSubscription } from '@/hooks/useRealtimeSubscription';
+import { StudentExamRegistrationCard } from './StudentExamRegistrationCard';
+import { StudentRevaluationCard } from './StudentRevaluationCard';
 import { PrintableHallTicket } from './PrintableHallTicket';
 import { getCourseTotalSemesters } from '@/constants/courses';
 import { useToast } from '@/hooks/use-toast';
+import { InstitutionName } from '@/lib/institution';
 
 export function StudentExams() {
   const { user } = useAuth();
@@ -105,17 +108,11 @@ export function StudentExams() {
     if (!user) return [];
     const userId = user.id?.toLowerCase();
     const sId = (user.student_id || user.roll_number || '').toLowerCase();
-    const uName = (user.name || '').toLowerCase();
 
     return hallTickets.filter(t => {
       const tStudentId = (t.student_id || '').toLowerCase();
       const tRoll = (t.roll_number || '').toLowerCase();
-      const tName = (t.student_name || '').toLowerCase();
-      return (
-        (userId && tStudentId === userId) ||
-        (sId && tRoll === sId) ||
-        (uName && tName && (tName.includes(uName) || uName.includes(tName)))
-      );
+      return (userId && tStudentId === userId) || (sId && tRoll === sId) || (sId && tStudentId === sId);
     });
   }, [hallTickets, user]);
 
@@ -127,52 +124,7 @@ export function StudentExams() {
     // If exams exist in public.exams table, use them
     const list: Exam[] = [...exams];
 
-    // Also check if any official exams are present in hall_tickets or schedules that might not have an exams row
-    const existingIds = new Set(list.map(e => e.id));
-    studentHallTickets.forEach(ht => {
-      if (ht.exam_id && !existingIds.has(ht.exam_id)) {
-        list.push({
-          id: ht.exam_id,
-          name: ht.exam_title || 'University End Semester Examination',
-          course: ht.department,
-          semester: ht.semester,
-          term: ht.semester,
-          academic_year: ht.academic_year,
-          start_date: ht.issued_date || new Date().toISOString().slice(0, 10),
-          end_date: new Date(Date.now() + 14 * 86400000).toISOString().slice(0, 10),
-          status: 'Scheduled',
-          is_published: true,
-          timetable_published: true,
-          hall_ticket_published: true,
-          results_published: false
-        });
-        existingIds.add(ht.exam_id);
-      }
-    });
-
-    // If schedules exist with no parent exam, group them under a designated course exam
-    const schedulesWithoutExam = schedules.filter(s => !s.exam_id || !existingIds.has(s.exam_id));
-    if (schedulesWithoutExam.length > 0 && list.length === 0) {
-      const dates = schedulesWithoutExam.map(s => new Date(s.exam_date).getTime());
-      const minDate = new Date(Math.min(...dates)).toISOString().slice(0, 10);
-      const maxDate = new Date(Math.max(...dates)).toISOString().slice(0, 10);
-      const syntheticId = 'exam-univ-active';
-      list.push({
-        id: syntheticId,
-        name: 'University Degree Semester Examination',
-        course: studentCourse,
-        semester: user?.class_name?.includes('Semester') ? user.class_name : 'Semester 1',
-        term: 'Annual / Semester Assessment',
-        academic_year: '2026-2027',
-        start_date: minDate,
-        end_date: maxDate,
-        status: new Date(maxDate) < today ? 'Completed' : 'Scheduled',
-        is_published: true,
-        timetable_published: true,
-        hall_ticket_published: studentHallTickets.length > 0,
-        results_published: examResults.length > 0
-      });
-    }
+    // Only real examinations are listed; nothing is synthesised.
 
     // Filter by student course (allow general exams if course is not restricted)
     let filtered = list.filter(e => {
@@ -269,6 +221,8 @@ export function StudentExams() {
 
   return (
     <div className="space-y-6 max-w-6xl mx-auto pb-12">
+      <StudentExamRegistrationCard />
+      <StudentRevaluationCard />
       {/* 1. Header Banner */}
       <div className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="space-y-1">
@@ -387,7 +341,7 @@ export function StudentExams() {
             const publishedMarks = getExamMarks(exam);
 
             const hasTimetable = examSchedulesList.length > 0;
-            const hasHallTicket = !!studentTicket && (studentTicket.status === 'Generated' || studentTicket.status === 'Published') && !studentTicket.is_detained;
+            const hasHallTicket = !!studentTicket && studentTicket.status === 'Issued' && !studentTicket.is_detained;
             const hasPublishedMarks = publishedMarks.length > 0;
 
             const isCompleted = exam.status === 'Completed' || exam.status === 'Results Published' || exam.results_published;
@@ -540,13 +494,7 @@ export function StudentExams() {
                   {hasHallTicket ? (
                     <Button
                       size="sm"
-                      onClick={() => {
-                        if (studentTicket.file_url) {
-                          window.open(studentTicket.file_url, '_blank');
-                        } else {
-                          setHallTicketModalData({ exam, ticket: studentTicket });
-                        }
-                      }}
+                      onClick={() => setHallTicketModalData({ exam, ticket: studentTicket })}
                       className="h-9 text-xs font-bold bg-[#1D61E7] hover:bg-blue-700 text-white rounded-xl shadow-2xs"
                     >
                       <Download className="w-3.5 h-3.5 mr-1" />
@@ -627,7 +575,7 @@ export function StudentExams() {
                   />
                   <div className="text-left">
                     <h1 className="text-lg sm:text-xl font-black text-slate-900 uppercase tracking-tight leading-none">
-                      Adithyan College
+                      <InstitutionName />
                     </h1>
                     <p className="text-[11px] text-slate-600 font-semibold mt-0.5">
                       Office of the Controller of Examinations (CoE) • Directorate of Technical Education
@@ -719,7 +667,7 @@ export function StudentExams() {
                 </ul>
                 <div className="pt-2 flex justify-between items-center text-[10px] font-bold text-slate-500 border-t border-slate-200">
                   <span>Certified by Controller of Examinations</span>
-                  <span>Adithyan Institute of Paramedical</span>
+                  <span><InstitutionName /></span>
                 </div>
               </div>
             </div>
@@ -743,7 +691,7 @@ export function StudentExams() {
             <PrintableHallTicket
               studentName={hallTicketModalData.ticket.student_name || user?.name || 'Student'}
               rollNumber={hallTicketModalData.ticket.roll_number || studentId}
-              registerNumber={hallTicketModalData.ticket.register_number || 'REG-PENDING'}
+              registerNumber={hallTicketModalData.ticket.register_number || studentId}
               department={hallTicketModalData.ticket.department || studentCourse}
               className={hallTicketModalData.ticket.class_name || user?.class_name || 'Year 1'}
               semester={hallTicketModalData.ticket.semester || hallTicketModalData.exam.semester}
@@ -751,7 +699,7 @@ export function StudentExams() {
               examCenter={hallTicketModalData.ticket.exam_center}
               hallNumber={hallTicketModalData.ticket.hall_number}
               seatNumber={hallTicketModalData.ticket.seat_number}
-              attendancePct={Number(hallTicketModalData.ticket.attendance_pct || 88)}
+              attendancePct={Number(hallTicketModalData.ticket.attendance_pct ?? 0)}
               isDetained={hallTicketModalData.ticket.is_detained || false}
               schedules={getExamSchedules(hallTicketModalData.exam)}
               onClose={() => setHallTicketModalData(null)}

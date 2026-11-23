@@ -83,11 +83,11 @@ export function ParentContactCollegeView({
         setSelectedTeacherId(list[0].id);
       } else {
         // Fallback: list faculty profiles
-        const allTeachers = await db.getTeachers();
+        const allTeachers = (await db.getAllProfiles().catch(() => [])).filter((t: any) => t.role === 'teacher');
         const facultyList = allTeachers.map(t => ({
           id: t.id,
-          name: t.name || 'Faculty Member',
-          subject: t.department || 'Paramedical Sciences',
+          name: t.name || 'Faculty member',
+          subject: t.department || '',
         }));
         setTeachers(facultyList);
         if (facultyList.length > 0) setSelectedTeacherId(facultyList[0].id);

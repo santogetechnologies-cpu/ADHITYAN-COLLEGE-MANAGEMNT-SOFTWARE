@@ -102,12 +102,13 @@ export function AdminDashboard() {
       const totalUsers = profiles.length;
       const activeStudents = profiles.filter(p => p.role === 'student' && (p.status === 'active' || !p.status)).length;
       const parentAccounts = profiles.filter(p => p.role === 'parent').length;
+      const students = profiles.filter(p => p.role === 'student');
       const teachers = profiles.filter(p => p.role === 'teacher').length;
       const staff = profiles.filter(p => 
         ['receptionist', 'store_manager', 'finance_manager', 'transport_driver', 'driver', 'storekeeper', 'accountant', 'financier', 'admin', 'principal', 'naac_coordinator', 'hr_manager', 'librarian', 'hostel_warden', 'placement_officer'].includes(p.role)
       );
 
-      let attRate = 95.0;
+      let attRate = 0;
       if (attendance.length > 0) {
         const presentCount = attendance.filter(a => a.status === 'present').length;
         attRate = Math.round((presentCount / attendance.length) * 1000) / 10;
@@ -157,9 +158,8 @@ export function AdminDashboard() {
       setDepartmentHealth([
         { name: 'Academic Performance', score: academicScore, status: academicScore >= 90 ? 'excellent' : 'good' },
         { name: 'Student Attendance & Wellbeing', score: Math.round(attRate), status: attRate >= 92 ? 'excellent' : 'good' },
-        { name: 'Staff Faculty Deployment', score: teachers.length > 0 ? 100 : 0, status: teachers.length > 0 ? 'good' : 'fair' },
+        { name: 'Staff Faculty Deployment', score: teachers > 0 ? 100 : 0, status: teachers > 0 ? 'good' : 'fair' },
         { name: 'Financial Health', score: financialScore, status: financialScore >= 80 ? 'good' : 'fair' },
-        { name: 'Infrastructure & Facilities', score: depts.length > 0 ? 95 : 0, status: 'excellent' }
       ]);
 
       // 4. Recent Alerts
@@ -192,7 +192,7 @@ export function AdminDashboard() {
             event: e.title,
             date: e.date ? new Date(e.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : 'Upcoming',
             type: e.category ? e.category.charAt(0).toUpperCase() + e.category.slice(1) : 'Academic',
-            attendees: e.target_audience === 'all' ? (students.length + teachers.length || 0) : 0
+            attendees: e.target_audience === 'all' ? (students.length + teachers) : 0
           }));
         setUpcomingEvents(sorted);
       } else {

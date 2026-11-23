@@ -1,6 +1,7 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
 import { db } from '@/services/supabase/database';
 import { useAuth } from '@/context/AuthContext';
+import { naacService, type NaacMetric } from '@/services/naacService';
 
 export interface NAACDocument {
   id: string;
@@ -13,6 +14,7 @@ export interface NAACDocument {
   fileType: string;
   fileSize: string;
   tags: string[];
+  fileUrl?: string | null;
 }
 
 export interface CriterionProgress {
@@ -25,6 +27,7 @@ export interface CriterionProgress {
 
 export interface NAACData {
   documents: NAACDocument[];
+  metrics: NaacMetric[];
   criterionProgress: CriterionProgress[];
   currentUser: {
     role: 'admin' | 'faculty' | 'student' | 'naac_coordinator';
@@ -35,23 +38,22 @@ export interface NAACData {
 
 interface NAACContextType {
   naacData: NAACData;
-  updateDocument: (document: NAACDocument) => void;
-  updateProgress: (criterionNumber: number, progress: Partial<CriterionProgress>) => void;
-  addDocument: (document: Omit<NAACDocument, 'id' | 'uploadDate'>) => void;
-  removeDocument: (documentId: string) => void;
+  reload: () => Promise<void>;
   isLoading: boolean;
+  loadError: string | null;
+  canEdit: boolean;
 }
 
 const NAACContext = createContext<NAACContextType | undefined>(undefined);
 
 const initialProgress: CriterionProgress[] = [
-  { criterionNumber: 1, completionPercentage: 0, totalMetrics: 10, completedMetrics: 0, lastUpdated: new Date().toISOString().split('T')[0] },
-  { criterionNumber: 2, completionPercentage: 0, totalMetrics: 10, completedMetrics: 0, lastUpdated: new Date().toISOString().split('T')[0] },
-  { criterionNumber: 3, completionPercentage: 0, totalMetrics: 10, completedMetrics: 0, lastUpdated: new Date().toISOString().split('T')[0] },
-  { criterionNumber: 4, completionPercentage: 0, totalMetrics: 10, completedMetrics: 0, lastUpdated: new Date().toISOString().split('T')[0] },
-  { criterionNumber: 5, completionPercentage: 0, totalMetrics: 10, completedMetrics: 0, lastUpdated: new Date().toISOString().split('T')[0] },
-  { criterionNumber: 6, completionPercentage: 0, totalMetrics: 10, completedMetrics: 0, lastUpdated: new Date().toISOString().split('T')[0] },
-  { criterionNumber: 7, completionPercentage: 0, totalMetrics: 10, completedMetrics: 0, lastUpdated: new Date().toISOString().split('T')[0] }
+  { criterionNumber: 1, completionPercentage: 0, totalMetrics: 10, completedMetrics: 0, lastUpdated: '' },
+  { criterionNumber: 2, completionPercentage: 0, totalMetrics: 10, completedMetrics: 0, lastUpdated: '' },
+  { criterionNumber: 3, completionPercentage: 0, totalMetrics: 10, completedMetrics: 0, lastUpdated: '' },
+  { criterionNumber: 4, completionPercentage: 0, totalMetrics: 10, completedMetrics: 0, lastUpdated: '' },
+  { criterionNumber: 5, completionPercentage: 0, totalMetrics: 10, completedMetrics: 0, lastUpdated: '' },
+  { criterionNumber: 6, completionPercentage: 0, totalMetrics: 10, completedMetrics: 0, lastUpdated: '' },
+  { criterionNumber: 7, completionPercentage: 0, totalMetrics: 10, completedMetrics: 0, lastUpdated: '' }
 ];
 
 const initialDocuments: NAACDocument[] = [];
@@ -60,154 +62,51 @@ export function NAACProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
   const [naacData, setNAACData] = useState<NAACData>({
     documents: initialDocuments,
+    metrics: [],
     criterionProgress: initialProgress,
     currentUser: {
       role: (user?.role === 'admin' ? 'admin' : user?.role === 'teacher' ? 'faculty' : 'naac_coordinator'),
       name: user?.name || user?.email || 'Institutional Staff',
-      permissions: ['view_all', 'edit_all', 'upload_documents', 'generate_reports']
+      permissions: []
     }
   });
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const canEdit = ['admin', 'principal', 'naac_coordinator'].includes(user?.role ?? '');
 
-  useEffect(() => {
-    async function loadNAACData() {
-      setIsLoading(true);
-      try {
-        const [progressRes, docsRes] = await Promise.all([
-          db.getNAACCriterionProgress(),
-          db.getNAACDocuments()
-        ]);
-
-        if (progressRes && progressRes.length > 0) {
-          setNAACData(prev => ({
-            ...prev,
-            criterionProgress: progressRes.map(p => ({
-              criterionNumber: p.criterion_number,
-              completionPercentage: p.completion_percentage,
-              totalMetrics: p.total_metrics,
-              completedMetrics: p.completed_metrics,
-              lastUpdated: p.last_updated ? p.last_updated.split('T')[0] : new Date().toISOString().split('T')[0]
-            }))
-          }));
-        } else {
-          setNAACData(prev => ({
-            ...prev,
-            criterionProgress: initialProgress
-          }));
-        }
-
-        if (docsRes && docsRes.length > 0) {
-          setNAACData(prev => ({
-            ...prev,
-            documents: docsRes.map(d => ({
-              id: d.id,
-              title: d.title,
-              filename: d.filename,
-              criterionNumber: d.criterion_number,
-              metricCode: d.metric_code,
-              evidenceType: d.evidence_type,
-              uploadDate: d.created_at ? d.created_at.split('T')[0] : new Date().toISOString().split('T')[0],
-              fileType: d.file_type,
-              fileSize: d.file_size || '1.0 MB',
-              tags: d.tags || []
-            }))
-          }));
-        } else {
-          setNAACData(prev => ({
-            ...prev,
-            documents: []
-          }));
-        }
-      } catch (err) {
-        console.warn('Error loading NAAC data from Supabase:', err);
-        setNAACData(prev => ({
-          ...prev,
-          documents: [],
-          criterionProgress: initialProgress
-        }));
-      } finally {
-        setIsLoading(false);
-      }
-    }
-    loadNAACData();
-  }, []);
-
-  const updateDocument = (updatedDocument: NAACDocument) => {
-    setNAACData(prev => ({
-      ...prev,
-      documents: prev.documents.map(doc => 
-        doc.id === updatedDocument.id ? updatedDocument : doc
-      )
-    }));
-  };
-
-  const updateProgress = async (criterionNumber: number, progressUpdate: Partial<CriterionProgress>) => {
-    setNAACData(prev => ({
-      ...prev,
-      criterionProgress: prev.criterionProgress.map(progress =>
-        progress.criterionNumber === criterionNumber
-          ? { ...progress, ...progressUpdate, lastUpdated: new Date().toISOString().split('T')[0] }
-          : progress
-      )
-    }));
-
-    await db.updateNAACProgress(criterionNumber, {
-      completion_percentage: progressUpdate.completionPercentage,
-      completed_metrics: progressUpdate.completedMetrics,
-      total_metrics: progressUpdate.totalMetrics
-    });
-  };
-
-  const addDocument = async (documentData: Omit<NAACDocument, 'id' | 'uploadDate'>) => {
-    const tempId = Date.now().toString();
-    const newDocument: NAACDocument = {
-      ...documentData,
-      id: tempId,
-      uploadDate: new Date().toISOString().split('T')[0]
-    };
-    
-    setNAACData(prev => ({
-      ...prev,
-      documents: [...prev.documents, newDocument]
-    }));
-
-    const inserted = await db.addNAACDocument({
-      title: documentData.title,
-      filename: documentData.filename,
-      criterion_number: documentData.criterionNumber,
-      metric_code: documentData.metricCode,
-      evidence_type: documentData.evidenceType,
-      file_type: documentData.fileType,
-      file_size: documentData.fileSize,
-      tags: documentData.tags,
-      uploaded_by: user?.id
-    });
-
-    if (inserted) {
+  const reload = useCallback(async () => {
+    try {
+      const [progressRes, docsRes, metrics] = await Promise.all([
+        db.getNAACCriterionProgress(), db.getNAACDocuments(), naacService.metrics()
+      ]);
       setNAACData(prev => ({
         ...prev,
-        documents: prev.documents.map(d => d.id === tempId ? { ...d, id: inserted.id } : d)
+        metrics,
+        criterionProgress: progressRes.length ? progressRes.map(p => ({
+          criterionNumber: p.criterion_number,
+          completionPercentage: p.completion_percentage,
+          totalMetrics: p.total_metrics,
+          completedMetrics: p.completed_metrics,
+          lastUpdated: p.last_updated ? p.last_updated.split('T')[0] : ''
+        })) : initialProgress,
+        documents: docsRes.map(d => ({
+          id: d.id, title: d.title, filename: d.filename, criterionNumber: d.criterion_number, metricCode: d.metric_code,
+          evidenceType: d.evidence_type, uploadDate: d.created_at ? d.created_at.split('T')[0] : '', fileType: d.file_type,
+          fileSize: d.file_size || '', tags: d.tags || [], fileUrl: d.file_url ?? null
+        }))
       }));
+      setLoadError(null);
+    } catch (err: any) {
+      setLoadError(err?.message || 'Could not load accreditation data.');
+    } finally {
+      setIsLoading(false);
     }
-  };
+  }, []);
 
-  const removeDocument = async (documentId: string) => {
-    setNAACData(prev => ({
-      ...prev,
-      documents: prev.documents.filter(doc => doc.id !== documentId)
-    }));
-    await db.deleteNAACDocument(documentId);
-  };
+  useEffect(() => { void reload(); }, [reload]);
 
   return (
-    <NAACContext.Provider value={{
-      naacData,
-      updateDocument,
-      updateProgress,
-      addDocument,
-      removeDocument,
-      isLoading
-    }}>
+    <NAACContext.Provider value={{ naacData, reload, isLoading, loadError, canEdit }}>
       {children}
     </NAACContext.Provider>
   );

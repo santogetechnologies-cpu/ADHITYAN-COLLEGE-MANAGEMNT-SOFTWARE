@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
+import { exportToCSV, printDocument } from '@/lib/exportUtils';
 import { useNAAC } from '@/context/NAACContext';
 import { 
   FileText, 
@@ -22,54 +23,56 @@ const reportTypes = [
     name: 'Self Study Report (SSR)',
     description: 'Comprehensive report for NAAC submission',
     format: 'PDF',
-    lastGenerated: '2024-02-20'
   },
   {
     id: 'aqar',
     name: 'Annual Quality Assurance Report (AQAR)',
     description: 'Annual report for quality assurance',
     format: 'PDF',
-    lastGenerated: '2024-02-15'
   },
   {
     id: 'criterion-wise',
     name: 'Criterion-wise Analysis',
     description: 'Detailed analysis by each criterion',
     format: 'Excel',
-    lastGenerated: '2024-02-18'
   },
   {
     id: 'compliance',
     name: 'Compliance Report',
     description: 'Current compliance status report',
     format: 'PDF',
-    lastGenerated: '2024-02-22'
   }
 ];
 
-const academicYears = [
-  '2023-24',
-  '2022-23',
-  '2021-22',
-  '2020-21',
-  '2019-20'
-];
+const academicYears = (() => {
+  const y = new Date().getFullYear(); const start = new Date().getMonth() >= 5 ? y : y - 1;
+  return Array.from({ length: 6 }, (_, i) => `${start - i}-${String(start - i + 1).slice(2)}`);
+})();
 
 export default function Reports() {
   const { naacData } = useNAAC();
-  const [selectedAcademicYear, setSelectedAcademicYear] = useState('2023-24');
+  const [selectedAcademicYear, setSelectedAcademicYear] = useState(academicYears[0]);
   const [generatingReport, setGeneratingReport] = useState<string | null>(null);
 
   const handleGenerateReport = async (reportId: string) => {
     setGeneratingReport(reportId);
-    
-    // Simulate report generation
-    await new Promise(resolve => setTimeout(resolve, 3000));
-    
-    setGeneratingReport(null);
-    
-    // In real implementation, this would trigger download
-    console.log(`Generated report: ${reportId} for year: ${selectedAcademicYear}`);
+    try {
+      const esc = (v: unknown) => String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c] as string));
+      const yearMetrics = naacData.metrics.filter((m) => !m.academic_year || m.academic_year === selectedAcademicYear);
+      const progressRows = naacData.criterionProgress.map((p) =>
+        `<tr><td>Criterion ${p.criterionNumber}</td><td>${p.completedMetrics}/${p.totalMetrics}</td><td>${p.completionPercentage}%</td><td>${naacData.documents.filter((d) => d.criterionNumber === p.criterionNumber).length}</td></tr>`).join('');
+      if (reportId === 'criterion-wise') {
+        exportToCSV(`naac-criterion-wise-${selectedAcademicYear}`, ['Criterion', 'Metric', 'Title', 'Status', 'Academic year', 'Value', 'Evidence files'],
+          naacData.metrics.map((m) => [m.criterion_number, m.metric_code, m.title, m.status, m.academic_year, m.quantitative_value, naacData.documents.filter((d) => d.metricCode === m.metric_code).length]));
+        return;
+      }
+      const summary = `<h3>Progress by criterion</h3><table border="1" cellpadding="6" style="border-collapse:collapse"><tr><th>Criterion</th><th>Metrics completed</th><th>Complete</th><th>Evidence files</th></tr>${progressRows}</table>`;
+      if (reportId === 'compliance') { printDocument(`NAAC compliance report ${selectedAcademicYear}`, `<h2>Compliance report — ${esc(selectedAcademicYear)}</h2>${summary}`); return; }
+      const detail = yearMetrics.map((m) => `<tr><td>${esc(m.metric_code)}</td><td>${esc(m.title)}</td><td>${esc(m.status)}</td><td>${esc(m.quantitative_value ?? '')}</td><td>${esc(m.description ?? '')}</td></tr>`).join('');
+      const evidence = naacData.documents.map((d) => `<tr><td>${esc(d.metricCode)}</td><td>${esc(d.title)}</td><td>${esc(d.evidenceType)}</td><td>${esc(d.uploadDate)}</td></tr>`).join('');
+      printDocument(`${reportId === 'ssr' ? 'Self Study Report' : 'AQAR'} ${selectedAcademicYear}`,
+        `<h2>${reportId === 'ssr' ? 'Self Study Report' : 'Annual Quality Assurance Report'} — ${esc(selectedAcademicYear)}</h2>${summary}<h3>Metrics</h3><table border="1" cellpadding="6" style="border-collapse:collapse"><tr><th>Code</th><th>Title</th><th>Status</th><th>Value</th><th>Description</th></tr>${detail || '<tr><td colspan="5">No metrics recorded.</td></tr>'}</table><h3>Evidence index</h3><table border="1" cellpadding="6" style="border-collapse:collapse"><tr><th>Metric</th><th>Document</th><th>Type</th><th>Uploaded</th></tr>${evidence || '<tr><td colspan="4">No evidence uploaded.</td></tr>'}</table>`);
+    } finally { setGeneratingReport(null); }
   };
 
   const overallCompletionRate = Math.round(
@@ -182,7 +185,6 @@ export default function Reports() {
                     <p className="text-sm text-muted-foreground mb-2">{report.description}</p>
                     <div className="flex items-center space-x-4 text-sm text-muted-foreground">
                       <span>Format: {report.format}</span>
-                      <span>Last: {report.lastGenerated}</span>
                     </div>
                   </div>
                 </div>
@@ -200,9 +202,6 @@ export default function Reports() {
                         Generate
                       </>
                     )}
-                  </Button>
-                  <Button variant="outline" size="icon">
-                    <Eye className="w-4 h-4" />
                   </Button>
                 </div>
               </Card>

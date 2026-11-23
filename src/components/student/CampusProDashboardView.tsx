@@ -32,6 +32,7 @@ import { EditableText } from '@/components/customizer/EditableText';
 import { EditableZone } from '@/components/customizer/EditableZone';
 import { IndiaTimeInfo } from '@/lib/indiaTime';
 import { getCourseSemesters } from '@/constants/courses';
+import { InstitutionName } from '@/lib/institution';
 
 interface DashboardViewProps {
   studentName: string;
@@ -902,7 +903,7 @@ export function CampusProDashboardView({
                     <span>Academic Portal Active</span>
                     <span className="text-[11px] text-slate-400 font-normal">Today</span>
                   </div>
-                  <p className="text-[11px] text-slate-500">Welcome to Adithyan Institute of Paramedical</p>
+                  <p className="text-[11px] text-slate-500">Welcome to <InstitutionName /></p>
                 </div>
                 <div className="relative text-xs space-y-0.5">
                   <div className="absolute -left-5 top-1 w-2.5 h-2.5 rounded-full bg-[#1D61E7] border-2 border-white ring-2 ring-blue-100" />
@@ -964,7 +965,7 @@ export function CampusProDashboardView({
 
       {/* Footer */}
       <footer className="pt-6 border-t border-slate-200/70 flex flex-col sm:flex-row items-center justify-between text-xs text-slate-400 space-y-2 sm:space-y-0">
-        <div>© 2026-2027 Adithyan Institute of Paramedical Sciences. All rights reserved.</div>
+        <div>© <InstitutionName />. All rights reserved.</div>
         <div className="flex items-center space-x-4 font-medium text-slate-500">
           <button onClick={() => onNavigate('complaints')} className="hover:underline">Help</button>
           <span>|</span>

@@ -47,6 +47,7 @@ import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
+import { askConfirm, askText } from '@/lib/dialogs';
 import { 
   Menu, 
   RefreshCw, 
@@ -57,6 +58,7 @@ import {
   Loader2, 
   ShieldCheck 
 } from 'lucide-react';
+import { InstitutionName } from '@/lib/institution';
 
 export default function PrincipalDashboard() {
   const { user, logout } = useAuth();
@@ -310,7 +312,9 @@ export default function PrincipalDashboard() {
   const handleRejectScholarship = async (id: string) => {
     setActionLoadingId(id);
     try {
-      const ok = await db.updateScholarshipStatus(id, 'Rejected', 0, principalProfile?.id);
+      const reason = await askText('Reason for declining this scholarship', { title: 'Decline scholarship', required: true, minLength: 3, confirmLabel: 'Decline', destructive: true });
+      if (!reason) { setActionLoadingId(null); return; }
+      const ok = await db.updateScholarshipStatus(id, 'Rejected', 0, principalProfile?.id, reason);
       if (ok) {
         setScholarships(prev => prev.map(s => s.id === id ? { ...s, status: 'Rejected' } : s));
         toast({
@@ -333,36 +337,18 @@ export default function PrincipalDashboard() {
   const handleApproveAdmission = async (app: AdmissionApplication) => {
     setActionLoadingId(app.id);
     try {
-      const prog = app.class_name || app.class_applied || 'Paramedical Sciences';
-      const result = await studentParentAuthService.confirmAdmission({
-        application_id: app.id,
-        student: {
-          name: app.applicant_name || app.name || 'Student',
-          email: app.email,
-          phone: app.phone,
-          department: prog,
-          class_name: `${prog} - Year 1`,
-          date_of_birth: app.date_of_birth,
-          address: app.address,
-          previous_school: app.previous_school,
-        },
-        parent: {
-          name: app.parent_name || 'Parent of ' + (app.applicant_name || app.name),
-          phone: app.parent_phone || app.phone,
-          relationship: 'Parent',
-        },
-      });
-
-      await db.updateAdmissionStatus(app.id, 'Approved', `Sanctioned by Principal. Student ID: ${result.student.student_id}, Parent ID: ${result.parent.parent_id}`);
+      // Approval is one step of the admission lifecycle. The offer, deposit and enrolment (which creates the student record and
+      // login) are done in Admission Management, where seats, quota and documents are checked.
+      await db.updateAdmissionStatus(app.id, 'Approved', 'Approved by Principal');
       toast({
-        title: "Admission Sanctioned & Provisioned",
-        description: `Student ID: ${result.student.student_id} • Parent ID: ${result.parent.parent_id}`,
+        title: "Application approved",
+        description: "Continue with the offer and enrolment in Admission Management.",
       });
       await loadData();
     } catch (err: any) {
       toast({
-        title: "Sanction Failed",
-        description: err.message || "Failed to sanction admission.",
+        title: "Approval failed",
+        description: err.message || "Could not approve the application.",
         variant: "destructive",
       });
     } finally {
@@ -394,11 +380,11 @@ export default function PrincipalDashboard() {
   const handleApproveCertificate = async (id: string) => {
     setActionLoadingId(id);
     try {
-      const ok = await db.updateCertificateStatus(id, 'Approved');
+      const ok = await db.updateCertificateStatus(id, 'Issued');
       if (ok) {
-        setCertificates(prev => prev.map(c => c.id === id ? { ...c, status: 'Approved' } : c));
+        setCertificates(prev => prev.map(c => c.id === id ? { ...c, status: 'Issued' } : c));
         toast({
-          title: "Certificate Approved",
+          title: "Certificate Issued",
           description: "Digitally authorized with Principal signature."
         });
       }
@@ -416,7 +402,9 @@ export default function PrincipalDashboard() {
   const handleRejectCertificate = async (id: string) => {
     setActionLoadingId(id);
     try {
-      const ok = await db.updateCertificateStatus(id, 'Rejected');
+      const reason = await askText('Reason for declining this certificate', { title: 'Decline certificate', required: true, minLength: 3, confirmLabel: 'Decline', destructive: true });
+      if (!reason) { setActionLoadingId(null); return; }
+      const ok = await db.updateCertificateStatus(id, 'Rejected', reason);
       if (ok) {
         setCertificates(prev => prev.map(c => c.id === id ? { ...c, status: 'Rejected' } : c));
         toast({
@@ -445,7 +433,7 @@ export default function PrincipalDashboard() {
   }): Promise<boolean> => {
     setPublishingBroadcast(true);
     try {
-      const author = principalProfile?.full_name || 'Dr. Principal & Dean';
+      const author = principalProfile?.name || user?.name || 'Principal';
       const created = await db.createInstitutionalBroadcast({
         title: data.title,
         message: data.message,
@@ -740,7 +728,7 @@ export default function PrincipalDashboard() {
           pendingApprovals: totalPendingApprovals,
           pendingAdmissions: pendingAdmissionsCount
         }}
-        principalName={principalProfile?.full_name || 'Dr. Principal & Dean'}
+        principalName={principalProfile?.name || user?.name || 'Principal'}
       />
 
       {/* -------------------------------------------------------------------- */}
@@ -762,7 +750,7 @@ export default function PrincipalDashboard() {
             <div>
               <div className="flex items-center space-x-2">
                 <span className="text-sm font-bold text-slate-900">
-                  Adithyan College of Paramedical Sciences
+                  <InstitutionName />
                 </span>
                 <Badge variant="outline" className="hidden sm:inline-flex text-[10px] font-semibold border-blue-200 text-blue-700 bg-blue-50">
                   Principal & Dean

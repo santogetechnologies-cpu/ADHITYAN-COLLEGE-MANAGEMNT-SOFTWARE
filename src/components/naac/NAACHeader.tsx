@@ -4,13 +4,13 @@ import { useAuth } from '@/context/AuthContext';
 import { useNAAC } from '@/context/NAACContext';
 import { Link } from 'react-router-dom';
 import { 
-  Bell, 
   Settings, 
   User, 
   LogOut,
   Award,
   ArrowLeft
 } from 'lucide-react';
+import { InstitutionName } from '@/lib/institution';
 
 export function NAACHeader() {
   const { user, logout } = useAuth();
@@ -35,7 +35,7 @@ export function NAACHeader() {
               className="w-10 h-10 object-contain rounded-lg bg-white p-0.5 border shadow-sm"
             />
             <div>
-              <h1 className="text-xl font-bold text-foreground">Adithyan College - NAAC System</h1>
+              <h1 className="text-xl font-bold text-foreground"><InstitutionName /> - NAAC System</h1>
               <p className="text-xs text-muted-foreground">AI&MCP Automated Assessment & Reporting</p>
             </div>
           </div>
@@ -43,17 +43,8 @@ export function NAACHeader() {
 
         {/* Right section */}
         <div className="flex items-center space-x-3">
-          {/* Notifications */}
-          <Button variant="ghost" size="icon" className="relative">
-            <Bell className="w-5 h-5" />
-            <span className="absolute -top-1 -right-1 w-3 h-3 bg-destructive rounded-full text-xs flex items-center justify-center text-destructive-foreground">
-              2
-            </span>
-          </Button>
-
-          {/* Settings */}
-          <Button variant="ghost" size="icon">
-            <Settings className="w-5 h-5" />
+          <Button variant="ghost" size="icon" asChild title="NAAC settings">
+            <Link to="/admin/naac/settings"><Settings className="w-5 h-5" /></Link>
           </Button>
 
           {/* User Profile */}

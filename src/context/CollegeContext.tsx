@@ -1,141 +1,68 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { useAuth } from './AuthContext';
-import { College } from '@/types/multiCollege.types';
+import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
+import { College, INSTITUTION_ID } from '@/types/institution.types';
 import { MasterSystemConfigState } from '@/types/superAdmin.types';
-import { multiCollegeService, DEFAULT_PRIMARY_COLLEGE } from '@/services/multiCollegeService';
 import { buildInitialMasterConfigState } from '@/services/superAdminDefaults';
+import { superAdminService } from '@/services/superAdminService';
 import { collegeDataService } from '@/services/collegeDataService';
-import { toast } from 'sonner';
+import { supabase } from '@/lib/supabase';
+import { setInstitutionName } from '@/lib/institution';
+import { useAuth } from './AuthContext';
 
+/**
+ * One institution per deployment. This context only exposes that institution's profile (from Settings) and the
+ * published ERP configuration; there is no tenant switching.
+ */
 interface CollegeContextType {
   currentCollege: College;
-  collegesList: College[];
-  isPlatformSuperAdmin: boolean;
   collegeConfig: MasterSystemConfigState;
   isModuleEnabled: (moduleId: string) => boolean;
   isFeatureEnabled: (featureId: string) => boolean;
   hasPermission: (action: string, resource: string) => boolean;
-  switchCollege: (collegeId: string) => Promise<boolean>;
   reloadCollegeData: () => Promise<void>;
   isLoading: boolean;
 }
 
+const PLACEHOLDER: College = { id: INSTITUTION_ID, name: 'Your Institution', code: 'INST', institution_type: 'Paramedical', contact_email: '' };
 const CollegeContext = createContext<CollegeContextType | undefined>(undefined);
 
 export function CollegeProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
-
-  const isPlatformSuperAdmin = user?.role === 'platform_super_admin' || user?.email === 'superadmin@platform.adithyan.edu';
-  const [currentCollege, setCurrentCollege] = useState<College>(DEFAULT_PRIMARY_COLLEGE);
-  const [collegesList, setCollegesList] = useState<College[]>([DEFAULT_PRIMARY_COLLEGE]);
+  const [currentCollege, setCurrentCollege] = useState<College>(PLACEHOLDER);
   const [collegeConfig, setCollegeConfig] = useState<MasterSystemConfigState>(buildInitialMasterConfigState());
-  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [isLoading, setIsLoading] = useState(true);
 
-  // Load colleges and resolve active tenant
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
+    if (!user) { setIsLoading(false); return; }
     setIsLoading(true);
     try {
-      const list = await multiCollegeService.listColleges();
-      setCollegesList(list);
-
-      // Determine active college:
-      // If user has an explicit college_id, lock to their college
-      let targetCollege = DEFAULT_PRIMARY_COLLEGE;
-
-      if (!isPlatformSuperAdmin && user?.college_id) {
-        const matched = list.find(c => c.id === user.college_id);
-        if (matched) targetCollege = matched;
-      } else if (isPlatformSuperAdmin) {
-        // Platform Super Admin remembers last viewed college or defaults to primary
-        const savedTenantId = localStorage.getItem('adhityan_active_tenant_id');
-        if (savedTenantId) {
-          const matched = list.find(c => c.id === savedTenantId);
-          if (matched) targetCollege = matched;
-        }
+      const { data } = await (supabase as any).from('institutional_settings').select('institution_name, institution_code, contact_email, contact_phone, address').limit(1).maybeSingle();
+      if (data) {
+        const name = (data.institution_name || '').trim() || PLACEHOLDER.name;
+        setCurrentCollege({ ...PLACEHOLDER, name, code: data.institution_code || PLACEHOLDER.code, contact_email: data.contact_email || '', contact_phone: data.contact_phone || undefined, address: data.address || undefined });
+        setInstitutionName(name);
       }
-
-      setCurrentCollege(targetCollege);
-      collegeDataService.setCollegeContext(targetCollege.id);
-      collegeDataService.getCourses(targetCollege.id).catch(console.warn);
-
-      // Load active college's isolated configuration
-      const config = await multiCollegeService.getCollegeConfiguration(targetCollege.id, { includeDrafts: true });
-      setCollegeConfig(config);
+      collegeDataService.setCollegeContext(INSTITUTION_ID);
+      try { setCollegeConfig(await superAdminService.getMasterConfiguration({ includeDrafts: false })); } catch { /* keep defaults */ }
     } catch (err) {
-      console.error('Failed to load college context:', err);
+      console.error('Failed to load institution profile:', err);
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [user?.id]);
 
-  useEffect(() => {
-    loadData();
-  }, [user]);
+  useEffect(() => { void loadData(); }, [loadData]);
 
-  // Switch college tenant context (Permitted strictly for Platform Super Admin)
-  const switchCollege = async (collegeId: string): Promise<boolean> => {
-    if (!isPlatformSuperAdmin) {
-      toast.error('Unauthorized: College switching is restricted strictly to Platform Super Admins.');
-      return false;
-    }
-
-    const target = collegesList.find(c => c.id === collegeId);
-    if (!target) {
-      toast.error(`Target college "${collegeId}" not found.`);
-      return false;
-    }
-
-    setCurrentCollege(target);
-    localStorage.setItem('adhityan_active_tenant_id', target.id);
-    collegeDataService.setCollegeContext(target.id);
-    collegeDataService.getCourses(target.id, true).catch(console.warn);
-
-    // Load newly selected college's isolated configuration
-    const config = await multiCollegeService.getCollegeConfiguration(target.id, { includeDrafts: true });
-    setCollegeConfig(config);
-
-    toast.success(`Switched active context to ${target.name} (${target.code})`);
-    return true;
-  };
-
-  // Helper check if module is enabled for current college
-  const isModuleEnabled = (moduleId: string): boolean => {
-    const mod = collegeConfig.modules.find(m => m.id === moduleId);
-    return mod ? !!mod.enabled : true;
-  };
-
-  // Helper check if granular feature is enabled for current college
-  const isFeatureEnabled = (featureId: string): boolean => {
-    const feat = collegeConfig.features.find(f => f.id === featureId);
-    return feat ? !!feat.enabled : true;
-  };
-
-  // Helper check if current user role has permission on resource
+  const isModuleEnabled = (moduleId: string): boolean => { const m = collegeConfig.modules.find(x => x.id === moduleId); return m ? !!m.enabled : true; };
+  const isFeatureEnabled = (featureId: string): boolean => { const f = collegeConfig.features.find(x => x.id === featureId); return f ? !!f.enabled : true; };
   const hasPermission = (action: string, resource: string): boolean => {
-    if (isPlatformSuperAdmin) return true;
-    const userRole = user?.role || 'student';
-    if (userRole === 'admin') return true;
-
-    const rule = collegeConfig.permissions.find(p => p.role === userRole && p.resource === resource);
-    if (!rule) return true; // Default permissive if not explicitly restricted
-    return rule.actions.includes(action as any) || rule.actions.includes('manage');
+    const role = user?.role || 'student';
+    if (role === 'admin') return true;
+    const rule = collegeConfig.permissions.find(p => p.role === role && p.resource === resource);
+    return !rule || rule.actions.includes(action as any) || rule.actions.includes('manage');
   };
 
   return (
-    <CollegeContext.Provider
-      value={{
-        currentCollege,
-        collegesList,
-        isPlatformSuperAdmin,
-        collegeConfig,
-        isModuleEnabled,
-        isFeatureEnabled,
-        hasPermission,
-        switchCollege,
-        reloadCollegeData: loadData,
-        isLoading
-      }}
-    >
+    <CollegeContext.Provider value={{ currentCollege, collegeConfig, isModuleEnabled, isFeatureEnabled, hasPermission, reloadCollegeData: loadData, isLoading }}>
       {children}
     </CollegeContext.Provider>
   );
@@ -143,8 +70,6 @@ export function CollegeProvider({ children }: { children: ReactNode }) {
 
 export function useCollege() {
   const context = useContext(CollegeContext);
-  if (!context) {
-    throw new Error('useCollege must be used within a CollegeProvider');
-  }
+  if (!context) throw new Error('useCollege must be used within a CollegeProvider');
   return context;
 }

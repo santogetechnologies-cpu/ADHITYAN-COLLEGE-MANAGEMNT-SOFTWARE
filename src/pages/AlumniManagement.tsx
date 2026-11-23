@@ -8,9 +8,13 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Search, Users, Calendar, DollarSign, Heart, Plus, Filter, Download, Mail, Loader2 } from "lucide-react";
-import { MentorshipMatchingDialog } from '@/components/alumni/MentorshipMatchingDialog';
+import { AlumniMentorship } from '@/components/alumni/AlumniMentorship';
+import { AlumniDonations } from '@/components/alumni/AlumniDonations';
+import { alumniService } from '@/services/alumniService';
+import { exportToCSV } from '@/lib/exportUtils';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { useToast } from '@/hooks/use-toast';
 import { EventCreationDialog } from '@/components/alumni/EventCreationDialog';
-import { DonationTrackingDialog } from '@/components/alumni/DonationTrackingDialog';
 import { AddAlumniDialog } from '@/components/alumni/AddAlumniDialog';
 import { db } from '@/services/supabase/database';
 import { AlumniProfile, AlumniEvent } from '@/types/database.types';
@@ -20,6 +24,11 @@ export default function AlumniManagement() {
   const [eventsList, setEventsList] = useState<AlumniEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState('all');
+  const { toast } = useToast();
+
+  const [donationsYear, setDonationsYear] = useState(0);
+  useEffect(() => { alumniService.listDonations().then((d) => setDonationsYear(d.filter((x) => x.status === 'Received' && new Date(x.donated_at).getFullYear() === new Date().getFullYear()).reduce((t, x) => t + x.amount, 0))).catch(() => setDonationsYear(0)); }, []);
 
   const loadAlumniData = useCallback(async () => {
       try {
@@ -51,7 +60,7 @@ export default function AlumniManagement() {
   }, [loadAlumniData]);
 
   // Real-time synchronization for alumni directory and networking events
-  useRealtimeSubscription({ table: 'alumni_members', onChange: loadAlumniData, onReconnect: loadAlumniData });
+  useRealtimeSubscription({ table: 'alumni_profiles', onChange: loadAlumniData, onReconnect: loadAlumniData });
   useRealtimeSubscription({ table: 'alumni_events', onChange: loadAlumniData, onReconnect: loadAlumniData });
 
   const handleAlumniAdded = (newAlumni: AlumniProfile) => {
@@ -61,6 +70,7 @@ export default function AlumniManagement() {
   const filteredAlumni = alumniList.filter((a) => {
     const fullName = `${a.first_name} ${a.last_name}`.toLowerCase();
     const query = searchQuery.toLowerCase();
+    if (statusFilter !== 'all' && a.status !== statusFilter) return false;
     return (
       fullName.includes(query) ||
       (a.department && a.department.toLowerCase().includes(query)) ||
@@ -101,7 +111,7 @@ export default function AlumniManagement() {
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold">{totalCount}</div>
-                <p className="text-xs text-muted-foreground">+12% from last year</p>
+                <p className="text-xs text-muted-foreground">In the directory</p>
               </CardContent>
             </Card>
             
@@ -112,7 +122,7 @@ export default function AlumniManagement() {
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold">{activeCount}</div>
-                <p className="text-xs text-muted-foreground">High engagement rate</p>
+                <p className="text-xs text-muted-foreground">Active or mentoring</p>
               </CardContent>
             </Card>
 
@@ -122,8 +132,8 @@ export default function AlumniManagement() {
                 <DollarSign className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">₹12.5L</div>
-                <p className="text-xs text-muted-foreground">+28% from last year</p>
+                <div className="text-2xl font-bold">₹{donationsYear.toLocaleString('en-IN')}</div>
+                <p className="text-xs text-muted-foreground">Received this calendar year</p>
               </CardContent>
             </Card>
 
@@ -164,11 +174,16 @@ export default function AlumniManagement() {
                         onChange={(e) => setSearchQuery(e.target.value)}
                       />
                     </div>
-                    <Button variant="outline">
-                      <Filter className="w-4 h-4 mr-2" />
-                      Filter
-                    </Button>
-                    <Button variant="outline">
+                    <Select value={statusFilter} onValueChange={setStatusFilter}>
+                      <SelectTrigger className="w-36"><Filter className="w-4 h-4 mr-2" /><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All statuses</SelectItem>
+                        <SelectItem value="Active">Active</SelectItem>
+                        <SelectItem value="Mentor">Mentor</SelectItem>
+                        <SelectItem value="Inactive">Inactive</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <Button variant="outline" disabled={filteredAlumni.length === 0} onClick={() => exportToCSV('alumni-directory', ['Name', 'Batch', 'Department', 'Position', 'Company', 'Location', 'Email', 'Phone', 'Status'], filteredAlumni.map((a) => [`${a.first_name} ${a.last_name}`, a.graduation_year, a.department, a.current_position, a.company, a.location, a.email, a.phone, a.status]))}>
                       <Download className="w-4 h-4 mr-2" />
                       Export
                     </Button>
@@ -245,7 +260,6 @@ export default function AlumniManagement() {
                           Create Event
                         </Button>
                       </EventCreationDialog>
-                      <Button variant="outline">View Calendar</Button>
                     </div>
                   </div>
                   
@@ -269,7 +283,10 @@ export default function AlumniManagement() {
                           </p>
                           <div className="flex items-center justify-between">
                             <span className="text-sm">{ev.attendees_count} Registered</span>
-                            <Button size="sm">Manage</Button>
+                            <Select value={ev.status} onValueChange={async (v) => { try { await alumniService.setEventStatus(ev.id, v); await loadAlumniData(); } catch (e: any) { toast({ title: 'Not updated', description: e.message, variant: 'destructive' }); } }}>
+                              <SelectTrigger className="h-8 w-32"><SelectValue /></SelectTrigger>
+                              <SelectContent>{['Planning', 'Upcoming', 'Ongoing', 'Completed'].map((x) => <SelectItem key={x} value={x}>{x}</SelectItem>)}</SelectContent>
+                            </Select>
                           </div>
                         </CardContent>
                       </Card>
@@ -279,210 +296,8 @@ export default function AlumniManagement() {
               </Card>
             </TabsContent>
 
-            <TabsContent value="donations" className="space-y-4">
-              <Card>
-                <CardHeader>
-                  <CardTitle>Donations & Sponsorship Tracking</CardTitle>
-                  <CardDescription>Track alumni contributions and sponsorships</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="grid gap-4 md:grid-cols-3 mb-6">
-                    <Card>
-                      <CardHeader className="pb-2">
-                        <CardTitle className="text-sm">This Month</CardTitle>
-                      </CardHeader>
-                      <CardContent>
-                        <div className="text-2xl font-bold">₹2,45,000</div>
-                        <p className="text-xs text-muted-foreground">23 donations</p>
-                      </CardContent>
-                    </Card>
-                    
-                    <Card>
-                      <CardHeader className="pb-2">
-                        <CardTitle className="text-sm">This Year</CardTitle>
-                      </CardHeader>
-                      <CardContent>
-                        <div className="text-2xl font-bold">₹12,50,000</div>
-                        <p className="text-xs text-muted-foreground">184 donations</p>
-                      </CardContent>
-                    </Card>
-
-                    <Card>
-                      <CardHeader className="pb-2">
-                        <CardTitle className="text-sm">Largest Donation</CardTitle>
-                      </CardHeader>
-                      <CardContent>
-                        <div className="text-2xl font-bold">₹5,00,000</div>
-                        <p className="text-xs text-muted-foreground">Infrastructure fund</p>
-                      </CardContent>
-                    </Card>
-                  </div>
-
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Donor</TableHead>
-                        <TableHead>Amount</TableHead>
-                        <TableHead>Purpose</TableHead>
-                        <TableHead>Date</TableHead>
-                        <TableHead>Status</TableHead>
-                        <TableHead>Receipt</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      <TableRow>
-                        <TableCell className="font-medium">Rajesh Kumar (2019)</TableCell>
-                        <TableCell>₹50,000</TableCell>
-                        <TableCell>Computer Lab Equipment</TableCell>
-                        <TableCell>Nov 15, 2024</TableCell>
-                        <TableCell><Badge>Received</Badge></TableCell>
-                        <TableCell>
-                          <DonationTrackingDialog donationId="D001">
-                            <Button variant="ghost" size="sm">Download</Button>
-                          </DonationTrackingDialog>
-                        </TableCell>
-                      </TableRow>
-                      <TableRow>
-                        <TableCell className="font-medium">Priya Sharma (2016)</TableCell>
-                        <TableCell>₹25,000</TableCell>
-                        <TableCell>Scholarship Fund</TableCell>
-                        <TableCell>Nov 12, 2024</TableCell>
-                        <TableCell><Badge>Received</Badge></TableCell>
-                        <TableCell>
-                          <Button variant="ghost" size="sm">Download</Button>
-                        </TableCell>
-                      </TableRow>
-                      <TableRow>
-                        <TableCell className="font-medium">TechCorp (Arun Patel)</TableCell>
-                        <TableCell>₹2,00,000</TableCell>
-                        <TableCell>Annual Tech Fest Sponsorship</TableCell>
-                        <TableCell>Oct 28, 2024</TableCell>
-                        <TableCell><Badge variant="secondary">Processing</Badge></TableCell>
-                        <TableCell>
-                          <Button variant="ghost" size="sm" disabled>Pending</Button>
-                        </TableCell>
-                      </TableRow>
-                    </TableBody>
-                  </Table>
-                </CardContent>
-              </Card>
-            </TabsContent>
-
-            <TabsContent value="mentorship" className="space-y-4">
-              <Card>
-                <CardHeader>
-                  <CardTitle>Mentorship Program</CardTitle>
-                  <CardDescription>Connect current students with alumni mentors</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="grid gap-4 md:grid-cols-4 mb-6">
-                    <Card>
-                      <CardHeader className="pb-2">
-                        <CardTitle className="text-sm">Active Mentors</CardTitle>
-                      </CardHeader>
-                      <CardContent>
-                        <div className="text-2xl font-bold">78</div>
-                        <p className="text-xs text-muted-foreground">Available alumni</p>
-                      </CardContent>
-                    </Card>
-                    
-                    <Card>
-                      <CardHeader className="pb-2">
-                        <CardTitle className="text-sm">Mentees</CardTitle>
-                      </CardHeader>
-                      <CardContent>
-                        <div className="text-2xl font-bold">156</div>
-                        <p className="text-xs text-muted-foreground">Current students</p>
-                      </CardContent>
-                    </Card>
-
-                    <Card>
-                      <CardHeader className="pb-2">
-                        <CardTitle className="text-sm">Active Pairs</CardTitle>
-                      </CardHeader>
-                      <CardContent>
-                        <div className="text-2xl font-bold">123</div>
-                        <p className="text-xs text-muted-foreground">Ongoing mentorship</p>
-                      </CardContent>
-                    </Card>
-
-                    <Card>
-                      <CardHeader className="pb-2">
-                        <CardTitle className="text-sm">Success Rate</CardTitle>
-                      </CardHeader>
-                      <CardContent>
-                        <div className="text-2xl font-bold">92%</div>
-                        <p className="text-xs text-muted-foreground">Completion rate</p>
-                      </CardContent>
-                    </Card>
-                  </div>
-
-                  <div className="flex justify-between items-center mb-4">
-                    <MentorshipMatchingDialog mode="match">
-                      <Button>
-                        <Plus className="w-4 h-4 mr-2" />
-                        Create Pairing
-                      </Button>
-                    </MentorshipMatchingDialog>
-                    <div className="flex items-center space-x-2">
-                      <MentorshipMatchingDialog mode="mentor">
-                        <Button variant="outline">Mentor Applications</Button>
-                      </MentorshipMatchingDialog>
-                      <MentorshipMatchingDialog mode="program">
-                        <Button variant="outline">Program Analytics</Button>
-                      </MentorshipMatchingDialog>
-                    </div>
-                  </div>
-
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Mentor</TableHead>
-                        <TableHead>Mentee</TableHead>
-                        <TableHead>Domain</TableHead>
-                        <TableHead>Duration</TableHead>
-                        <TableHead>Status</TableHead>
-                        <TableHead>Actions</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      <TableRow>
-                        <TableCell className="font-medium">Rajesh Kumar (Google)</TableCell>
-                        <TableCell>Amit Singh (Final Year CSE)</TableCell>
-                        <TableCell>Software Development</TableCell>
-                        <TableCell>6 months</TableCell>
-                        <TableCell><Badge>Active</Badge></TableCell>
-                        <TableCell>
-                          <MentorshipMatchingDialog mode="program" profileId="M001">
-                            <Button variant="ghost" size="sm">View Details</Button>
-                          </MentorshipMatchingDialog>
-                        </TableCell>
-                      </TableRow>
-                      <TableRow>
-                        <TableCell className="font-medium">Priya Sharma (Microsoft)</TableCell>
-                        <TableCell>Neha Gupta (Third Year ECE)</TableCell>
-                        <TableCell>Product Management</TableCell>
-                        <TableCell>4 months</TableCell>
-                        <TableCell><Badge>Active</Badge></TableCell>
-                        <TableCell>
-                          <Button variant="ghost" size="sm">View Details</Button>
-                        </TableCell>
-                      </TableRow>
-                      <TableRow>
-                        <TableCell className="font-medium">Arun Patel (Entrepreneur)</TableCell>
-                        <TableCell>Rahul Verma (Final Year ME)</TableCell>
-                        <TableCell>Entrepreneurship</TableCell>
-                        <TableCell>8 months</TableCell>
-                        <TableCell><Badge variant="secondary">Completed</Badge></TableCell>
-                        <TableCell>
-                          <Button variant="ghost" size="sm">View Report</Button>
-                        </TableCell>
-                      </TableRow>
-                    </TableBody>
-                  </Table>
-                </CardContent>
-              </Card>
-            </TabsContent>
+            <TabsContent value="donations" className="space-y-4"><AlumniDonations alumni={alumniList} /></TabsContent>
+            <TabsContent value="mentorship" className="space-y-4"><AlumniMentorship alumni={alumniList} /></TabsContent>
           </Tabs>
         </div>
       </main>

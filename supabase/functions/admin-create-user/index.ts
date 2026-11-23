@@ -1,121 +1,54 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+// POST { email, password, name, role, department?, class_name?, phone? } -> { success, user }
+// Admin-only account creation.
+// Fixed vs previous version: the caller was recognised as admin from auth user_metadata.role,
+// which every signed-in user can edit for themselves => anyone could create admin accounts.
+// Now the role comes from public.profiles via _shared/auth.ts, the new role is validated against
+// the known role list, and the auth user is rolled back if the profile write fails.
+import { json, preflight, readJson } from "../_shared/http.ts";
+import { authenticate, requireRole, KNOWN_ROLES, audit } from "../_shared/auth.ts";
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-};
+Deno.serve(async (req) => {
+  const pre = preflight(req); if (pre) return pre;
+  const auth = await authenticate(req);
+  if (!auth.ok) return auth.response;
+  const denied = requireRole(req, auth.caller, ["admin"]);
+  if (denied) return denied;
 
-serve(async (req) => {
-  if (req.method === "OPTIONS") {
-    return new Response("ok", { headers: corsHeaders });
+  const body = await readJson(req, 16_384);
+  if (!body) return json(req, 400, { error: "Invalid JSON body.", code: "VALIDATION_ERROR" });
+  const email = String(body.email ?? "").trim().toLowerCase();
+  const name = String(body.name ?? "").trim();
+  const role = String(body.role ?? "");
+  const password = String(body.password ?? "");
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email) || !name || name.length > 200) {
+    return json(req, 400, { error: "A valid email and name are required.", code: "VALIDATION_ERROR" });
+  }
+  if (!(KNOWN_ROLES as readonly string[]).includes(role)) {
+    return json(req, 400, { error: "Unknown role.", code: "VALIDATION_ERROR" });
+  }
+  if (password.length < 8 || password.length > 72) {
+    return json(req, 400, { error: "Password must be 8-72 characters.", code: "WEAK_PASSWORD" });
   }
 
-  try {
-    const supabaseUrl = Deno.env.get("SUPABASE_URL") || "";
-    const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY") || "";
-    const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
-
-    const authHeader = req.headers.get("Authorization");
-    if (!authHeader) {
-      return new Response(
-        JSON.stringify({ error: "Missing authorization token", code: "UNAUTHORIZED" }),
-        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    const token = authHeader.replace("Bearer ", "");
-    const userClient = createClient(supabaseUrl, supabaseAnonKey, {
-      global: { headers: { Authorization: `Bearer ${token}` } },
-    });
-
-    // 1. Verify caller user identity
-    const { data: { user: callerUser }, error: callerError } = await userClient.auth.getUser();
-    if (callerError || !callerUser) {
-      return new Response(
-        JSON.stringify({ error: callerError?.message || "Invalid or expired session", code: "SESSION_EXPIRED" }),
-        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    // 2. Role check: Verify caller is an administrator
-    const callerRole = callerUser.user_metadata?.role;
-    if (callerRole !== "admin") {
-      return new Response(
-        JSON.stringify({ error: "Unauthorized: Administrator privileges required to provision accounts", code: "FORBIDDEN" }),
-        { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    // 3. Admin client with service role key for user creation
-    const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, {
-      auth: { autoRefreshToken: false, persistSession: false },
-    });
-
-    const body = await req.json();
-    const { email, password, name, role, department, class_name, phone } = body;
-
-    if (!email || !password || !name || !role) {
-      return new Response(
-        JSON.stringify({ error: "Missing required fields: email, password, name, and role are required." }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    const { data: createdAuth, error: createError } = await supabaseAdmin.auth.admin.createUser({
-      email: email.trim().toLowerCase(),
-      password,
-      email_confirm: true,
-      user_metadata: {
-        name: name.trim(),
-        role,
-        department,
-        class_name,
-        phone,
-      },
-    });
-
-    if (createError) {
-      return new Response(
-        JSON.stringify({ error: createError.message, code: "CREATE_USER_FAILED" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    const newUserId = createdAuth.user.id;
-
-    // Explicitly update profile to guarantee persistence
-    await supabaseAdmin.from("profiles").upsert({
-      id: newUserId,
-      email: email.trim().toLowerCase(),
-      name: name.trim(),
-      role,
-      department: department || null,
-      class_name: class_name || null,
-      phone: phone || null,
-      status: "active",
-      updated_at: new Date().toISOString(),
-    });
-
-    return new Response(
-      JSON.stringify({
-        success: true,
-        user: {
-          id: newUserId,
-          email: createdAuth.user.email,
-          name,
-          role,
-          department,
-        },
-      }),
-      { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
-  } catch (err: any) {
-    return new Response(
-      JSON.stringify({ error: err.message || "Internal server error" }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
+  const admin = auth.admin;
+  const { data: created, error: createErr } = await admin.auth.admin.createUser({
+    email, password, email_confirm: true,
+    user_metadata: { name },                 // display only; never used for authorisation
+    app_metadata: { role, erp_provisioned: true },   // not user-editable; the flag tells the sign-up trigger this account is already provisioned
+  });
+  if (createErr || !created?.user) {
+    return json(req, 400, { error: createErr?.message ?? "Could not create user.", code: "CREATE_USER_FAILED" });
   }
+  const id = created.user.id;
+  const { error: profErr } = await admin.from("profiles").upsert({
+    id, email, name, role,
+    department: body.department ?? null, class_name: body.class_name ?? null, phone: body.phone ?? null,
+    status: "active", updated_at: new Date().toISOString(),
+  });
+  if (profErr) {
+    await admin.auth.admin.deleteUser(id);   // no orphan auth user without a profile
+    return json(req, 500, { error: "Profile creation failed; account rolled back.", code: "PROFILE_ERROR" });
+  }
+  await audit(admin, auth.caller, "create_user", "profiles", id, { role, email });
+  return json(req, 200, { success: true, user: { id, email, name, role, department: body.department ?? null } });
 });
-

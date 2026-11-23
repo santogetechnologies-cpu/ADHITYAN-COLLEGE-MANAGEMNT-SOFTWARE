@@ -29,6 +29,7 @@ import { useAuth } from '@/context/AuthContext';
 import { StaffPayrollEngine } from '../hr/StaffPayrollEngine';
 import { StaffLeaveManager } from '../hr/StaffLeaveManager';
 import { toast } from 'sonner';
+import { InstitutionName } from '@/lib/institution';
 
 export default function HRManagerDashboard() {
   const { user, logout } = useAuth();
@@ -45,8 +46,8 @@ export default function HRManagerDashboard() {
   // New staff registration form state
   const [newStaff, setNewStaff] = useState({
     employee_code: '',
-    department: 'Medical Laboratory Technology',
-    designation: 'Assistant Professor',
+    department: '',
+    designation: '',
     qualification: '',
     date_of_joining: new Date().toISOString().split('T')[0],
     pan_number: '',
@@ -58,13 +59,20 @@ export default function HRManagerDashboard() {
     da_pct: 0,
     hra_pct: 0,
     special_allowance: 0,
+    monthly_tds: 0,
+    other_deductions: 0,
     epf_opt_out: false,
     status: 'Active' as const
   });
 
+  const [leavesToday, setLeavesToday] = useState(0);
+  const [latestRun, setLatestRun] = useState<{ month_year: string; status: string; total_net_disbursed: number } | null>(null);
+
   const loadData = useCallback(async () => {
     try {
       setLoading(true);
+      db.getStaffLeaveApplications().then((ls: any[]) => { const t = new Date().toISOString().slice(0, 10); setLeavesToday(ls.filter((l: any) => l.status === 'Approved' && l.start_date <= t && l.end_date >= t).length); }).catch(() => setLeavesToday(0));
+      db.getStaffPayrollRuns().then((r) => setLatestRun(r.find((x) => x.status !== 'Cancelled') ?? null)).catch(() => setLatestRun(null));
       const [records, profilesRes] = await Promise.all([
         db.getStaffServiceRecords(),
         supabase
@@ -90,6 +98,10 @@ export default function HRManagerDashboard() {
     loadData();
   }, [loadData]);
 
+  const teachingCount = availableStaffProfiles.filter(p => p.role === 'teacher' || p.role === 'hod').length;
+  const nonTeachingCount = availableStaffProfiles.filter(p => !['teacher', 'hod'].includes(p.role)).length;
+  const onLeaveToday = leavesToday;
+
   const handleSaveStaff = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
@@ -100,7 +112,7 @@ export default function HRManagerDashboard() {
         return;
       }
 
-      const res = await db.createStaffServiceRecord({
+      const res = await db.upsertStaffServiceRecord({
         ...newStaff,
         user_id: targetUserId
       });
@@ -110,8 +122,8 @@ export default function HRManagerDashboard() {
         toast.success(`Service record created for ${newStaff.employee_code}`);
         setNewStaff({
           employee_code: '',
-          department: 'Medical Laboratory Technology',
-          designation: 'Assistant Professor',
+          department: '',
+          designation: '',
           qualification: '',
           date_of_joining: new Date().toISOString().split('T')[0],
           pan_number: '',
@@ -123,10 +135,13 @@ export default function HRManagerDashboard() {
           da_pct: 0,
           hra_pct: 0,
           special_allowance: 0,
+          monthly_tds: 0,
+          other_deductions: 0,
           epf_opt_out: false,
           status: 'Active' as const
         });
       }
+      if (!res) { toast.error('The service record could not be saved. Check the details and your permissions.'); return; }
       setAddStaffOpen(false);
     } catch (err: any) {
       console.error('Error creating staff service record:', err);
@@ -165,7 +180,7 @@ export default function HRManagerDashboard() {
               </Badge>
             </div>
             <p className="text-xs text-slate-500">
-              Adhityan Institution of Paramedical Sciences | Logged in as: <span className="font-semibold text-slate-700">{user?.name || 'Director of HR'}</span>
+              <InstitutionName /> | Logged in as: <span className="font-semibold text-slate-700">{user?.name || 'Director of HR'}</span>
             </p>
           </div>
         </div>
@@ -192,8 +207,8 @@ export default function HRManagerDashboard() {
               <span className="text-xs font-medium uppercase tracking-wider">Total Teaching Faculty</span>
               <GraduationCap className="w-4 h-4 text-primary" />
             </div>
-            <div className="text-2xl font-black text-slate-900">89</div>
-            <span className="text-[11px] text-emerald-600 font-medium">100% Ph.D. / PG Qualified</span>
+            <div className="text-2xl font-black text-slate-900">{teachingCount}</div>
+            <span className="text-[11px] text-slate-500">Teacher accounts</span>
           </CardContent>
         </Card>
 
@@ -203,8 +218,8 @@ export default function HRManagerDashboard() {
               <span className="text-xs font-medium uppercase tracking-wider">Non-Teaching Staff</span>
               <Users className="w-4 h-4 text-blue-600" />
             </div>
-            <div className="text-2xl font-black text-slate-900">42</div>
-            <span className="text-[11px] text-slate-500">Lab, Admin, Finance & Transport</span>
+            <div className="text-2xl font-black text-slate-900">{nonTeachingCount}</div>
+            <span className="text-[11px] text-slate-500">Other staff accounts</span>
           </CardContent>
         </Card>
 
@@ -214,8 +229,8 @@ export default function HRManagerDashboard() {
               <span className="text-xs font-medium uppercase tracking-wider">Monthly Payroll Bill</span>
               <DollarSign className="w-4 h-4 text-emerald-600" />
             </div>
-            <div className="text-2xl font-black text-slate-900">₹ 48.6 L</div>
-            <span className="text-[11px] text-emerald-600 font-medium">EPF & ESI Reconciled</span>
+            <div className="text-2xl font-black text-slate-900">{latestRun ? `₹ ${Number(latestRun.total_net_disbursed).toLocaleString('en-IN')}` : '—'}</div>
+            <span className="text-[11px] text-slate-500">{latestRun ? `${latestRun.month_year} net (${latestRun.status})` : 'No payroll run yet'}</span>
           </CardContent>
         </Card>
 
@@ -225,8 +240,8 @@ export default function HRManagerDashboard() {
               <span className="text-xs font-medium uppercase tracking-wider">Staff On Leave Today</span>
               <Calendar className="w-4 h-4 text-amber-600" />
             </div>
-            <div className="text-2xl font-black text-amber-700">3</div>
-            <span className="text-[11px] text-slate-500">Proxy Faculties Active</span>
+            <div className="text-2xl font-black text-amber-700">{onLeaveToday}</div>
+            <span className="text-[11px] text-slate-500">Approved leave covering today</span>
           </CardContent>
         </Card>
       </div>
@@ -464,6 +479,16 @@ export default function HRManagerDashboard() {
                   onChange={(e) => setNewStaff({ ...newStaff, special_allowance: Number(e.target.value) })}
                   className="h-8 text-xs font-mono"
                 />
+              </div>
+
+              <div className="space-y-1">
+                <label className="font-semibold text-slate-700">Monthly income tax (TDS, ₹)</label>
+                <Input type="number" min={0} value={newStaff.monthly_tds} onChange={(e) => setNewStaff({ ...newStaff, monthly_tds: Math.max(0, Number(e.target.value)) })} className="h-8 text-xs font-mono" />
+              </div>
+
+              <div className="space-y-1">
+                <label className="font-semibold text-slate-700">Other monthly deductions (₹)</label>
+                <Input type="number" min={0} value={newStaff.other_deductions} onChange={(e) => setNewStaff({ ...newStaff, other_deductions: Math.max(0, Number(e.target.value)) })} className="h-8 text-xs font-mono" />
               </div>
             </div>
 

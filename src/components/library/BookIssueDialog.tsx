@@ -21,6 +21,7 @@ interface BookIssueDialogProps {
 }
 
 export const BookIssueDialog = ({ children, onBookIssued }: BookIssueDialogProps) => {
+  const [submitting, setSubmitting] = useState(false);
   const [open, setOpen] = useState(false);
   const [step, setStep] = useState<'scan' | 'details' | 'confirm'>('scan');
   const [scannerOpen, setScannerOpen] = useState(false);
@@ -192,32 +193,26 @@ export const BookIssueDialog = ({ children, onBookIssued }: BookIssueDialogProps
         renew_count: 0
       };
 
-      try {
-        if (bookData.rawId && studentData.id) {
-          try {
-            await libraryService.issueBook(bookData.rawId, studentData.id, issueData.due_date);
-          } catch (rpcErr) {
-            console.warn('RPC issue_library_book fallback to db.issueBook:', rpcErr);
-            await db.issueBook(issueData);
-          }
-        } else {
-          await db.issueBook(issueData);
-        }
-        toast({
-          title: "Book Issued Successfully",
-          description: `Issued "${bookData.title}" to ${studentData.name}.`,
-        });
-      } catch (err: any) {
-        toast({
-          title: "Issue Failed",
-          description: err.message || "Could not issue book.",
-          variant: "destructive"
-        });
+      if (!bookData.rawId || !studentData.id) {
+        toast({ title: "Cannot issue", description: "Select a catalogued book and a registered student first.", variant: "destructive" });
+        return;
       }
-      
-      onBookIssued?.(issueData);
-      resetDialog();
-      setOpen(false);
+      if (submitting) return;
+      setSubmitting(true);
+      try {
+        // One atomic server call (checks stock + authorisation, decrements copies, records the issue).
+        // No fallback to a direct insert: that would skip the stock check.
+        await libraryService.issueBook(bookData.rawId, studentData.id, issueData.due_date);
+        toast({ title: "Book Issued Successfully", description: `Issued "${bookData.title}" to ${studentData.name}.` });
+        onBookIssued?.(issueData);
+        resetDialog();
+        setOpen(false);
+      } catch (err: any) {
+        // keep the dialog open so the librarian can correct it
+        toast({ title: "Issue Failed", description: err.message || "Could not issue book.", variant: "destructive" });
+      } finally {
+        setSubmitting(false);
+      }
     }
   };
 
@@ -460,7 +455,7 @@ export const BookIssueDialog = ({ children, onBookIssued }: BookIssueDialogProps
                 <Button 
                   className="flex-1" 
                   onClick={handleIssueBook}
-                  disabled={!canIssue()}
+                  disabled={!canIssue() || submitting}
                 >
                   Issue Book
                 </Button>

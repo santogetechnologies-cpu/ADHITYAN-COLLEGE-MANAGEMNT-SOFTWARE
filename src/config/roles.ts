@@ -15,25 +15,11 @@ export interface RoleConfig {
 }
 
 export const ROLE_CONFIGS: Record<UserRole, RoleConfig> = {
-  platform_super_admin: {
-    role: 'platform_super_admin',
-    label: 'Platform Super Admin',
-    home: '/platform-admin',
-    allowedRoutes: ['/platform-admin', '/platform-admin/colleges', '/platform-admin/provision', '/platform-admin/templates', '/platform-admin/audit-logs', '/platform-admin/settings'],
-    navItems: [
-      { label: 'Platform Overview', path: '/platform-admin' },
-      { label: 'Colleges Directory', path: '/platform-admin/colleges' },
-      { label: 'Provision College', path: '/platform-admin/provision' },
-      { label: 'Config Templates', path: '/platform-admin/templates' },
-      { label: 'Platform Audit Logs', path: '/platform-admin/audit-logs' },
-      { label: 'Platform Settings', path: '/platform-admin/settings' },
-    ],
-  },
   admin: {
     role: 'admin',
     label: 'Institutional Administrator',
     home: '/admin',
-    allowedRoutes: ['/admin', '/dashboard', '/exam-management', '/library-management', '/admission-management', '/alumni-management', '/medical-management', '/certificate-generation', '/sports-management', '/disciplinary-management', '/store', '/report-concern', '/admin/account-provisioning', '/account-provisioning'],
+    allowedRoutes: ['/student-lifecycle', '/integrations', '/announcements', '/student-leave', '/data-centre', '/admin', '/dashboard', '/exam-management', '/library-management', '/admission-management', '/alumni-management', '/medical-management', '/student-promotion', '/audit-log', '/certificate-generation', '/sports-management', '/disciplinary-management', '/store', '/report-concern', '/admin/account-provisioning', '/account-provisioning'],
     navItems: [
       { label: 'Admin Overview', path: '/admin' },
       { label: 'User Directory', path: '/admin/users' },
@@ -47,11 +33,12 @@ export const ROLE_CONFIGS: Record<UserRole, RoleConfig> = {
     role: 'principal',
     label: 'Principal / Dean',
     home: '/dashboard/principal',
-    allowedRoutes: ['/dashboard', '/principal', '/dashboard/principal', '/admin/departments', '/admin/timetable', '/admin/teachers', '/admin/naac', '/disciplinary-management', '/certificate-generation', '/exam-management', '/report-concern', '/admin/account-provisioning', '/account-provisioning'],
+    allowedRoutes: ['/student-lifecycle', '/announcements', '/student-leave', '/data-centre', '/dashboard', '/principal', '/admission-management', '/dashboard/principal', '/admin/departments', '/admin/timetable', '/admin/teachers', '/admin/naac', '/student-promotion', '/audit-log', '/disciplinary-management', '/certificate-generation', '/exam-management', '/report-concern', '/admin/account-provisioning', '/account-provisioning'],
     navItems: [
       { label: 'Executive Dashboard', path: '/dashboard/principal' },
       { label: 'Departments', path: '/admin/departments' },
       { label: 'Timetable', path: '/admin/timetable' },
+      { label: 'Admissions', path: '/admission-management' },
       { label: 'Certificates', path: '/certificate-generation' },
       { label: 'Disciplinary Council', path: '/disciplinary-management' },
       { label: 'NAAC Review', path: '/admin/naac' },
@@ -61,7 +48,7 @@ export const ROLE_CONFIGS: Record<UserRole, RoleConfig> = {
     role: 'teacher',
     label: 'Faculty Member',
     home: '/dashboard/teacher',
-    allowedRoutes: ['/dashboard', '/teacher', '/dashboard/teacher', '/teachers/create-assignment', '/teachers/message-parents', '/teachers/generate-report', '/teachers/daily-update', '/exam-management', '/report-concern'],
+    allowedRoutes: ['/student-leave', '/data-centre', '/dashboard', '/teacher', '/dashboard/teacher', '/teachers/create-assignment', '/teachers/message-parents', '/teachers/generate-report', '/teachers/daily-update', '/exam-management', '/report-concern'],
     navItems: [
       { label: 'Faculty Hub', path: '/dashboard/teacher' },
       { label: 'Create Assignment', path: '/teachers/create-assignment' },
@@ -100,31 +87,31 @@ export const ROLE_CONFIGS: Record<UserRole, RoleConfig> = {
     role: 'finance_manager',
     label: 'Finance Manager',
     home: '/dashboard/finance_manager',
-    allowedRoutes: ['/dashboard', '/admin/finance', '/admin/finance-manager', '/admin/accounts'],
+    allowedRoutes: ['/data-centre', '/dashboard', '/finance', '/accounts'],
     navItems: [
       { label: 'Finance Hub', path: '/dashboard/finance_manager' },
-      { label: 'Fee Schedules', path: '/admin/finance' },
-      { label: 'Accounting Ledger', path: '/admin/accounts' },
+      { label: 'Fees & Fee Setup', path: '/finance' },
+      { label: 'Accounting Ledger', path: '/accounts' },
     ],
   },
   financier: {
     role: 'financier',
     label: 'Financier & Cashier',
     home: '/dashboard/financier',
-    allowedRoutes: ['/dashboard', '/admin/finance', '/dashboard/financier'],
+    allowedRoutes: ['/data-centre', '/dashboard', '/finance', '/dashboard/financier'],
     navItems: [
       { label: 'Cashier Desk', path: '/dashboard/financier' },
-      { label: 'Fee Transactions', path: '/admin/finance' },
+      { label: 'Fee Transactions', path: '/finance' },
     ],
   },
   accountant: {
     role: 'accountant',
     label: 'Accounts Officer',
     home: '/dashboard/accountant',
-    allowedRoutes: ['/dashboard', '/admin/accounts', '/dashboard/accountant'],
+    allowedRoutes: ['/data-centre', '/dashboard', '/accounts', '/dashboard/accountant'],
     navItems: [
       { label: 'Accounts Dashboard', path: '/dashboard/accountant' },
-      { label: 'Institutional Ledger', path: '/admin/accounts' },
+      { label: 'Institutional Ledger', path: '/accounts' },
     ],
   },
   store_manager: {
@@ -171,11 +158,15 @@ export const ROLE_CONFIGS: Record<UserRole, RoleConfig> = {
     role: 'receptionist',
     label: 'Front Desk Receptionist',
     home: '/dashboard/receptionist',
-    allowedRoutes: ['/dashboard', '/admin/receptionist', '/dashboard/receptionist', '/admission-management', '/admin/account-provisioning', '/account-provisioning'],
-    navItems: [],
+    allowedRoutes: ['/data-centre', '/dashboard', '/dashboard/receptionist', '/admission-management', '/account-provisioning'],
+    navItems: [
+      { label: 'Front Desk', path: '/dashboard/receptionist' },
+      { label: 'Admissions', path: '/admission-management' },
+      { label: 'Student & Parent Accounts', path: '/account-provisioning' },
+    ],
   },
   naac_coordinator: {
-    role: 'admin', // Resolved to admin access as required
+    role: 'naac_coordinator',
     label: 'NAAC Coordinator',
     home: '/admin/naac',
     allowedRoutes: ['/admin/naac', '/dashboard'],
@@ -187,7 +178,7 @@ export const ROLE_CONFIGS: Record<UserRole, RoleConfig> = {
     role: 'hr_manager',
     label: 'HR Manager',
     home: '/dashboard/hr_manager',
-    allowedRoutes: ['/dashboard', '/dashboard/hr_manager'],
+    allowedRoutes: ['/data-centre', '/dashboard', '/dashboard/hr_manager'],
     navItems: [
       { label: 'HR Workspace', path: '/dashboard/hr_manager' },
     ],
@@ -205,7 +196,7 @@ export const ROLE_CONFIGS: Record<UserRole, RoleConfig> = {
     role: 'hod',
     label: 'Head of Department',
     home: '/dashboard/teacher',
-    allowedRoutes: ['/dashboard', '/teachers/create-assignment', '/teachers/daily-update', '/teachers/generate-report'],
+    allowedRoutes: ['/student-leave', '/data-centre', '/dashboard', '/teachers/create-assignment', '/teachers/daily-update', '/teachers/generate-report'],
     navItems: [
       { label: 'Department Desk', path: '/dashboard/teacher' },
     ],

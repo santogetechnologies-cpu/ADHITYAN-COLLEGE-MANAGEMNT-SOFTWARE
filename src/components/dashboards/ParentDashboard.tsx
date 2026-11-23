@@ -47,6 +47,7 @@ import { ParentExamTimetableView } from '@/components/parent/ParentExamTimetable
 import { ParentHallTicketsView } from '@/components/parent/ParentHallTicketsView';
 import { ParentExamMarksView } from '@/components/parent/ParentExamMarksView';
 import { ParentFeesView } from '@/components/parent/ParentFeesView';
+import { ParentLeaveView } from '@/components/parent/ParentLeaveView';
 import { ParentAssignmentsView } from '@/components/parent/ParentAssignmentsView';
 import { ParentAnnouncementsView } from '@/components/parent/ParentAnnouncementsView';
 import { ParentNotificationsView } from '@/components/parent/ParentNotificationsView';
@@ -192,7 +193,7 @@ export function ParentDashboard() {
             </div>
             <div>
               <h1 className="text-2xl font-bold">Welcome, {user?.name || 'Parent'}</h1>
-              <p className="opacity-90 text-sm font-mono pt-0.5">Parent ID: {user?.login_id || 'PAR-2026-0001'}</p>
+              <p className="opacity-90 text-sm font-mono pt-0.5">Parent ID: {user?.login_id || '—'}</p>
             </div>
           </div>
         </div>
@@ -212,7 +213,7 @@ export function ParentDashboard() {
               In accordance with institutional security policies, student and parent accounts are linked exclusively by authorized Administrators and Receptionists during admission confirmation.
             </p>
             <p className="text-muted-foreground">
-              Please contact the College Reception Desk with your <strong>Parent ID: {user?.login_id || 'PAR-2026-0001'}</strong> and your child's <strong>Student ID</strong> to link your accounts.
+              Please contact the College Reception Desk with your <strong>Parent ID: {user?.login_id || '—'}</strong> and your child's <strong>Student ID</strong> to link your accounts.
             </p>
             <div className="pt-2">
               <Button onClick={() => setActiveTab('contact')} variant="outline" className="border-blue-300 text-blue-700">
@@ -238,7 +239,7 @@ export function ParentDashboard() {
               <div className="flex items-center gap-2">
                 <h1 className="text-xl sm:text-2xl font-bold">Welcome, {user?.name || 'Parent'}</h1>
                 <Badge className="bg-white/20 text-white border-white/30 text-[10px] font-mono">
-                  {user?.login_id || 'PAR-2026-0001'}
+                  {user?.login_id || '—'}
                 </Badge>
               </div>
               <p className="text-xs text-white/80 pt-0.5">
@@ -296,7 +297,7 @@ export function ParentDashboard() {
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-2xl bg-blue-50/70 border border-blue-100 dark:bg-blue-950/20 dark:border-blue-900/50">
             <div className="flex items-center gap-3">
               <img
-                src={activeChild?.avatar_url || activeChild?.avatar || "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&h=150&fit=crop&crop=face"}
+                src={activeChild?.avatar_url || "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&h=150&fit=crop&crop=face"}
                 alt={activeChild?.name}
                 className="w-12 h-12 rounded-xl object-cover border-2 border-white shadow-xs"
               />
@@ -445,10 +446,13 @@ export function ParentDashboard() {
       )}
 
       {activeTab === 'attendance' && activeChild && (
-        <ParentAttendanceView
-          studentId={activeChild.id}
-          studentName={activeChild.name}
-        />
+        <div className="space-y-6">
+          <ParentLeaveView studentId={activeChild.id} studentName={activeChild.name} />
+          <ParentAttendanceView
+            studentId={activeChild.id}
+            studentName={activeChild.name}
+          />
+        </div>
       )}
 
       {activeTab === 'results' && activeChild && (
@@ -558,7 +562,7 @@ export function ParentDashboard() {
                   <Badge className="bg-primary text-white">Current Stop (08:00 AM)</Badge>
                 </div>
                 <div className="flex items-center justify-between p-2 rounded bg-muted/30">
-                  <span className="font-medium">5. Adithyan Paramedical Campus Bay</span>
+                  <span className="font-medium">5. Campus Bay</span>
                   <Badge variant="outline">Upcoming (08:25 AM)</Badge>
                 </div>
               </div>

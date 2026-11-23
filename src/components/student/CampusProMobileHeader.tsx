@@ -8,7 +8,7 @@ interface MobileHeaderProps {
 }
 
 const VIEW_TITLES: Record<string, string> = {
-  'dashboard': 'Adithyan College',
+  'dashboard': 'Home',
   'attendance': 'Academic Attendance',
   'timetable': 'Class Timetable',
   'learning': 'AI Assistant',
@@ -18,6 +18,7 @@ const VIEW_TITLES: Record<string, string> = {
   'fees': 'Fees & Receipts',
   'store': 'Campus Store',
   'transport': 'Bus Tracking',
+  'placement': 'Placements',
   'complaints': 'Raise Complaints',
   'settings': 'Student Profile',
 };
@@ -28,7 +29,7 @@ export function CampusProMobileHeader({
   title
 }: MobileHeaderProps) {
   const isHome = currentView === 'dashboard';
-  const pageTitle = title || VIEW_TITLES[currentView] || 'Adithyan College';
+  const pageTitle = title || VIEW_TITLES[currentView] || 'Home';
 
   return (
     <header className="lg:hidden h-14 bg-white/90 backdrop-blur-md border-b border-slate-200/80 px-4 flex items-center justify-between sticky top-0 z-30 shadow-2xs">

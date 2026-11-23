@@ -18,6 +18,7 @@ import { db } from '@/services/supabase/database';
 import { useRealtimeSubscription } from '@/hooks/useRealtimeSubscription';
 import { Concern, Profile } from '@/types/database.types';
 import { ROLE_CONFIGS } from '@/config/roles';
+import { InstitutionName } from '@/lib/institution';
 
 const ReportConcern = () => {
   const navigate = useNavigate();
@@ -234,7 +235,7 @@ const ReportConcern = () => {
             </Button>
             <div>
               <h1 className="text-2xl font-bold text-foreground">Report Concern</h1>
-              <p className="text-xs text-muted-foreground">Adithyan College Grievance Redressal</p>
+              <p className="text-xs text-muted-foreground"><InstitutionName /> Grievance Redressal</p>
             </div>
           </div>
         </div>

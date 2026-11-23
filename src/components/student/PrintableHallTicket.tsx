@@ -3,6 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Printer, ShieldCheck, CheckCircle2, AlertOctagon, User } from 'lucide-react';
 import { ExamSchedule } from '@/types/database.types';
+import { InstitutionName } from '@/lib/institution';
 
 interface HallTicketProps {
   studentName: string;
@@ -31,7 +32,7 @@ export function PrintableHallTicket({
   className,
   semester,
   examTitle = 'End Semester Examination',
-  examCenter = 'Main Examination Complex (Block B), Adithyan College',
+  examCenter = 'Main Examination Complex',
   hallNumber = 'Exam Hall B-302',
   seatNumber = 'Desk 14-B',
   qrCodeToken,
@@ -95,7 +96,7 @@ export function PrintableHallTicket({
               className="w-10 h-10 object-contain rounded-md"
             />
             <h1 className="text-lg sm:text-xl font-black tracking-tight text-slate-900 uppercase">
-              Adithyan College
+              <InstitutionName />
             </h1>
           </div>
           <p className="text-[11px] text-slate-600 font-medium">
@@ -207,7 +208,7 @@ export function PrintableHallTicket({
               Controller of Examinations (CoE)
             </div>
             <div className="text-[10px] text-slate-400">
-              Adithyan College
+              <InstitutionName />
             </div>
           </div>
         </div>

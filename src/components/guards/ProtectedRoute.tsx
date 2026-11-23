@@ -5,6 +5,7 @@ import { ROLE_CONFIGS } from '@/config/roles';
 import { Loader2 } from 'lucide-react';
 import { permissionEnforcementService } from '@/services/permissionEnforcementService';
 import { toast } from 'sonner';
+import { ForcePasswordChange } from '@/components/auth/ForcePasswordChange';
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
@@ -33,16 +34,13 @@ export function ProtectedRoute({ children, allowedRoles }: ProtectedRouteProps) 
     return <Navigate to="/" state={state} replace />;
   }
 
-  // Platform super admin has global bypass across platform and college previews
-  if (user.role === 'platform_super_admin') {
-    return <>{children}</>;
+  // A password set or reset by an administrator must be replaced by the user before anything else.
+  if (user.requires_password_change) {
+    return <ForcePasswordChange />;
   }
 
-  // College admin has bypass within their college routes, but is strictly blocked from Platform Super Admin routes
+  // The administrator can open every institutional screen
   if (user.role === 'admin') {
-    if (allowedRoles && allowedRoles.includes('platform_super_admin') && !allowedRoles.includes('admin')) {
-      return <Navigate to="/admin" replace />;
-    }
     return <>{children}</>;
   }
 

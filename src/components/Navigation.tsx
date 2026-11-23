@@ -4,6 +4,7 @@ import { Link, useLocation } from 'react-router-dom';
 import { NotificationCenter } from '@/components/NotificationCenter';
 import { UserSettings } from '@/components/UserSettings';
 import { ROLE_CONFIGS } from '@/config/roles';
+import { InstitutionName } from '@/lib/institution';
 import { 
   GraduationCap, 
   LogOut, 
@@ -49,7 +50,7 @@ export function Navigation({ showBackButton = false, backUrl = '/dashboard', bac
                 className="w-10 h-10 object-contain rounded-lg bg-white p-0.5 border shadow-sm"
               />
               <div>
-                <h1 className="text-xl font-bold text-foreground leading-none">Adithyan College</h1>
+                <h1 className="text-xl font-bold text-foreground leading-none"><InstitutionName /></h1>
                 <p className="text-xs text-muted-foreground mt-0.5">College Management ERP</p>
               </div>
             </Link>

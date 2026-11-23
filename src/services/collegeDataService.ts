@@ -662,7 +662,7 @@ class CollegeDataService {
       id: newId,
       total_annual_fee: total,
       created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString()
+      // updated_at is maintained by the database trigger
     };
 
     try {
@@ -728,7 +728,7 @@ class CollegeDataService {
       payment_date: receipt.payment_date || new Date().toISOString().split('T')[0],
       payment_mode: receipt.payment_mode || 'UPI / Online Transfer',
       transaction_reference: receipt.transaction_reference || `TXN-${Date.now().toString().slice(-6)}`,
-      remarks: receipt.remarks || 'Fee payment recorded via Super Admin Console',
+      remarks: (receipt as any).remarks || 'Fee payment recorded via Super Admin Console',
       qr_verification_token: `VERIF-${receiptNo}-${Date.now()}`,
       created_at: new Date().toISOString()
     } as any;

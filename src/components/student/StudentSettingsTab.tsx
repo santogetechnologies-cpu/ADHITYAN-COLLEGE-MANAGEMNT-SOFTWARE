@@ -41,6 +41,8 @@ export function StudentSettingsTab({ onLogout }: { onLogout: () => void }) {
   // 5 Real Backend-Connected Notification Settings
   const userPrefs = user?.preferences || {};
   const [emailAlerts, setEmailAlerts] = useState<boolean>(userPrefs.email_notifications ?? true);
+  const [smsAlerts, setSmsAlerts] = useState<boolean>(userPrefs.sms_notifications ?? true);
+  const [waAlerts, setWaAlerts] = useState<boolean>(userPrefs.whatsapp_notifications ?? false);
   const [pushAlerts, setPushAlerts] = useState<boolean>(userPrefs.push_notifications ?? true);
   const [feeReminders, setFeeReminders] = useState<boolean>(userPrefs.fee_reminders ?? true);
   const [examUpdates, setExamUpdates] = useState<boolean>(userPrefs.exam_updates ?? true);
@@ -135,6 +137,8 @@ export function StudentSettingsTab({ onLogout }: { onLogout: () => void }) {
       const updatedPrefs = {
         ...(user?.preferences || {}),
         email_notifications: emailAlerts,
+        sms_notifications: smsAlerts,
+        whatsapp_notifications: waAlerts,
         push_notifications: pushAlerts,
         fee_reminders: feeReminders,
         exam_updates: examUpdates,
@@ -363,6 +367,22 @@ export function StudentSettingsTab({ onLogout }: { onLogout: () => void }) {
                 />
               </div>
 
+              <div className="flex items-center justify-between pt-2 border-t border-slate-100">
+                <div className="space-y-0.5">
+                  <div className="font-semibold text-slate-800">Text messages (SMS)</div>
+                  <div className="text-[11px] text-slate-500">Only urgent alerts, sent to the phone number on your profile</div>
+                </div>
+                <Switch checked={smsAlerts} onCheckedChange={setSmsAlerts} />
+              </div>
+
+              <div className="flex items-center justify-between pt-2 border-t border-slate-100">
+                <div className="space-y-0.5">
+                  <div className="font-semibold text-slate-800">WhatsApp alerts</div>
+                  <div className="text-[11px] text-slate-500">Urgent alerts on WhatsApp, to the phone number on your profile. Off unless you switch it on.</div>
+                </div>
+                <Switch checked={waAlerts} onCheckedChange={setWaAlerts} />
+              </div>
+
               {/* 2. Push Notifications */}
               <div className="flex items-center justify-between pt-2 border-t border-slate-100">
                 <div className="space-y-0.5">
@@ -473,24 +493,24 @@ export function StudentSettingsTab({ onLogout }: { onLogout: () => void }) {
               ) : (
                 <div className="space-y-3">
                   {linkedGuardians.map((g) => (
-                    <div key={g.guardian_user_id} className="p-3.5 rounded-xl border border-slate-200 bg-slate-50/70 flex items-center justify-between">
+                    <div key={g.link_id} className="p-3.5 rounded-xl border border-slate-200 bg-slate-50/70 flex items-center justify-between">
                       <div className="space-y-0.5">
                         <div className="font-bold text-slate-900 flex items-center space-x-1.5">
-                          <span>{g.guardian_name || 'Registered Parent'}</span>
-                          <Badge className="bg-emerald-50 text-emerald-700 border-emerald-200 text-[9px]">Verified</Badge>
+                          <span>{g.parent?.name || 'Registered Parent'}</span>
+                          <Badge className={g.verified ? "bg-emerald-50 text-emerald-700 border-emerald-200 text-[9px]" : "bg-amber-50 text-amber-700 border-amber-200 text-[9px]"}>{g.verified ? "Verified" : "Awaiting verification"}</Badge>
                         </div>
                         <div className="text-[11px] text-slate-500 flex items-center space-x-2">
                           <span>{g.relationship || 'Guardian'}</span>
-                          {g.guardian_email && (
+                          {g.parent?.email && (
                             <>
                               <span>•</span>
-                              <span>{g.guardian_email}</span>
+                              <span>{g.parent.email}</span>
                             </>
                           )}
-                          {g.guardian_phone && (
+                          {g.parent?.phone && (
                             <>
                               <span>•</span>
-                              <span>{g.guardian_phone}</span>
+                              <span>{g.parent.phone}</span>
                             </>
                           )}
                         </div>

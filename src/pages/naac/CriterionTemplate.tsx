@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -7,409 +7,157 @@ import { Textarea } from '@/components/ui/textarea';
 import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Loader2, Pencil, Plus, Trash2, Upload, FileText, AlertTriangle } from 'lucide-react';
 import { useNAAC } from '@/context/NAACContext';
-import { 
-  Upload, 
-  Download, 
-  Eye, 
-  Edit, 
-  Trash2, 
-  Plus,
-  FileText,
-  CheckCircle2,
-  AlertCircle,
-  Calendar
-} from 'lucide-react';
+import { naacService, type NaacMetric } from '@/services/naacService';
+import { EvidenceActions } from '@/components/naac/EvidenceActions';
+import { useAuth } from '@/context/AuthContext';
+import { useToast } from '@/hooks/use-toast';
+import { askConfirm, askText } from '@/lib/dialogs';
 
-interface CriterionTemplateProps {
-  criterionNumber: number;
-  title: string;
-  description: string;
-  icon: React.ElementType;
-}
+interface CriterionTemplateProps { criterionNumber: number; title: string; description: string; icon: React.ElementType }
+const STATUSES: NaacMetric['status'][] = ['Pending', 'In progress', 'Completed'];
 
 export function CriterionTemplate({ criterionNumber, title, description, icon: Icon }: CriterionTemplateProps) {
-  const { naacData, updateProgress, addDocument } = useNAAC();
-  const [activeTab, setActiveTab] = useState('overview');
-  
-  const criterionProgress = naacData.criterionProgress.find(p => p.criterionNumber === criterionNumber);
-  const criterionDocuments = naacData.documents.filter(d => d.criterionNumber === criterionNumber);
+  const { naacData, reload, canEdit, isLoading, loadError } = useNAAC();
+  const { user } = useAuth();
+  const { toast } = useToast();
+  const [tab, setTab] = useState('metrics');
+  const [busy, setBusy] = useState(false);
+  const [addOpen, setAddOpen] = useState(false);
+  const [newM, setNewM] = useState({ code: `${criterionNumber}.`, title: '' });
+  const [edit, setEdit] = useState<NaacMetric | null>(null);
+  const [uploadMetric, setUploadMetric] = useState('');
 
-    const criterionMetrics = [
-    {
-      code: `${criterionNumber}.1.1`,
-      title: 'Curriculum Planning and Implementation',
-      status: 'completed',
-      lastUpdated: '2024-02-20',
-      evidenceCount: 3
-    },
-    {
-      code: `${criterionNumber}.1.2`,
-      title: 'Academic Flexibility',
-      status: 'in-progress',
-      lastUpdated: '2024-02-18',
-      evidenceCount: 1
-    },
-    {
-      code: `${criterionNumber}.2.1`,
-      title: 'Student Enrollment and Profile',
-      status: 'pending',
-      lastUpdated: '2024-02-15',
-      evidenceCount: 0
-    }
-  ];
+  const progress = naacData.criterionProgress.find((p) => p.criterionNumber === criterionNumber);
+  const metrics = useMemo(() => naacData.metrics.filter((m) => m.criterion_number === criterionNumber), [naacData.metrics, criterionNumber]);
+  const docs = naacData.documents.filter((d) => d.criterionNumber === criterionNumber);
+  const evidenceCount = (code: string) => docs.filter((d) => d.metricCode === code).length;
 
-  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (file) {
-            addDocument({
-        title: file.name.split('.')[0],
-        filename: file.name,
-        criterionNumber,
-        metricCode: `${criterionNumber}.1.1`,
-        evidenceType: 'Supporting Document',
-        fileType: file.type.includes('pdf') ? 'PDF' : 'Document',
-        fileSize: `${(file.size / 1024 / 1024).toFixed(1)} MB`,
-        tags: ['evidence', 'uploaded']
-      });
-    }
+  const run = async (fn: () => Promise<void>, ok: string, after?: () => void) => {
+    setBusy(true);
+    try { await fn(); toast({ title: ok }); after?.(); await reload(); }
+    catch (e: any) { toast({ title: 'Not saved', description: e.message, variant: 'destructive' }); }
+    finally { setBusy(false); }
   };
+
+  const addMetric = () => {
+    const code = newM.code.trim();
+    if (!new RegExp(`^${criterionNumber}\\.\\d+(\\.\\d+)?$`).test(code)) return toast({ title: `Metric code must look like ${criterionNumber}.1.1`, variant: 'destructive' });
+    if (!newM.title.trim()) return toast({ title: 'Enter a title', variant: 'destructive' });
+    void run(() => naacService.addMetric({ criterion_number: criterionNumber, metric_code: code, title: newM.title.trim() }), 'Metric added', () => { setAddOpen(false); setNewM({ code: `${criterionNumber}.`, title: '' }); });
+  };
+
+  const upload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]; e.target.value = '';
+    if (!file) return;
+    if (!uploadMetric) return toast({ title: 'Choose the metric this evidence supports', variant: 'destructive' });
+    void run(() => naacService.addEvidence(file, { title: file.name.replace(/\.[^.]+$/, ''), criterion: criterionNumber, metricCode: uploadMetric, evidenceType: 'Supporting document', tags: [], userId: user?.id }), 'Document uploaded');
+  };
+
+  if (isLoading) return <div className="flex justify-center py-16"><Loader2 className="w-6 h-6 animate-spin text-muted-foreground" /></div>;
 
   return (
     <div className="space-y-6">
-      {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center space-x-4">
-          <div className="w-12 h-12 bg-gradient-primary rounded-lg flex items-center justify-center">
-            <Icon className="w-6 h-6 text-primary-foreground" />
-          </div>
-          <div>
-            <h1 className="text-3xl font-bold text-foreground">
-              Criterion {criterionNumber}: {title}
-            </h1>
-            <p className="text-muted-foreground">{description}</p>
-          </div>
+          <div className="w-12 h-12 bg-gradient-primary rounded-lg flex items-center justify-center"><Icon className="w-6 h-6 text-primary-foreground" /></div>
+          <div><h1 className="text-3xl font-bold text-foreground">Criterion {criterionNumber}: {title}</h1><p className="text-muted-foreground">{description}</p></div>
         </div>
-        <div className="text-right">
-          <div className="text-2xl font-bold text-primary">
-            {criterionProgress?.completionPercentage || 0}%
-          </div>
-          <p className="text-sm text-muted-foreground">Complete</p>
-        </div>
+        <div className="text-right"><div className="text-2xl font-bold text-primary">{progress?.completionPercentage ?? 0}%</div><p className="text-sm text-muted-foreground">Complete</p></div>
       </div>
+      {loadError && <p className="text-sm text-destructive flex items-center gap-1"><AlertTriangle className="h-4 w-4" />{loadError}</p>}
 
-      {/* Progress Overview */}
       <Card>
-        <CardHeader>
-          <CardTitle>Progress Overview</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-4">
-            <Progress value={criterionProgress?.completionPercentage || 0} className="h-3" />
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="text-center">
-                <div className="text-2xl font-bold text-success">
-                  {criterionProgress?.completedMetrics || 0}
-                </div>
-                <p className="text-sm text-muted-foreground">Completed Metrics</p>
-              </div>
-              <div className="text-center">
-                <div className="text-2xl font-bold text-warning">
-                  {(criterionProgress?.totalMetrics || 0) - (criterionProgress?.completedMetrics || 0)}
-                </div>
-                <p className="text-sm text-muted-foreground">Pending Metrics</p>
-              </div>
-              <div className="text-center">
-                <div className="text-2xl font-bold text-primary">
-                  {criterionDocuments.length}
-                </div>
-                <p className="text-sm text-muted-foreground">Documents Uploaded</p>
-              </div>
-            </div>
+        <CardHeader><CardTitle>Progress</CardTitle><CardDescription>Calculated from the metrics below: completed ÷ total.</CardDescription></CardHeader>
+        <CardContent className="space-y-4">
+          <Progress value={progress?.completionPercentage ?? 0} className="h-3" />
+          <div className="grid grid-cols-3 gap-4 text-center">
+            <div><div className="text-2xl font-bold">{progress?.completedMetrics ?? 0}</div><p className="text-sm text-muted-foreground">Completed</p></div>
+            <div><div className="text-2xl font-bold">{(progress?.totalMetrics ?? 0) - (progress?.completedMetrics ?? 0)}</div><p className="text-sm text-muted-foreground">Remaining</p></div>
+            <div><div className="text-2xl font-bold">{docs.length}</div><p className="text-sm text-muted-foreground">Evidence files</p></div>
           </div>
         </CardContent>
       </Card>
 
-      {/* Main Content Tabs */}
-      <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="grid w-full grid-cols-4">
-          <TabsTrigger value="overview">Overview</TabsTrigger>
-          <TabsTrigger value="metrics">Metrics</TabsTrigger>
-          <TabsTrigger value="documents">Documents</TabsTrigger>
-          <TabsTrigger value="forms">Data Entry</TabsTrigger>
-        </TabsList>
+      <Tabs value={tab} onValueChange={setTab}>
+        <TabsList><TabsTrigger value="metrics">Metrics ({metrics.length})</TabsTrigger><TabsTrigger value="documents">Evidence ({docs.length})</TabsTrigger></TabsList>
 
-        <TabsContent value="overview" className="space-y-6">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <Card>
-              <CardHeader>
-                <CardTitle>Key Requirements</CardTitle>
-                <CardDescription>Essential elements for this criterion</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-3">
-                  {criterionMetrics.map((metric) => (
-                    <div key={metric.code} className="flex items-center justify-between p-2 rounded border">
-                      <div className="flex-1">
-                        <div className="font-medium text-sm">{metric.code}</div>
-                        <div className="text-sm text-muted-foreground">{metric.title}</div>
-                      </div>
-                      <Badge variant={
-                        metric.status === 'completed' ? 'default' :
-                        metric.status === 'in-progress' ? 'secondary' : 'outline'
-                      }>
-                        {metric.status}
-                      </Badge>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle>Recent Activity</CardTitle>
-                <CardDescription>Latest updates and changes</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-3">
-                  <div className="flex items-center space-x-3">
-                    <CheckCircle2 className="w-4 h-4 text-success" />
-                    <div className="flex-1">
-                      <p className="text-sm">Document uploaded successfully</p>
-                      <p className="text-xs text-muted-foreground">2 hours ago</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center space-x-3">
-                    <AlertCircle className="w-4 h-4 text-warning" />
-                    <div className="flex-1">
-                      <p className="text-sm">Metric 1.2.1 needs attention</p>
-                      <p className="text-xs text-muted-foreground">1 day ago</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center space-x-3">
-                    <Calendar className="w-4 h-4 text-primary" />
-                    <div className="flex-1">
-                      <p className="text-sm">Deadline reminder set</p>
-                      <p className="text-xs text-muted-foreground">3 days ago</p>
-                    </div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-        </TabsContent>
-
-        <TabsContent value="metrics" className="space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>Metrics Status</CardTitle>
-              <CardDescription>Track progress for all metrics in this criterion</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Metric Code</TableHead>
-                    <TableHead>Title</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Evidence</TableHead>
-                    <TableHead>Last Updated</TableHead>
-                    <TableHead>Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {criterionMetrics.map((metric) => (
-                    <TableRow key={metric.code}>
-                      <TableCell className="font-medium">{metric.code}</TableCell>
-                      <TableCell>{metric.title}</TableCell>
-                      <TableCell>
-                        <Badge variant={
-                          metric.status === 'completed' ? 'default' :
-                          metric.status === 'in-progress' ? 'secondary' : 'outline'
-                        }>
-                          {metric.status}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>{metric.evidenceCount} files</TableCell>
-                      <TableCell>{metric.lastUpdated}</TableCell>
-                      <TableCell>
-                        <div className="flex space-x-2">
-                          <Button variant="ghost" size="sm">
-                            <Eye className="w-4 h-4" />
-                          </Button>
-                          <Button variant="ghost" size="sm">
-                            <Edit className="w-4 h-4" />
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="documents" className="space-y-6">
+        <TabsContent value="metrics">
           <Card>
             <CardHeader>
               <div className="flex items-center justify-between">
-                <div>
-                  <CardTitle>Evidence Documents</CardTitle>
-                  <CardDescription>Upload and manage supporting documents</CardDescription>
-                </div>
-                <div className="flex space-x-2">
-                  <input
-                    type="file"
-                    id="file-upload"
-                    className="hidden"
-                    onChange={handleFileUpload}
-                    accept=".pdf,.doc,.docx,.xlsx,.jpg,.png"
-                  />
-                  <Button 
-                    onClick={() => document.getElementById('file-upload')?.click()}
-                    size="sm"
-                  >
-                    <Upload className="w-4 h-4 mr-2" />
-                    Upload Document
-                  </Button>
-                </div>
+                <div><CardTitle>Metrics</CardTitle><CardDescription>Add the metrics your institution tracks for this criterion, then record data and status.</CardDescription></div>
+                {canEdit && <Button size="sm" onClick={() => setAddOpen(true)}><Plus className="w-4 h-4 mr-1" />Add metric</Button>}
               </div>
             </CardHeader>
             <CardContent>
               <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Document Title</TableHead>
-                    <TableHead>Metric Code</TableHead>
-                    <TableHead>Type</TableHead>
-                    <TableHead>Upload Date</TableHead>
-                    <TableHead>Size</TableHead>
-                    <TableHead>Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
+                <TableHeader><TableRow><TableHead>Code</TableHead><TableHead>Title</TableHead><TableHead>Status</TableHead><TableHead>Value</TableHead><TableHead>Evidence</TableHead><TableHead>Updated</TableHead><TableHead /></TableRow></TableHeader>
                 <TableBody>
-                  {criterionDocuments.map((doc) => (
-                    <TableRow key={doc.id}>
-                      <TableCell>
-                        <div className="flex items-center space-x-2">
-                          <FileText className="w-4 h-4" />
-                          <span>{doc.title}</span>
-                        </div>
-                      </TableCell>
-                      <TableCell>{doc.metricCode}</TableCell>
-                      <TableCell>{doc.evidenceType}</TableCell>
-                      <TableCell>{doc.uploadDate}</TableCell>
-                      <TableCell>{doc.fileSize}</TableCell>
-                      <TableCell>
-                        <div className="flex space-x-2">
-                          <Button variant="ghost" size="sm">
-                            <Download className="w-4 h-4" />
-                          </Button>
-                          <Button variant="ghost" size="sm">
-                            <Eye className="w-4 h-4" />
-                          </Button>
-                          <Button variant="ghost" size="sm">
-                            <Trash2 className="w-4 h-4" />
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                  {criterionDocuments.length === 0 && (
-                    <TableRow>
-                      <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
-                        No documents uploaded yet. Click "Upload Document" to add evidence.
-                      </TableCell>
-                    </TableRow>
-                  )}
+                  {metrics.length === 0 ? <TableRow><TableCell colSpan={7} className="text-center py-8 text-sm text-muted-foreground">No metrics yet.{canEdit ? ' Click "Add metric" to start.' : ''}</TableCell></TableRow> : metrics.map((m) => (
+                    <TableRow key={m.id}>
+                      <TableCell className="font-medium">{m.metric_code}</TableCell><TableCell>{m.title}</TableCell>
+                      <TableCell>{canEdit ? (
+                        <Select value={m.status} onValueChange={(v) => void run(() => naacService.updateMetric(m.id, { status: v as NaacMetric['status'] }), 'Status updated')}>
+                          <SelectTrigger className="h-8 w-32"><SelectValue /></SelectTrigger><SelectContent>{STATUSES.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent></Select>
+                      ) : <Badge variant={m.status === 'Completed' ? 'default' : 'secondary'}>{m.status}</Badge>}</TableCell>
+                      <TableCell>{m.quantitative_value ?? '—'}</TableCell>
+                      <TableCell>{evidenceCount(m.metric_code)} file(s)</TableCell>
+                      <TableCell>{m.updated_at?.slice(0, 10)}</TableCell>
+                      <TableCell className="text-right whitespace-nowrap">{canEdit && <>
+                        <Button variant="ghost" size="sm" title="Record data" onClick={() => setEdit(m)}><Pencil className="w-4 h-4" /></Button>
+                        <Button variant="ghost" size="sm" title="Delete metric" onClick={async () => { if (await askConfirm(`Delete metric ${m.metric_code}? Its evidence files stay in the repository.`, { title: 'Delete metric', confirmLabel: 'Delete', destructive: true })) void run(() => naacService.deleteMetric(m.id), 'Metric deleted'); }}><Trash2 className="w-4 h-4" /></Button></>}</TableCell>
+                    </TableRow>))}
                 </TableBody>
               </Table>
             </CardContent>
           </Card>
         </TabsContent>
 
-        <TabsContent value="forms" className="space-y-6">
+        <TabsContent value="documents">
           <Card>
             <CardHeader>
-              <CardTitle>Data Entry Forms</CardTitle>
-              <CardDescription>Input quantitative and qualitative data for metrics</CardDescription>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div><CardTitle>Evidence documents</CardTitle><CardDescription>Files are stored privately; links open for two minutes.</CardDescription></div>
+                <div className="flex items-center gap-2">
+                  <Select value={uploadMetric} onValueChange={setUploadMetric}><SelectTrigger className="w-56"><SelectValue placeholder="Metric for new file" /></SelectTrigger>
+                    <SelectContent>{metrics.map((m) => <SelectItem key={m.id} value={m.metric_code}>{m.metric_code} — {m.title}</SelectItem>)}</SelectContent></Select>
+                  <input type="file" id={`naac-upload-${criterionNumber}`} className="hidden" onChange={upload} accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png" />
+                  <Button size="sm" disabled={busy || metrics.length === 0} onClick={() => document.getElementById(`naac-upload-${criterionNumber}`)?.click()}><Upload className="w-4 h-4 mr-1" />Upload</Button>
+                </div>
+              </div>
             </CardHeader>
-            <CardContent className="space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="space-y-4">
-                  <div>
-                    <Label htmlFor="academic-year">Academic Year</Label>
-                    <Select>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select academic year" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="2023-24">2023-24</SelectItem>
-                        <SelectItem value="2022-23">2022-23</SelectItem>
-                        <SelectItem value="2021-22">2021-22</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div>
-                    <Label htmlFor="metric-code">Metric Code</Label>
-                    <Select>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select metric" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {criterionMetrics.map((metric) => (
-                          <SelectItem key={metric.code} value={metric.code}>
-                            {metric.code} - {metric.title}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div>
-                    <Label htmlFor="data-value">Quantitative Data</Label>
-                    <Input 
-                      id="data-value" 
-                      type="number" 
-                      placeholder="Enter numerical value"
-                    />
-                  </div>
-                </div>
-
-                <div className="space-y-4">
-                  <div>
-                    <Label htmlFor="description">Qualitative Description</Label>
-                    <Textarea 
-                      id="description"
-                      placeholder="Provide detailed description and context"
-                      rows={4}
-                    />
-                  </div>
-
-                  <div>
-                    <Label htmlFor="remarks">Additional Remarks</Label>
-                    <Textarea 
-                      id="remarks"
-                      placeholder="Any additional notes or comments"
-                      rows={3}
-                    />
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex justify-end space-x-2">
-                <Button variant="outline">Save Draft</Button>
-                <Button>Submit Data</Button>
-              </div>
+            <CardContent>
+              {metrics.length === 0 && <p className="text-xs text-muted-foreground mb-2">Add a metric first; evidence is filed under a metric.</p>}
+              <Table>
+                <TableHeader><TableRow><TableHead>Document</TableHead><TableHead>Metric</TableHead><TableHead>Type</TableHead><TableHead>Uploaded</TableHead><TableHead>Size</TableHead><TableHead /></TableRow></TableHeader>
+                <TableBody>
+                  {docs.length === 0 ? <TableRow><TableCell colSpan={6} className="text-center py-8 text-sm text-muted-foreground">No evidence uploaded yet.</TableCell></TableRow> : docs.map((d) => (
+                    <TableRow key={d.id}><TableCell><span className="flex items-center gap-2"><FileText className="w-4 h-4" />{d.title}</span></TableCell><TableCell>{d.metricCode}</TableCell><TableCell>{d.fileType}</TableCell><TableCell>{d.uploadDate}</TableCell><TableCell>{d.fileSize}</TableCell><TableCell><EvidenceActions doc={d} /></TableCell></TableRow>))}
+                </TableBody>
+              </Table>
             </CardContent>
           </Card>
         </TabsContent>
       </Tabs>
+
+      <Dialog open={addOpen} onOpenChange={setAddOpen}><DialogContent><DialogHeader><DialogTitle>Add metric to criterion {criterionNumber}</DialogTitle></DialogHeader>
+        <div className="grid gap-3"><div className="space-y-1"><Label>Metric code</Label><Input value={newM.code} onChange={(e) => setNewM({ ...newM, code: e.target.value })} /></div>
+          <div className="space-y-1"><Label>Title</Label><Input value={newM.title} onChange={(e) => setNewM({ ...newM, title: e.target.value })} /></div></div>
+        <DialogFooter><Button variant="outline" onClick={() => setAddOpen(false)}>Cancel</Button><Button onClick={addMetric} disabled={busy}>Add</Button></DialogFooter></DialogContent></Dialog>
+
+      {edit && <Dialog open onOpenChange={(o) => !o && setEdit(null)}><DialogContent><DialogHeader><DialogTitle>{edit.metric_code} — record data</DialogTitle></DialogHeader>
+        <div className="grid gap-3">
+          <div className="grid grid-cols-2 gap-3"><div className="space-y-1"><Label>Academic year</Label><Input value={edit.academic_year ?? ''} onChange={(e) => setEdit({ ...edit, academic_year: e.target.value })} placeholder="2025-26" /></div>
+            <div className="space-y-1"><Label>Quantitative value</Label><Input type="number" value={edit.quantitative_value ?? ''} onChange={(e) => setEdit({ ...edit, quantitative_value: e.target.value === '' ? null : Number(e.target.value) })} /></div></div>
+          <div className="space-y-1"><Label>Description</Label><Textarea rows={3} value={edit.description ?? ''} onChange={(e) => setEdit({ ...edit, description: e.target.value })} /></div>
+          <div className="space-y-1"><Label>Remarks</Label><Textarea rows={2} value={edit.remarks ?? ''} onChange={(e) => setEdit({ ...edit, remarks: e.target.value })} /></div>
+        </div>
+        <DialogFooter><Button variant="outline" onClick={() => setEdit(null)}>Cancel</Button><Button disabled={busy} onClick={() => void run(() => naacService.updateMetric(edit.id, { academic_year: edit.academic_year || null, quantitative_value: edit.quantitative_value, description: edit.description || null, remarks: edit.remarks || null }), 'Saved', () => setEdit(null))}>Save</Button></DialogFooter></DialogContent></Dialog>}
     </div>
   );
 }

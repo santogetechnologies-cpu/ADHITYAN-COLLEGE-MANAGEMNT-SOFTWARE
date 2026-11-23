@@ -39,10 +39,11 @@ export function ExaminationsModule({
 
   // Overall pass percentage calculation from real database results
   const passStats = useMemo(() => {
-    if (results.length === 0) return { total: 0, passed: 0, rate: 0 };
-    const passed = results.filter(r => (r.status || '').toLowerCase() === 'pass' || (r.marks_obtained || 0) >= 50).length;
-    const rate = Math.round((passed / results.length) * 1000) / 10;
-    return { total: results.length, passed, rate };
+    const appeared = results.filter(r => r.result_status !== 'Absent');
+    if (appeared.length === 0) return { total: 0, passed: 0, rate: 0 };
+    const passed = appeared.filter(r => r.result_status === 'Pass').length;
+    const rate = Math.round((passed / appeared.length) * 1000) / 10;
+    return { total: appeared.length, passed, rate };
   }, [results]);
 
   return (
@@ -135,13 +136,13 @@ export function ExaminationsModule({
                   {filteredSchedules.map((s) => (
                     <TableRow key={s.id} className="hover:bg-slate-50">
                       <TableCell className="font-semibold text-xs text-slate-900 py-3">
-                        {s.subject_name || s.subject || 'Paramedical Clinical Paper'}
+                        {s.subject}
                       </TableCell>
                       <TableCell className="text-xs text-muted-foreground py-3">
-                        {s.class_name || 'Allied Health Sciences'}
+                        {s.class_name}
                       </TableCell>
                       <TableCell className="text-xs font-medium py-3">
-                        {s.exam_date || s.date}
+                        {s.exam_date}
                       </TableCell>
                       <TableCell className="text-xs py-3">
                         {s.start_time} - {s.end_time}
@@ -216,20 +217,20 @@ export function ExaminationsModule({
                   {results.map((r) => (
                     <TableRow key={r.id}>
                       <TableCell className="font-semibold text-xs text-slate-900 py-2.5">
-                        {r.student_name || 'Student Candidate'}
+                        {r.student_name}
                       </TableCell>
                       <TableCell className="text-xs text-muted-foreground py-2.5">
-                        {r.subject_name || 'Clinical Course'}
+                        {r.subject}
                       </TableCell>
                       <TableCell className="text-xs font-bold text-center py-2.5">
-                        {r.marks_obtained || 0} / {r.max_marks || 100}
+                        {r.result_status === 'Absent' ? 'Absent' : `${r.marks_obtained ?? '—'} / ${r.max_marks ?? '—'}`}
                       </TableCell>
                       <TableCell className="text-xs text-center py-2.5">
-                        {r.percentage ?? Math.round(((r.marks_obtained || 0) / (r.max_marks || 100)) * 100)}%
+                        {r.max_marks && r.result_status !== 'Absent' ? `${Math.round((Number(r.marks_obtained) / Number(r.max_marks)) * 100)}%` : '—'}
                       </TableCell>
                       <TableCell className="text-center py-2.5">
-                        <Badge variant={r.status === 'pass' ? 'default' : 'destructive'} className="text-[10px]">
-                          {r.status?.toUpperCase() || 'PASS'}
+                        <Badge variant={r.result_status === 'Pass' ? 'default' : 'destructive'} className="text-[10px]">
+                          {(r.result_status || 'pending').toUpperCase()}
                         </Badge>
                       </TableCell>
                     </TableRow>

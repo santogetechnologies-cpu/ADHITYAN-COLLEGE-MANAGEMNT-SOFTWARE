@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 import { Badge } from '@/components/ui/badge';
+import { InstitutionName } from '@/lib/institution';
 
 interface MobileNavProps {
   currentView: string;
@@ -128,7 +129,7 @@ export function CampusProMobileNav({
                   />
                 </div>
                 <SheetTitle className="text-sm font-bold text-slate-900 text-left">
-                  Adithyan Institute of Paramedical
+                  <InstitutionName />
                 </SheetTitle>
               </SheetHeader>
 

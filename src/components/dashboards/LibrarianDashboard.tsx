@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import { db } from '@/services/supabase/database';
 import { LibraryCirculation, LibraryBook, Profile } from '@/types/database.types';
+import { InstitutionName } from '@/lib/institution';
 
 const IS_UUID = (v?: string | null): v is string => !!v && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v);
 
@@ -49,7 +50,7 @@ export default function LibrarianDashboard() {
       const [circData, booksData, profilesData] = await Promise.all([
         db.getLibraryCirculation(),
         db.getLibraryBooks(),
-        db.getProfiles()
+        db.getStudentDirectory().catch(() => [])
       ]);
 
       setCirculations(circData || []);
@@ -96,7 +97,7 @@ export default function LibrarianDashboard() {
         book_title: formData.book_title,
         accession_no: formData.accession_no || `ACC-${Date.now().toString().slice(-6)}`,
         user_id: resolvedUserId,
-        user_name: formData.user_name || matchedProfile?.full_name || 'Borrower',
+        user_name: formData.user_name || matchedProfile?.name || 'Borrower',
         user_role: formData.user_role,
         issue_date: today.toISOString().split('T')[0],
         due_date: dueDate.toISOString().split('T')[0],
@@ -158,7 +159,7 @@ export default function LibrarianDashboard() {
               </Badge>
             </div>
             <p className="text-xs text-slate-500">
-              Adhityan Institution of Paramedical Sciences | Central Medical & Clinical Resource Library
+              <InstitutionName /> | Central Medical & Clinical Resource Library
             </p>
           </div>
         </div>
@@ -185,8 +186,8 @@ export default function LibrarianDashboard() {
               <span className="text-xs font-medium uppercase tracking-wider">Total Cataloged Volumes</span>
               <BookOpen className="w-4 h-4 text-primary" />
             </div>
-            <div className="text-2xl font-black text-slate-900">45,820</div>
-            <span className="text-[11px] text-emerald-600 font-medium">100% Barcode Indexed</span>
+            <div className="text-2xl font-black text-slate-900">{books.reduce((s, b: any) => s + Number(b.total_copies ?? b.copies ?? 1), 0)}</div>
+            <span className="text-[11px] text-slate-500">{books.length} titles</span>
           </CardContent>
         </Card>
 

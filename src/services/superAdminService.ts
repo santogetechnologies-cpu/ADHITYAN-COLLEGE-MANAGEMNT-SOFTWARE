@@ -19,110 +19,120 @@ import {
   DEFAULT_THEME_CONFIG
 } from './superAdminDefaults';
 
-const STORAGE_CACHE_KEY = 'adhityan_super_admin_config_cache_v1';
-const DRAFT_CACHE_KEY = 'adhityan_super_admin_draft_cache_v1';
+const SETTING_KEY = 'control_center';
+const CACHE_TTL_MS = 15_000;
+type Snapshot = Partial<MasterSystemConfigState>;
+const RUNTIME_FIELDS: (keyof MasterSystemConfigState)[] = ['activeReleaseVersion', 'lastUpdated'];
 
+/**
+ * Control Center configuration.
+ *  - LIVE config:   table app_settings (key 'control_center'), readable by every signed-in user, so a published
+ *                   change really applies to everyone (it used to be read from admin-only audit_logs, so other
+ *                   roles silently got defaults, and the draft/published copies lived in each browser's localStorage).
+ *  - DRAFT:         table app_setting_drafts, one shared draft for the administrators.
+ *  - RELEASES:      table app_setting_versions (append-only). Version numbers come from the database.
+ * Changes only go live through publishConfiguration(); rollback publishes an old release as a NEW release.
+ */
 class SuperAdminService {
-  private inMemoryCache: MasterSystemConfigState | null = null;
-  private draftCache: Partial<MasterSystemConfigState> | null = null;
+  private published: MasterSystemConfigState | null = null;
+  private publishedVersion = 0;
+  private publishedLoadedAt = 0;
+  private draft: Snapshot | null = null;
   private releaseHistory: ConfigurationRelease[] = [];
 
-  constructor() {
-    this.initLocalCache();
+  private applySnapshot(base: MasterSystemConfigState, snap: Snapshot): MasterSystemConfigState {
+    return {
+      ...base,
+      ...snap,
+      roles: { ...base.roles, ...(snap.roles || {}) },
+      pages: { ...base.pages, ...(snap.pages || {}) },
+      dashboards: { ...base.dashboards, ...(snap.dashboards || {}) },
+      navigation: { ...base.navigation, ...(snap.navigation || {}) },
+      forms: { ...base.forms, ...(snap.forms || {}) },
+      workflows: { ...base.workflows, ...(snap.workflows || {}) },
+      globalSettings: { ...base.globalSettings, ...(snap.globalSettings || {}) },
+      theme: { ...base.theme, ...(snap.theme || {}) },
+    };
   }
 
-  private initLocalCache() {
+  /** The signed-in user is the author, whatever the calling screen passes (screens used to pass a hard-coded address). */
+  private async currentAuthor(fallback: { email: string; id?: string }): Promise<{ email: string; id?: string }> {
     try {
-      const stored = localStorage.getItem(STORAGE_CACHE_KEY);
-      if (stored) {
-        this.inMemoryCache = JSON.parse(stored);
-      }
-      const draftStored = localStorage.getItem(DRAFT_CACHE_KEY);
-      if (draftStored) {
-        this.draftCache = JSON.parse(draftStored);
-      }
-    } catch {
-      // Local storage unavailable or parsing error
-    }
+      const { data } = await supabase.auth.getUser();
+      if (data.user?.email) return { email: data.user.email, id: data.user.id };
+    } catch { /* offline: keep the caller's value */ }
+    return fallback;
+  }
 
-    if (!this.inMemoryCache) {
-      this.inMemoryCache = buildInitialMasterConfigState();
+  private strip(config: Snapshot): Snapshot {
+    const copy: any = { ...config };
+    RUNTIME_FIELDS.forEach((k) => delete copy[k]);
+    return copy;
+  }
+
+  /** Loads the live configuration from the database (cached for a few seconds). Falls back to the last known/default config offline. */
+  private async loadPublished(force = false): Promise<void> {
+    if (!force && this.published && Date.now() - this.publishedLoadedAt < CACHE_TTL_MS) return;
+    const base = buildInitialMasterConfigState();
+    try {
+      const { data, error } = await supabase.from('app_settings' as any).select('value, version').eq('key', SETTING_KEY).maybeSingle();
+      if (error) throw error;
+      if (data && (data as any).value) {
+        const v = (data as any).version as number;
+        this.published = { ...this.applySnapshot(base, (data as any).value), activeReleaseVersion: `v1.${v}.0` };
+        this.publishedVersion = v;
+      } else {
+        this.published = base;        // nothing published yet: built-in defaults
+        this.publishedVersion = 0;
+      }
+      this.publishedLoadedAt = Date.now();
+    } catch (err) {
+      console.warn('Could not load the published configuration; using the last known one:', err);
+      if (!this.published) this.published = base;
+    }
+  }
+
+  private async loadDraft(): Promise<void> {
+    try {
+      const { data } = await supabase.from('app_setting_drafts' as any).select('value').eq('key', SETTING_KEY).maybeSingle();
+      this.draft = ((data as any)?.value as Snapshot) || null;   // RLS: only administrators can see the draft
+    } catch {
+      this.draft = null;
+    }
+  }
+
+  private async syncInstitutionalSettings(g: GlobalSettingsConfig): Promise<void> {
+    try {
+      await supabase.from('institutional_settings').update({
+        institution_name: g.institutionName,
+        institution_code: g.institutionCode,
+        academic_year: g.academicYear,
+        contact_email: g.contactEmail,
+        contact_phone: g.contactPhone,
+        min_attendance_percentage: g.attendancePolicyThreshold,
+        passing_marks_percentage: g.passingMarksThreshold,
+        maintenance_mode: g.maintenanceMode,
+        enable_realtime: g.enableRealtime,
+        updated_at: new Date().toISOString()
+      }).eq('id', '00000000-0000-0000-0000-000000000001');
+    } catch {
+      // the configuration itself is already saved; institutional_settings is a convenience mirror
     }
   }
 
   // ===========================================================================
-  // 1. GET CONFIGURATION (PUBLISHED OR DRAFT)
+  // 1. GET CONFIGURATION (LIVE, OR LIVE + SHARED DRAFT FOR ADMINISTRATORS)
   // ===========================================================================
   async getMasterConfiguration(options?: { includeDrafts?: boolean }): Promise<MasterSystemConfigState> {
-    if (!this.inMemoryCache) {
-      this.inMemoryCache = buildInitialMasterConfigState();
-    }
-
-    const merged = { ...this.inMemoryCache };
-
-    // Synchronize global settings from real existing Supabase institutional_settings table
-    try {
-      const { data: instRow } = await supabase
-        .from('institutional_settings')
-        .select('*')
-        .eq('id', '00000000-0000-0000-0000-000000000001')
-        .maybeSingle();
-
-      if (instRow) {
-        merged.globalSettings = {
-          ...merged.globalSettings,
-          institutionName: instRow.institution_name || merged.globalSettings.institutionName,
-          institutionCode: instRow.institution_code || merged.globalSettings.institutionCode,
-          academicYear: instRow.academic_year || merged.globalSettings.academicYear,
-          contactEmail: instRow.contact_email || merged.globalSettings.contactEmail,
-          contactPhone: instRow.contact_phone || merged.globalSettings.contactPhone,
-          attendancePolicyThreshold: instRow.min_attendance_percentage ?? merged.globalSettings.attendancePolicyThreshold,
-          passingMarksThreshold: instRow.passing_marks_percentage ?? merged.globalSettings.passingMarksThreshold,
-          enableRealtime: instRow.enable_realtime ?? merged.globalSettings.enableRealtime,
-          maintenanceMode: instRow.maintenance_mode ?? merged.globalSettings.maintenanceMode,
-        };
-      }
-    } catch (err) {
-      // Continue with in-memory state
-    }
-
-    // Synchronize latest release snapshot from real existing Supabase audit_logs table
-    try {
-      const { data: releaseLogs } = await supabase
-        .from('audit_logs')
-        .select('*')
-        .eq('action', 'publish_configuration')
-        .order('created_at', { ascending: false })
-        .limit(1);
-
-      if (releaseLogs && releaseLogs.length > 0 && releaseLogs[0].new_values?.snapshot) {
-        const snap = releaseLogs[0].new_values.snapshot;
-        if (snap.roles && Array.isArray(snap.roles)) {
-          snap.roles.forEach((r: any) => { merged.roles[r.role] = r; });
-        }
-        if (snap.modules && Array.isArray(snap.modules)) merged.modules = snap.modules;
-        if (snap.features && Array.isArray(snap.features)) merged.features = snap.features;
-        if (snap.globalSettings) merged.globalSettings = { ...merged.globalSettings, ...snap.globalSettings };
-        if (snap.theme) merged.theme = { ...merged.theme, ...snap.theme };
-        if (releaseLogs[0].new_values.version) merged.activeReleaseVersion = releaseLogs[0].new_values.version;
-      }
-    } catch (err) {
-      // Continue with in-memory state
-    }
-
-    // Merge in-memory drafts if requested
-    if (options?.includeDrafts && this.draftCache) {
-      return {
-        ...merged,
-        ...this.draftCache
-      };
-    }
-
-    return merged;
+    await this.loadPublished();
+    const live = this.published as MasterSystemConfigState;
+    if (!options?.includeDrafts) return live;
+    await this.loadDraft();
+    return this.draft ? this.applySnapshot(live, this.draft) : live;
   }
 
   // ===========================================================================
-  // 2. SAVE DRAFT CONFIGURATION
+  // 2. SAVE DRAFT CONFIGURATION (shared with the other administrators; not live until published)
   // ===========================================================================
   async saveDraft(
     configType: SuperAdminConfigType,
@@ -131,45 +141,27 @@ class SuperAdminService {
     author: { email: string; id?: string }
   ): Promise<{ success: boolean; error?: string }> {
     try {
-      // Update memory / local cache immediately
-      if (!this.draftCache) this.draftCache = {};
-      
-      if (configType === 'global') {
-        this.draftCache.globalSettings = data;
-      } else if (configType === 'theme') {
-        this.draftCache.theme = data;
-      } else if (configType === 'role' && targetRole !== 'global') {
-        if (!this.draftCache.roles) this.draftCache.roles = { ...(this.inMemoryCache?.roles || {}) };
-        this.draftCache.roles[targetRole] = data;
-      } else if (configType === 'dashboard' && targetRole !== 'global') {
-        if (!this.draftCache.dashboards) this.draftCache.dashboards = { ...(this.inMemoryCache?.dashboards || {}) };
-        this.draftCache.dashboards[targetRole] = data;
-      } else if (configType === 'page' && targetRole !== 'global') {
-        if (!this.draftCache.pages) this.draftCache.pages = { ...(this.inMemoryCache?.pages || {}) };
-        this.draftCache.pages[targetRole] = data;
-      } else if (configType === 'navigation' && targetRole !== 'global') {
-        if (!this.draftCache.navigation) this.draftCache.navigation = { ...(this.inMemoryCache?.navigation || {}) };
-        this.draftCache.navigation[targetRole] = data;
-      } else if (configType === 'module') {
-        this.draftCache.modules = data;
-      } else if (configType === 'feature') {
-        this.draftCache.features = data;
-      }
+      author = await this.currentAuthor(author);
+      const patch: Snapshot = {};
+      if (configType === 'global') patch.globalSettings = data;
+      else if (configType === 'theme') patch.theme = data;
+      else if (configType === 'role' && targetRole !== 'global') patch.roles = { [targetRole]: data };
+      else if (configType === 'dashboard' && targetRole !== 'global') patch.dashboards = { [targetRole]: data };
+      else if (configType === 'page' && targetRole !== 'global') patch.pages = { [targetRole]: data };
+      else if (configType === 'navigation' && targetRole !== 'global') patch.navigation = { [targetRole]: data };
+      else if (configType === 'module') patch.modules = data;
+      else if (configType === 'feature') patch.features = data;
+      else return { success: false, error: `Unsupported configuration type "${configType}".` };
 
-      try {
-        localStorage.setItem(DRAFT_CACHE_KEY, JSON.stringify(this.draftCache));
-      } catch {}
+      const { data: merged, error } = await supabase.rpc('app_settings_draft_merge' as any, { p_key: SETTING_KEY, p_patch: patch as any });
+      if (error) throw error;
+      this.draft = merged as Snapshot;
 
-      // Record audit log entry in Supabase audit_logs table
       await this.logAuditAction({
-        user_email: author.email,
-        user_role: 'admin',
-        action: 'save_draft',
-        entity_type: configType,
-        entity_id: targetRole,
+        user_email: author.email, user_role: 'admin', action: 'save_draft',
+        entity_type: configType, entity_id: targetRole,
         new_values: { data, timestamp: new Date().toISOString() }
       });
-
       return { success: true };
     } catch (err: any) {
       return { success: false, error: err.message || 'Failed to save draft' };
@@ -177,31 +169,37 @@ class SuperAdminService {
   }
 
   // ===========================================================================
-  // 3. PUBLISH CONFIGURATION (VALIDATE, VERSION & DEPLOY LIVE)
+  // 3. PUBLISH CONFIGURATION (VALIDATE, VERSION & DEPLOY LIVE FOR EVERYONE)
   // ===========================================================================
   async publishConfiguration(
     author: { email: string; id?: string },
     changeSummary: string
   ): Promise<{ success: boolean; release?: ConfigurationRelease; error?: string }> {
     try {
+      author = await this.currentAuthor(author);
       const currentConfig = await this.getMasterConfiguration({ includeDrafts: true });
 
-      // Run pre-flight validation
       const validation = this.validateConfiguration(currentConfig);
       if (!validation.isValid) {
         return { success: false, error: `Validation Failed: ${validation.errors.join(' • ')}` };
       }
 
-      // Calculate next version
-      const currentVersionNum = this.releaseHistory.length + 1;
-      const releaseVersionStr = `v1.${currentVersionNum}.0`;
+      const summary = changeSummary || 'Routine institutional configuration update.';
+      // The WHOLE configuration is published (previously dashboards, pages, navigation, permissions, forms,
+      // workflows and notifications were saved as drafts but silently dropped on publish).
+      const { data, error } = await supabase.rpc('app_settings_publish' as any, {
+        p_key: SETTING_KEY, p_value: this.strip(currentConfig) as any, p_summary: summary
+      });
+      if (error) throw error;
+      const version = (data as any).version as number;
+      const releaseVersionStr = `v1.${version}.0`;
 
       const release: ConfigurationRelease = {
-        id: crypto.randomUUID ? crypto.randomUUID() : `rel_${Date.now()}`,
+        id: `${SETTING_KEY}:${version}`,
         release_version: releaseVersionStr,
-        version_number: currentVersionNum,
+        version_number: version,
         title: `Release ${releaseVersionStr}`,
-        change_summary: changeSummary || 'Routine institutional configuration update.',
+        change_summary: summary,
         author_id: author.id,
         author_email: author.email,
         snapshot: {
@@ -216,54 +214,12 @@ class SuperAdminService {
         created_at: new Date().toISOString()
       };
 
-      // Add to release history
-      this.releaseHistory.unshift(release);
-
-      // Promote in-memory cache to published
-      this.inMemoryCache = {
-        ...currentConfig,
-        activeReleaseVersion: releaseVersionStr,
-        lastUpdated: new Date().toISOString()
-      };
-      this.draftCache = null;
-
-      try {
-        localStorage.setItem(STORAGE_CACHE_KEY, JSON.stringify(this.inMemoryCache));
-        localStorage.removeItem(DRAFT_CACHE_KEY);
-      } catch {}
-
-      // Update institutional_settings in Supabase as live global persistence
-      try {
-        await supabase.from('institutional_settings').update({
-          institution_name: currentConfig.globalSettings.institutionName,
-          institution_code: currentConfig.globalSettings.institutionCode,
-          academic_year: currentConfig.globalSettings.academicYear,
-          contact_email: currentConfig.globalSettings.contactEmail,
-          contact_phone: currentConfig.globalSettings.contactPhone,
-          min_attendance_percentage: currentConfig.globalSettings.attendancePolicyThreshold,
-          passing_marks_percentage: currentConfig.globalSettings.passingMarksThreshold,
-          maintenance_mode: currentConfig.globalSettings.maintenanceMode,
-          enable_realtime: currentConfig.globalSettings.enableRealtime,
-          updated_at: new Date().toISOString()
-        }).eq('id', '00000000-0000-0000-0000-000000000001');
-      } catch (err) {
-        // Continue
-      }
-
-      // Record high-priority audit log entry with full snapshot in new_values
-      await this.logAuditAction({
-        user_email: author.email,
-        user_role: 'admin',
-        action: 'publish_configuration',
-        entity_type: 'release',
-        entity_id: releaseVersionStr,
-        new_values: {
-          version: releaseVersionStr,
-          summary: changeSummary,
-          snapshot: release.snapshot,
-          publishedAt: new Date().toISOString()
-        }
-      });
+      this.published = { ...currentConfig, activeReleaseVersion: releaseVersionStr, lastUpdated: new Date().toISOString() };
+      this.publishedVersion = version;
+      this.publishedLoadedAt = Date.now();
+      this.draft = null;
+      await this.syncInstitutionalSettings(currentConfig.globalSettings);
+      if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('system_config_published'));
 
       return { success: true, release };
     } catch (err: any) {
@@ -272,83 +228,57 @@ class SuperAdminService {
   }
 
   // ===========================================================================
-  // 4. GET RELEASES (FETCHED FROM AUDIT_LOGS)
+  // 4. GET RELEASES (append-only history in the database)
   // ===========================================================================
   async getReleases(): Promise<ConfigurationRelease[]> {
     try {
-      const { data: logs } = await supabase
-        .from('audit_logs')
-        .select('*')
-        .eq('action', 'publish_configuration')
-        .order('created_at', { ascending: false })
-        .limit(20);
-
-      if (logs && logs.length > 0) {
-        return logs.map((log: any, idx: number) => ({
-          id: log.id,
-          release_version: log.entity_id || log.new_values?.version || `v1.${idx + 1}.0`,
-          version_number: idx + 1,
-          title: `Release ${log.entity_id || log.new_values?.version || 'v1.0.0'}`,
-          change_summary: log.new_values?.summary || 'Administrative configuration release',
-          author_email: log.user_email || 'admin@gmail.com',
-          snapshot: log.new_values?.snapshot || {},
-          is_active: idx === 0,
-          created_at: log.created_at
-        }));
-      }
+      const { data, error } = await supabase.from('app_setting_versions' as any)
+        .select('*').eq('key', SETTING_KEY).order('version', { ascending: false }).limit(50);
+      if (error) throw error;
+      await this.loadPublished();
+      this.releaseHistory = ((data as any[]) || []).map((row) => {
+        const v = row.value || {};
+        return {
+          id: row.id,
+          release_version: `v1.${row.version}.0`,
+          version_number: row.version,
+          title: row.kind === 'rollback' ? `Rollback to v1.${row.rolled_back_to}.0` : `Release v1.${row.version}.0`,
+          change_summary: row.summary || 'Administrative configuration release',
+          author_id: row.published_by || undefined,
+          author_email: row.published_by_email || '',
+          snapshot: {
+            roles: Object.values(v.roles || {}) as RoleCustomConfig[],
+            modules: v.modules || [], features: v.features || [],
+            globalSettings: v.globalSettings, theme: v.theme, publishedAt: row.created_at
+          },
+          is_active: row.version === this.publishedVersion,
+          created_at: row.created_at
+        } as ConfigurationRelease;
+      });
     } catch (err) {
-      console.warn('Failed to fetch releases from audit_logs:', err);
+      console.warn('Failed to load release history:', err);
     }
     return this.releaseHistory;
   }
 
   // ===========================================================================
-  // 5. ROLLBACK CONFIGURATION
+  // 5. ROLLBACK CONFIGURATION (publishes the old release again as a NEW release; history is kept)
   // ===========================================================================
   async rollbackConfiguration(
     versionNumber: number,
     author: { email: string; id?: string }
   ): Promise<{ success: boolean; error?: string }> {
     try {
-      const targetRelease = this.releaseHistory.find(r => r.version_number === versionNumber);
-      if (!targetRelease) {
-        return { success: false, error: `Release version #${versionNumber} not found in history.` };
-      }
-
-      // Restore snapshot
-      const snapshot = targetRelease.snapshot;
-      if (this.inMemoryCache && snapshot) {
-        const restoredRoles: Record<string, RoleCustomConfig> = {};
-        if (snapshot.roles && Array.isArray(snapshot.roles)) {
-          snapshot.roles.forEach(r => { restoredRoles[r.role] = r; });
-        }
-
-        this.inMemoryCache = {
-          ...this.inMemoryCache,
-          roles: Object.keys(restoredRoles).length > 0 ? restoredRoles : this.inMemoryCache.roles,
-          modules: snapshot.modules || this.inMemoryCache.modules,
-          features: snapshot.features || this.inMemoryCache.features,
-          globalSettings: snapshot.globalSettings || this.inMemoryCache.globalSettings,
-          theme: snapshot.theme || this.inMemoryCache.theme,
-          activeReleaseVersion: targetRelease.release_version,
-          lastUpdated: new Date().toISOString()
-        };
-
-        try {
-          localStorage.setItem(STORAGE_CACHE_KEY, JSON.stringify(this.inMemoryCache));
-        } catch {}
-      }
-
-      // Log audit
-      await this.logAuditAction({
-        user_email: author.email,
-        user_role: 'admin',
-        action: 'rollback_configuration',
-        entity_type: 'release',
-        entity_id: targetRelease.release_version,
-        new_values: { rolledBackTo: targetRelease.release_version, timestamp: new Date().toISOString() }
+      author = await this.currentAuthor(author);
+      const { data, error } = await supabase.rpc('app_settings_rollback' as any, {
+        p_key: SETTING_KEY, p_version: versionNumber, p_reason: `Rolled back by ${author.email}`
       });
-
+      if (error) throw error;
+      if (!(data as any)?.success) return { success: false, error: (data as any)?.error || `Release #${versionNumber} not found.` };
+      await this.loadPublished(true);
+      this.draft = null;
+      if (this.published) await this.syncInstitutionalSettings(this.published.globalSettings);
+      if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('system_config_published'));
       return { success: true };
     } catch (err: any) {
       return { success: false, error: err.message || 'Failed to rollback release.' };
@@ -414,6 +344,7 @@ class SuperAdminService {
     author: { email: string; id?: string }
   ): Promise<{ success: boolean; backupPayload?: string; error?: string }> {
     try {
+      author = await this.currentAuthor(author);
       const config = await this.getMasterConfiguration({ includeDrafts: true });
       const payload = {
         backupName: name,
@@ -445,25 +376,20 @@ class SuperAdminService {
     author: { email: string; id?: string }
   ): Promise<{ success: boolean; error?: string }> {
     try {
+      author = await this.currentAuthor(author);
       const parsed = JSON.parse(backupJson);
       if (!parsed.config || !parsed.config.roles || !parsed.config.globalSettings) {
         return { success: false, error: 'Invalid backup structure. Required configuration keys missing.' };
       }
-
-      this.inMemoryCache = parsed.config;
-      try {
-        localStorage.setItem(STORAGE_CACHE_KEY, JSON.stringify(parsed.config));
-      } catch {}
+      // A restored backup becomes the shared DRAFT: it only goes live when an administrator publishes it.
+      const ok = await this.saveMasterConfiguration(parsed.config);
+      if (!ok) return { success: false, error: 'The backup could not be saved as a draft.' };
 
       await this.logAuditAction({
-        user_email: author.email,
-        user_role: 'admin',
-        action: 'restore_backup',
-        entity_type: 'backup',
+        user_email: author.email, user_role: 'admin', action: 'restore_backup', entity_type: 'backup',
         entity_id: parsed.backupName || 'unnamed_backup',
         new_values: { restoredFrom: parsed.backupName, timestamp: new Date().toISOString() }
       });
-
       return { success: true };
     } catch (err: any) {
       return { success: false, error: err.message || 'Failed to parse and restore backup.' };
@@ -504,35 +430,19 @@ class SuperAdminService {
   }
 
   // ===========================================================================
-  // 9. SAVE FULL MASTER CONFIGURATION DRAFT & SNAPSHOT
+  // 9. SAVE FULL MASTER CONFIGURATION AS THE SHARED DRAFT (goes live only on publish)
   // ===========================================================================
   async saveMasterConfiguration(config: MasterSystemConfigState): Promise<boolean> {
-    this.inMemoryCache = { ...config };
-    this.draftCache = { ...config };
     try {
-      localStorage.setItem(STORAGE_CACHE_KEY, JSON.stringify(this.inMemoryCache));
-      localStorage.setItem(DRAFT_CACHE_KEY, JSON.stringify(this.draftCache));
-    } catch {}
-
-    // Update institutional_settings if changed
-    if (config.globalSettings) {
-      try {
-        await supabase.from('institutional_settings').update({
-          institution_name: config.globalSettings.institutionName,
-          institution_code: config.globalSettings.institutionCode,
-          academic_year: config.globalSettings.academicYear,
-          contact_email: config.globalSettings.contactEmail,
-          contact_phone: config.globalSettings.contactPhone,
-          min_attendance_percentage: config.globalSettings.attendancePolicyThreshold,
-          passing_marks_percentage: config.globalSettings.passingMarksThreshold,
-          maintenance_mode: config.globalSettings.maintenanceMode,
-          enable_realtime: config.globalSettings.enableRealtime,
-          updated_at: new Date().toISOString()
-        }).eq('id', '00000000-0000-0000-0000-000000000001');
-      } catch {}
+      const stripped = this.strip(config);
+      const { error } = await supabase.rpc('app_settings_draft_save' as any, { p_key: SETTING_KEY, p_value: stripped as any });
+      if (error) throw error;
+      this.draft = stripped;
+      return true;
+    } catch (err) {
+      console.warn('Could not save the configuration draft:', err);
+      return false;
     }
-
-    return true;
   }
 
   // ===========================================================================

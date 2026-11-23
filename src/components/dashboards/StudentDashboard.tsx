@@ -22,6 +22,7 @@ import { StudentClassTimetableTab } from '@/components/student/StudentClassTimet
 import { StudentExams } from '@/components/student/StudentExams';
 import { StudentFeesTab } from '@/components/student/StudentFeesTab';
 import { StudentStoreTab } from '@/components/student/StudentStoreTab';
+import { StudentPlacementTab } from '@/components/student/StudentPlacementTab';
 import { StudentBusTab } from '@/components/student/StudentBusTab';
 import { StudentComplaintsTab } from '@/components/student/StudentComplaintsTab';
 import { StudentSettingsTab } from '@/components/student/StudentSettingsTab';
@@ -43,7 +44,7 @@ export function StudentDashboard() {
     'dashboard', 'attendance', 'timetable', 'class-timetable', 
     'learning', 'assignments', 'performance', 'morning-checkin', 
     'evening-checkin', 'exams', 'fees', 'store', 'transport', 
-    'complaints', 'settings'
+    'placement', 'complaints', 'settings'
   ]), []);
 
   const currentView = validViews.has(rawView) ? rawView : 'dashboard';
@@ -90,7 +91,7 @@ export function StudentDashboard() {
   const studentRoll = useMemo(() => user?.roll_number || 'ID Pending', [user?.roll_number]);
   const studentDepartment = useMemo(() => user?.department || 'Paramedical Sciences', [user?.department]);
   const studentClass = useMemo(() => user?.class_name || 'Current Term', [user?.class_name]);
-  const avatarUrl = useMemo(() => user?.avatar_url || user?.avatar || '', [user?.avatar_url, user?.avatar]);
+  const avatarUrl = useMemo(() => user?.avatar || '', [user?.avatar]);
 
   // Periodic IST Time Refresh (every 60 seconds)
   useEffect(() => {
@@ -127,7 +128,8 @@ export function StudentDashboard() {
       // 1. Overall grade % from verified examination results
       if (results && results.length > 0) {
         const totalPct = results.reduce((acc, r) => {
-          const max = Number(r.max_marks) || 100;
+          const max = Number(r.max_marks);
+          if (!max) return;
           const obtained = Number(r.marks_obtained) || 0;
           return acc + (obtained / max) * 100;
         }, 0);
@@ -136,7 +138,8 @@ export function StudentDashboard() {
         // Subject-wise bar breakdown
         const subjectMap: Record<string, number> = {};
         results.forEach(r => {
-          const max = Number(r.max_marks) || 100;
+          const max = Number(r.max_marks);
+          if (!max) return;
           const obtained = Number(r.marks_obtained) || 0;
           subjectMap[r.subject] = Math.round((obtained / max) * 100);
         });
@@ -410,6 +413,10 @@ export function StudentDashboard() {
           {/* 10. Bus Tracking */}
           {currentView === 'transport' && (
             <StudentBusTab />
+          )}
+
+          {currentView === 'placement' && (
+            <StudentPlacementTab />
           )}
 
           {/* 11. Raise Complaints */}

@@ -1,4 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
+import { supabase } from '@/lib/supabase';
+import { useAuth } from '@/context/AuthContext';
 import { useRealtimeSubscription } from '@/hooks/useRealtimeSubscription';
 import { Navigation } from '@/components/Navigation';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -26,6 +28,8 @@ const DisciplinaryManagement = () => {
   const { toast } = useToast();
   const [loading, setLoading] = useState(true);
   const [incidents, setIncidents] = useState<any[]>([]);
+  const { user } = useAuth();
+  const canDecide = ['admin', 'principal'].includes(user?.role ?? '');
 
   // Dynamically derive behavioral longitudinal history from real database incidents
   const behavioralHistory = useMemo(() => {
@@ -62,7 +66,7 @@ const DisciplinaryManagement = () => {
         const mapped = data.map((d: any) => ({
           id: d.id,
           studentName: d.student_name,
-          studentId: d.roll_no || 'ST001',
+          studentId: d.roll_no || '',
           class: d.class_name,
           incident: d.incident,
           severity: d.severity,
@@ -94,43 +98,42 @@ const DisciplinaryManagement = () => {
   });
 
   const handleIncidentReported = async (newIncident: any) => {
-    try {
-      await db.reportDisciplinaryIncident({
-        student_name: newIncident.studentName,
-        roll_no: newIncident.studentId,
-        class_name: newIncident.class || 'B.VOC MLT - Semester 1',
-        incident: newIncident.incident,
-        severity: newIncident.severity,
-        reported_by: newIncident.reportedBy,
-        incident_date: newIncident.date,
-        status: 'Pending Review'
-      });
-      setIncidents(prev => [newIncident, ...prev]);
-    } catch (err) {
-      console.error('Failed to report incident to db:', err);
-      setIncidents(prev => [newIncident, ...prev]);
+    const sb: any = supabase;
+    if (!newIncident.class) {
+      toast({ title: 'Choose the student\'s class', variant: 'destructive' });
+      return;
     }
+    const { error } = await sb.from('disciplinary_incidents').insert({
+      student_name: newIncident.studentName,
+      roll_no: newIncident.studentId,
+      class_name: newIncident.class,
+      incident: newIncident.incident,
+      severity: newIncident.severity,
+      reported_by: newIncident.reportedBy || user?.name || 'Staff',
+      incident_date: newIncident.date,
+      status: 'Pending Review'
+    });
+    if (error) {
+      toast({ title: 'Incident not saved', description: error.message, variant: 'destructive' });
+      return;
+    }
+    toast({ title: 'Incident reported' });
+    await loadIncidents();
+  };
+
+  const decide = async (incidentId: any, status: 'Under Investigation' | 'Resolved', action?: string) => {
+    const sb: any = supabase;
+    const { data, error } = await sb.rpc('discipline_update', { p_id: String(incidentId), p_status: status, p_action: action ?? null });
+    if (error || !data?.success) {
+      toast({ title: 'Not updated', description: error?.message || data?.error, variant: 'destructive' });
+      return false;
+    }
+    await loadIncidents();
+    return true;
   };
 
   const handleActionTaken = async (incidentId: any, action: string) => {
-    try {
-      await db.resolveIncident(String(incidentId), action);
-      setIncidents(incidents.map(incident => 
-        String(incident.id) === String(incidentId) 
-          ? { ...incident, status: 'Resolved', actionTaken: action }
-          : incident
-      ));
-      toast({
-        title: "Action Recorded",
-        description: "Incident has been resolved and logged."
-      });
-    } catch (err: any) {
-      toast({
-        title: "Error resolving incident",
-        description: err.message,
-        variant: "destructive"
-      });
-    }
+    if (await decide(incidentId, 'Resolved', action)) toast({ title: 'Incident resolved', description: 'The action has been recorded.' });
   };
 
   const handleTakeAction = (incident: any) => {
@@ -259,10 +262,12 @@ const DisciplinaryManagement = () => {
                         </div>
                         
                         <div className="flex gap-2 pt-2">
-                          <Button variant="outline" size="sm">
-                            <Edit className="h-4 w-4 mr-1" />
-                            Edit
-                          </Button>
+                          {canDecide && incident.status === 'Pending Review' && (
+                            <Button variant="outline" size="sm" onClick={async () => { if (await decide(incident.id, 'Under Investigation')) toast({ title: 'Investigation started' }); }}>
+                              <Edit className="h-4 w-4 mr-1" />
+                              Start investigation
+                            </Button>
+                          )}
                           <Button 
                             variant="outline" 
                             size="sm"
@@ -271,7 +276,7 @@ const DisciplinaryManagement = () => {
                             <Eye className="h-4 w-4 mr-1" />
                             View Details
                           </Button>
-                          {incident.status === 'Pending Review' && (
+                          {canDecide && incident.status !== 'Resolved' && (
                             <Button size="sm" onClick={() => handleTakeAction(incident)}>
                               Take Action
                             </Button>

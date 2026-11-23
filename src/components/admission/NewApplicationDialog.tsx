@@ -25,6 +25,7 @@ import { OFFICIAL_COURSES } from '@/constants/courses';
 import { parentLinkingService, ParentAccountSummary } from '@/services/parentLinkingService';
 import { studentParentAuthService, AdmissionConfirmationResult } from '@/services/studentParentAuthService';
 import { AdmissionSuccessDialog } from '@/components/admission/AdmissionSuccessDialog';
+import { generateTempPassword } from '@/lib/tempPassword';
 
 interface NewApplicationDialogProps {
   onApplicationAdded: (application: any) => void;
@@ -52,7 +53,7 @@ export const NewApplicationDialog = ({ onApplicationAdded }: NewApplicationDialo
   // Parent Account Action state
   const [parentAccountAction, setParentAccountAction] = useState<'none' | 'create' | 'link_existing'>('create');
   const [parentLoginId, setParentLoginId] = useState(`PAR-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`);
-  const [temporaryPassword, setTemporaryPassword] = useState('Adithyan@2026');
+  const [temporaryPassword, setTemporaryPassword] = useState(() => generateTempPassword());
   const [existingParents, setExistingParents] = useState<ParentAccountSummary[]>([]);
   const [selectedExistingParentId, setSelectedExistingParentId] = useState<string>('');
 

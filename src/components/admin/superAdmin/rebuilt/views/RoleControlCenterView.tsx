@@ -4,7 +4,7 @@ import {
   MasterSystemConfigState, 
   RoleCustomConfig, 
   WidgetPlacement, 
-  RoleNavItem, 
+  NavItemConfig as RoleNavItem, 
   RolePageConfig 
 } from '@/types/superAdmin.types';
 import { DEFAULT_WIDGET_CATALOG } from '@/services/superAdminDefaults';

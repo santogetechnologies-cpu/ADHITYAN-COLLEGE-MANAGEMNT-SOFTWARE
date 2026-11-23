@@ -325,7 +325,7 @@ export const AdmissionFees = () => {
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>Official Fee Receipt</DialogTitle>
-            <DialogDescription>Adithyan College – Finance & Admissions Desk</DialogDescription>
+            <DialogDescription>Finance & Admissions Desk</DialogDescription>
           </DialogHeader>
           {selectedReceipt && (
             <div className="p-4 border rounded-lg bg-card space-y-3 font-mono text-xs">

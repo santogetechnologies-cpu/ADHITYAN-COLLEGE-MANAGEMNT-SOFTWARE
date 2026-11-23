@@ -24,6 +24,7 @@ import {
   LogIn,
   CheckCircle2
 } from 'lucide-react';
+import { InstitutionName } from '@/lib/institution';
 
 interface RoleSelectionProps {
   onSelectRole: (role?: UserRole) => void;
@@ -239,7 +240,7 @@ export function RoleSelection({ onSelectRole }: RoleSelectionProps) {
               </div>
               <div>
                 <h1 className="text-lg font-bold text-foreground tracking-tight leading-none">
-                  Adithyan College
+                  <InstitutionName />
                 </h1>
                 <p className="text-[11px] text-muted-foreground">College Management ERP & LMS</p>
               </div>
@@ -275,7 +276,7 @@ export function RoleSelection({ onSelectRole }: RoleSelectionProps) {
         <div className="container mx-auto text-center relative z-10 max-w-4xl">
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 text-xs font-medium mb-4 backdrop-blur border border-white/20">
             <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-            <span>Role-Based Access Control • All 13 Institutional Portals Live</span>
+            <span>Role-Based Access Control • Every role has its own secure portal</span>
           </div>
 
           <h1 className="text-3xl md:text-5xl font-extrabold mb-4 tracking-tight leading-tight">
@@ -463,7 +464,7 @@ export function RoleSelection({ onSelectRole }: RoleSelectionProps) {
 
       {/* Footer */}
       <footer className="border-t bg-card py-6 text-center text-xs text-muted-foreground">
-        <p>© 2026 Adithyan College. Secure Role-Based ERP & LMS.</p>
+        <p>© {new Date().getFullYear()} <InstitutionName />. Secure Role-Based ERP & LMS.</p>
       </footer>
     </div>
   );

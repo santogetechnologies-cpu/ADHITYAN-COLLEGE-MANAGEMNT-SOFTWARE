@@ -7,6 +7,9 @@ import { HallTicketGeneration } from '@/components/exam/HallTicketGeneration';
 import { ExamWorkflows } from '@/components/exam/ExamWorkflows';
 import { GradingInterface } from '@/components/exam/GradingInterface';
 import { ResultPublishing } from '@/components/exam/ResultPublishing';
+import { ExamRegistrationSeating } from '@/components/exam/ExamRegistrationSeating';
+import { RevaluationSupplementary } from '@/components/exam/RevaluationSupplementary';
+import { GradeScaleAndGpa } from '@/components/exam/GradeScaleAndGpa';
 import { ExamAnalytics } from '@/components/exam/ExamAnalytics';
 import { Calendar, FileText, CheckSquare, GraduationCap, BarChart3, Settings } from 'lucide-react';
 
@@ -21,7 +24,7 @@ const ExamManagement = () => {
         </div>
 
         <Tabs defaultValue="scheduling" className="w-full">
-          <TabsList className="grid w-full grid-cols-6">
+          <TabsList className="grid w-full grid-cols-9">
             <TabsTrigger value="scheduling" className="flex items-center gap-2">
               <Calendar className="h-4 w-4" />
               <span className="hidden sm:inline">Scheduling</span>
@@ -32,15 +35,27 @@ const ExamManagement = () => {
             </TabsTrigger>
             <TabsTrigger value="workflows" className="flex items-center gap-2">
               <Settings className="h-4 w-4" />
-              <span className="hidden sm:inline">Workflows</span>
+              <span className="hidden sm:inline">Progress</span>
             </TabsTrigger>
             <TabsTrigger value="grading" className="flex items-center gap-2">
               <CheckSquare className="h-4 w-4" />
-              <span className="hidden sm:inline">Grading</span>
+              <span className="hidden sm:inline">Marks entry</span>
             </TabsTrigger>
             <TabsTrigger value="results" className="flex items-center gap-2">
               <GraduationCap className="h-4 w-4" />
               <span className="hidden sm:inline">Results</span>
+            </TabsTrigger>
+            <TabsTrigger value="seating" className="flex items-center gap-2">
+              <Calendar className="h-4 w-4" />
+              <span className="hidden sm:inline">Seating</span>
+            </TabsTrigger>
+            <TabsTrigger value="reval" className="flex items-center gap-2">
+              <BarChart3 className="h-4 w-4" />
+              <span className="hidden sm:inline">Revaluation</span>
+            </TabsTrigger>
+            <TabsTrigger value="gpa" className="flex items-center gap-2">
+              <BarChart3 className="h-4 w-4" />
+              <span className="hidden sm:inline">Grades &amp; GPA</span>
             </TabsTrigger>
             <TabsTrigger value="analytics" className="flex items-center gap-2">
               <BarChart3 className="h-4 w-4" />
@@ -66,6 +81,18 @@ const ExamManagement = () => {
 
           <TabsContent value="results" className="mt-6">
             <ResultPublishing />
+          </TabsContent>
+
+          <TabsContent value="seating" className="mt-6">
+            <ExamRegistrationSeating />
+          </TabsContent>
+
+          <TabsContent value="reval" className="mt-6">
+            <RevaluationSupplementary />
+          </TabsContent>
+
+          <TabsContent value="gpa" className="mt-6">
+            <GradeScaleAndGpa />
           </TabsContent>
 
           <TabsContent value="analytics" className="mt-6">

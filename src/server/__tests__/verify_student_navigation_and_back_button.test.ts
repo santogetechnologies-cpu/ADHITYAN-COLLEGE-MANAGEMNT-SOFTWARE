@@ -17,6 +17,7 @@
  *    - Student user can sign in, obtain session, and verify profile and role integrity.
  */
 
+// @ts-ignore vitest is optional: this file only runs where it is installed
 import { describe, it, expect, beforeAll } from 'vitest';
 import { createClient } from '@supabase/supabase-js';
 import { ROLE_CONFIGS } from '../../config/roles';

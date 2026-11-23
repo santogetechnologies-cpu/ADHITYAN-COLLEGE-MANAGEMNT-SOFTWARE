@@ -19,6 +19,7 @@ import {
   Clock,
   BookOpen
 } from 'lucide-react';
+import { StudentGpaCard } from '@/components/student/StudentGpaCard';
 import { useAuth } from '@/context/AuthContext';
 import { db } from '@/services/supabase/database';
 import { ExamResult, StudentAttendance, Assignment, AssignmentSubmission } from '@/types/database.types';
@@ -185,6 +186,8 @@ export function PerformanceAnalytics() {
   const weakestSubject = sortedSubjects.length > 1 ? sortedSubjects[sortedSubjects.length - 1] : null;
 
   return (
+    <div className="space-y-4">
+    <StudentGpaCard studentId={user?.id} />
     <Card className="bg-white border-slate-200/80 rounded-2xl shadow-2xs">
       <CardHeader className="p-5 border-b border-slate-100">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -448,5 +451,6 @@ export function PerformanceAnalytics() {
         )}
       </CardContent>
     </Card>
+    </div>
   );
 }

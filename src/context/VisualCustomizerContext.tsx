@@ -1,7 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { useAuth } from './AuthContext';
 import { useCollege } from './CollegeContext';
-import { DEFAULT_PRIMARY_COLLEGE } from '@/services/multiCollegeService';
 import { visualCustomizationService } from '@/services/visualCustomizationService';
 import { 
   CollegeRoleVisualCustomization, 
@@ -46,7 +45,7 @@ export function VisualCustomizerProvider({
 }) {
   const { user } = useAuth();
   const { currentCollege } = useCollege();
-  const activeCollege = currentCollege || DEFAULT_PRIMARY_COLLEGE;
+  const activeCollege = currentCollege;
 
   // Resolve role: either forced or initial or user's role or 'student'
   const [roleKey, setRoleKey] = useState<string>(initialRole || user?.role || 'student');

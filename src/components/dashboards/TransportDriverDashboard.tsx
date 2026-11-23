@@ -41,8 +41,11 @@ import {
   Compass
 } from 'lucide-react';
 import { db } from '@/services/supabase/database';
+import { exportToCSV, printDocument } from '@/lib/exportUtils';
+const esc = (v: unknown) => String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c] as string));
 import { TransportVehicle, TransportStop, StudentTransportLog, VehicleMaintenance } from '@/types/database.types';
 import { useToast } from '@/hooks/use-toast';
+import { campusOpsService } from '@/services/campusOpsService';
 import { StudentSearchSelect } from '@/components/shared/StudentSearchSelect';
 
 export default function TransportDriverDashboard() {
@@ -92,9 +95,9 @@ export default function TransportDriverDashboard() {
       setVehicles(allVehicles || []);
 
       // Match driver vehicle by driver_id or driver_name, or default to first
-      const currentVehicle = allVehicles?.find(v => v.driver_id === user?.id) || 
-                           allVehicles?.find(v => v.driver_name && user?.name && v.driver_name.toLowerCase().includes(user.name.toLowerCase())) ||
-                           allVehicles?.[0] || null;
+      // A driver works on the bus assigned to them. Admin/principal (who see every bus) start with the first.
+      const isDriver = ['driver', 'transport_driver'].includes(user?.role ?? '');
+      const currentVehicle = allVehicles?.find(v => v.driver_id === user?.id) || (isDriver ? null : allVehicles?.[0]) || null;
 
       if (currentVehicle) {
         setSelectedVehicle(currentVehicle);
@@ -157,7 +160,7 @@ export default function TransportDriverDashboard() {
         setIsTrackingGPS(true);
         const lat = pos.coords.latitude.toFixed(5);
         const lng = pos.coords.longitude.toFixed(5);
-        const speedKmh = pos.coords.speed ? Math.round(pos.coords.speed * 3.6) : 32;
+        const speedKmh = pos.coords.speed ? Math.round(pos.coords.speed * 3.6) : 0;
         setCurrentSpeed(speedKmh);
 
         const locString = `GPS: ${lat}° N, ${lng}° E (${speedKmh} km/h)`;
@@ -167,16 +170,9 @@ export default function TransportDriverDashboard() {
       },
       (err) => {
         console.warn('Geolocation error:', err.message);
-        toast({ 
-          title: 'GPS Access Notice', 
-          description: 'Using device location simulator. Realtime coordinates active.', 
-        });
-        // Simulated fallback if browser permission blocked in iframe/sandbox
-        setIsTrackingGPS(true);
-        setCurrentSpeed(35);
-        if (selectedVehicle) {
-          db.updateTransportVehicleLocation(selectedVehicle.id, 'Main Campus Route (Live GPS Active)', 'On Schedule');
-        }
+        if (watchIdRef.current !== null) { navigator.geolocation.clearWatch(watchIdRef.current); watchIdRef.current = null; }
+        setIsTrackingGPS(false);
+        toast({ title: 'Location not available', description: 'Allow location access in the browser to share the bus position. Nothing was broadcast.', variant: 'destructive' });
       },
       { enableHighAccuracy: true, maximumAge: 10000, timeout: 15000 }
     );
@@ -328,21 +324,21 @@ export default function TransportDriverDashboard() {
 
   // Attendance metrics
   const checkedInCount = studentLogs.filter(s => s.status === 'checked_in').length;
-  const totalAssignedCount = studentLogs.length > 0 ? studentLogs.length : 12;
-  const attendanceRate = Math.round((checkedInCount / totalAssignedCount) * 100);
+  const totalAssignedCount = studentLogs.length;
+  const attendanceRate = totalAssignedCount ? Math.round((checkedInCount / totalAssignedCount) * 100) : 0;
 
   const transportStats = [
     { 
       title: 'Assigned Students', 
       value: totalAssignedCount.toString(), 
       icon: Users, 
-      trend: `${selectedVehicle?.route_name || 'Active Route'} - Trip Active` 
+      trend: selectedVehicle?.route_name || 'No route' 
     },
     { 
-      title: "Today's Trips", 
-      value: (vehicles.length > 0 ? vehicles.length : 3).toString(), 
+      title: 'Vehicle', 
+      value: selectedVehicle?.vehicle_number || '—', 
       icon: Bus, 
-      trend: `Bus ${selectedVehicle?.vehicle_number || '#42'} Assigned` 
+      trend: selectedVehicle ? `${selectedVehicle.occupied_seats ?? 0}/${selectedVehicle.capacity ?? '—'} seats` : 'No vehicle assigned' 
     },
     { 
       title: 'Route Stops', 
@@ -360,6 +356,9 @@ export default function TransportDriverDashboard() {
 
   return (
     <div className="space-y-6">
+      {!loading && !selectedVehicle && (
+        <div className="rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">No vehicle is assigned to your account. Ask the transport office to assign your bus; until then nothing on this screen can be changed.</div>
+      )}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Transport Management Hub</h1>
@@ -385,6 +384,18 @@ export default function TransportDriverDashboard() {
                 ))}
               </SelectContent>
             </Select>
+          )}
+          {selectedVehicle && (
+            <Button variant="outline" size="sm" onClick={async () => {
+              try {
+                const r = await campusOpsService.transportStartDay(selectedVehicle.id);
+                toast({ title: r.created ? `Today's list ready: ${r.created} rider(s) added` : 'Today\'s list is already up to date' });
+                loadTransportData();
+              } catch (e: any) { toast({ title: 'Could not start today\'s list', description: e.message, variant: 'destructive' }); }
+            }}>
+              <Users className="h-4 w-4 mr-2" />
+              Load today's riders
+            </Button>
           )}
           <Button variant="outline" size="sm" onClick={() => setQrScannerDialogOpen(true)}>
             <Scan className="h-4 w-4 mr-2" />
@@ -530,7 +541,7 @@ export default function TransportDriverDashboard() {
             <div className="space-y-2 text-sm pt-2">
               <div className="flex justify-between py-1 border-b">
                 <span className="text-muted-foreground">Current Speed</span>
-                <span className="font-semibold">{currentSpeed !== null ? `${currentSpeed} km/h` : '32 km/h'}</span>
+                <span className="font-semibold">{currentSpeed !== null ? `${currentSpeed} km/h` : '—'}</span>
               </div>
               <div className="flex justify-between py-1 border-b">
                 <span className="text-muted-foreground">Next Scheduled Stop</span>
@@ -541,7 +552,7 @@ export default function TransportDriverDashboard() {
               <div className="flex justify-between py-1">
                 <span className="text-muted-foreground">ETA to School Gate</span>
                 <span className="font-semibold text-green-600">
-                  {selectedVehicle?.eta_to_next_stop || '15 minutes'}
+                  {selectedVehicle?.eta_to_next_stop || '—'}
                 </span>
               </div>
             </div>
@@ -705,11 +716,10 @@ export default function TransportDriverDashboard() {
           <div className="grid grid-cols-2 gap-3">
             <Button 
               variant="outline"
+              disabled={studentLogs.length === 0}
               onClick={() => {
-                toast({ 
-                  title: 'Daily Manifest Generated', 
-                  description: `${checkedInCount} of ${totalAssignedCount} students verified on Bus ${selectedVehicle?.vehicle_number || ''}.` 
-                });
+                const rows = studentLogs.map(l => `<tr><td>${esc(l.student_name)}</td><td>${esc(l.class_name)}</td><td>${esc(l.stop_name)}</td><td>${esc(l.status)}</td></tr>`).join('');
+                printDocument(`Rider manifest ${selectedVehicle?.vehicle_number ?? ''}`, `<h2>Rider manifest — ${esc(selectedVehicle?.vehicle_number)} (${esc(selectedVehicle?.route_name)})</h2><p>${new Date().toLocaleDateString()} • ${checkedInCount} of ${totalAssignedCount} on board</p><table border="1" cellpadding="6" style="border-collapse:collapse"><tr><th>Student</th><th>Class</th><th>Stop</th><th>Status</th></tr>${rows}</table>`);
               }}
             >
               <FileText className="h-4 w-4 mr-2" />
@@ -717,15 +727,15 @@ export default function TransportDriverDashboard() {
             </Button>
             <Button 
               variant="outline"
-              onClick={() => {
-                toast({ 
-                  title: 'Parents Notified', 
-                  description: 'Automated SMS & notification dispatched to parents of waiting riders.' 
-                });
+              disabled={!studentLogs.some(l => l.status === 'waiting' && l.student_id)}
+              onClick={async () => {
+                const waiting = studentLogs.filter(l => l.status === 'waiting' && l.student_id);
+                await Promise.all(waiting.map(l => db.createNotification({ user_id: l.student_id as string, title: 'Bus arriving', message: `Bus ${selectedVehicle?.vehicle_number ?? ''} is on its way to ${l.stop_name}.`, type: 'info', priority: 'medium', is_read: false }).catch(() => null)));
+                toast({ title: 'Riders notified', description: `Notification sent to ${waiting.length} waiting rider(s). It is also e-mailed where e-mail alerts are switched on.` });
               }}
             >
               <Phone className="h-4 w-4 mr-2" />
-              Notify Parents
+              Notify waiting riders
             </Button>
           </div>
         </CardContent>
@@ -781,9 +791,8 @@ export default function TransportDriverDashboard() {
             <Button 
               variant="outline" 
               className="h-auto p-4 flex flex-col gap-2 items-center justify-center"
-              onClick={() => {
-                toast({ title: 'Rider Manifest', description: 'Manifest saved to local storage.' });
-              }}
+              disabled={studentLogs.length === 0}
+              onClick={() => exportToCSV(`manifest-${selectedVehicle?.vehicle_number ?? 'bus'}`, ['Student', 'Class', 'Stop', 'Status'], studentLogs.map(l => [l.student_name, l.class_name, l.stop_name, l.status]))}
             >
               <FileText className="h-6 w-6 text-purple-500" />
               <span className="text-xs font-medium">Reports</span>

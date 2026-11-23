@@ -4,6 +4,7 @@ import { Badge } from '@/components/ui/badge';
 import { Award, BookOpen, CheckCircle2, AlertCircle, Loader2, MessageSquare } from 'lucide-react';
 import { db } from '@/services/supabase/database';
 import { useRealtimeSubscription } from '@/hooks/useRealtimeSubscription';
+import { StudentGpaCard } from '@/components/student/StudentGpaCard';
 import { ExamResult } from '@/types/database.types';
 
 interface ParentResultsViewProps {
@@ -14,6 +15,7 @@ interface ParentResultsViewProps {
 export function ParentResultsView({ studentId, studentName }: ParentResultsViewProps) {
   const [loading, setLoading] = useState(true);
   const [results, setResults] = useState<ExamResult[]>([]);
+  const [examNames, setExamNames] = useState<Record<string, string>>({});
 
   const loadResults = useCallback(async () => {
     if (!studentId) return;
@@ -21,6 +23,8 @@ export function ParentResultsView({ studentId, studentName }: ParentResultsViewP
     try {
       const data = await db.getExamResults(studentId);
       setResults(data || []);
+      const exams = await db.getExams().catch(() => []);
+      setExamNames(Object.fromEntries((exams as any[]).map(e => [e.id, e.name])));
     } catch (err) {
       console.warn('Failed to load student results:', err);
     } finally {
@@ -34,8 +38,9 @@ export function ParentResultsView({ studentId, studentName }: ParentResultsViewP
 
   useRealtimeSubscription({ table: 'exam_results', onChange: loadResults, onReconnect: loadResults });
 
-  const avgScore = results.length > 0 
-    ? Math.round(results.reduce((sum, r) => sum + (r.percentage || 0), 0) / results.length)
+  const scored = results.filter(r => r.max_marks && (r as any).result_status !== 'Absent');
+  const avgScore = scored.length > 0
+    ? Math.round(scored.reduce((sum, r) => sum + (Number(r.marks_obtained) / Number(r.max_marks)) * 100, 0) / scored.length)
     : null;
 
   return (
@@ -56,6 +61,8 @@ export function ParentResultsView({ studentId, studentName }: ParentResultsViewP
         )}
       </div>
 
+      <StudentGpaCard studentId={studentId} />
+
       {loading ? (
         <div className="flex items-center justify-center p-12 text-muted-foreground">
           <Loader2 className="w-6 h-6 animate-spin mr-2" /> Loading examination records...
@@ -72,10 +79,11 @@ export function ParentResultsView({ studentId, studentName }: ParentResultsViewP
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {results.map((res) => {
             const score = res.marks_obtained ?? (res as any).marks ?? 0;
-            const max = res.max_marks ?? res.total_marks ?? (res as any).total ?? 100;
-            const pct = res.percentage ?? (max > 0 ? Math.round((score / max) * 100) : 0);
-            const grade = res.grade || (pct >= 90 ? 'O' : pct >= 80 ? 'A+' : pct >= 70 ? 'A' : pct >= 60 ? 'B+' : pct >= 50 ? 'B' : 'F');
-            const isPass = pct >= 50;
+            const max = res.max_marks ?? 0;
+            const pct = max > 0 ? Math.round((Number(score) / max) * 100) : 0;
+            const grade = res.grade || '—';
+            const outcome = (res as any).result_status as string | undefined;
+            const isPass = outcome === 'Pass';
             const remarks = res.remarks || (res as any).comments;
 
             return (
@@ -99,7 +107,7 @@ export function ParentResultsView({ studentId, studentName }: ParentResultsViewP
                     </Badge>
                   </div>
                   <CardDescription className="text-xs">
-                    {res.exam_name || 'Academic Assessment'} • {res.exam_date || 'Published Evaluation'}
+                    {examNames[res.exam_id as string] || 'Examination'}
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="p-4 space-y-3 text-xs">
@@ -130,13 +138,15 @@ export function ParentResultsView({ studentId, studentName }: ParentResultsViewP
 
                   <div className="flex items-center justify-between text-[11px] text-muted-foreground pt-1">
                     <span>
-                      Status: {isPass ? (
-                        <strong className="text-emerald-600 font-semibold">PASS (Eligible)</strong>
+                      Result: {outcome === 'Absent' ? (
+                        <strong className="text-muted-foreground font-semibold">ABSENT</strong>
+                      ) : isPass ? (
+                        <strong className="text-emerald-600 font-semibold">PASS</strong>
                       ) : (
-                        <strong className="text-rose-600 font-semibold">RE-APPEAR REQUIRED</strong>
+                        <strong className="text-rose-600 font-semibold">{outcome === 'Fail' ? 'FAIL' : 'NOT YET DECIDED'}</strong>
                       )}
                     </span>
-                    <span>Evaluated by Assigned Faculty</span>
+                    
                   </div>
                 </CardContent>
               </Card>
